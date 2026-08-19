@@ -1,0 +1,544 @@
+// SQLite 스키마와 앱 데이터 조회·저장 작업을 제공합니다.
+use std::path::Path;
+
+use chrono::{Duration, NaiveDate};
+use rusqlite::{params, Connection, OptionalExtension};
+
+use crate::{
+    exp::{self, ExpCalculation},
+    models::{
+        AppStatus, CharacterBasic, CharacterRecord, DashboardData, DashboardSummary, RankingRow,
+        SeriesPoint, Snapshot,
+    },
+    AppError,
+};
+
+pub fn open(path: &Path) -> Result<Connection, AppError> {
+    let connection = Connection::open(path)?;
+    connection.pragma_update(None, "journal_mode", "WAL")?;
+    connection.pragma_update(None, "foreign_keys", "ON")?;
+    Ok(connection)
+}
+
+pub fn migrate(connection: &Connection) -> Result<(), AppError> {
+    connection.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS characters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            current_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            world_name TEXT NOT NULL,
+            character_class TEXT NOT NULL DEFAULT '',
+            is_primary INTEGER NOT NULL DEFAULT 0,
+            is_favorite INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS character_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+            ocid TEXT NOT NULL UNIQUE,
+            valid_from TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            valid_to TEXT
+        );
+        CREATE TABLE IF NOT EXISTS guild_memberships (
+            date TEXT NOT NULL,
+            member_name TEXT NOT NULL COLLATE NOCASE,
+            character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,
+            PRIMARY KEY (date, member_name)
+        );
+        CREATE TABLE IF NOT EXISTS daily_snapshots (
+            character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+            date TEXT NOT NULL,
+            level INTEGER NOT NULL,
+            exp INTEGER NOT NULL,
+            exp_rate TEXT NOT NULL,
+            access_flag TEXT,
+            raw_json TEXT NOT NULL,
+            fetched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (character_id, date)
+        );
+        CREATE TABLE IF NOT EXISTS xp_deltas (
+            character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+            date TEXT NOT NULL,
+            from_date TEXT NOT NULL,
+            gained_exp INTEGER,
+            table_version TEXT NOT NULL,
+            status TEXT NOT NULL,
+            PRIMARY KEY (character_id, date)
+        );
+        CREATE TABLE IF NOT EXISTS exp_table_versions (
+            version TEXT PRIMARY KEY,
+            effective_date TEXT NOT NULL,
+            checksum TEXT NOT NULL,
+            source_note TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            target_start TEXT NOT NULL,
+            target_end TEXT NOT NULL,
+            status TEXT NOT NULL,
+            success_count INTEGER NOT NULL DEFAULT 0,
+            failure_count INTEGER NOT NULL DEFAULT 0,
+            message TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_snapshots_date ON daily_snapshots(date);
+        CREATE INDEX IF NOT EXISTS idx_deltas_date ON xp_deltas(date);
+        CREATE INDEX IF NOT EXISTS idx_memberships_date ON guild_memberships(date);
+        "#,
+    )?;
+    connection.execute(
+        "INSERT OR REPLACE INTO exp_table_versions(version, effective_date, checksum, source_note) VALUES (?1, ?2, ?3, ?4)",
+        params![
+            exp::EXP_TABLE_VERSION,
+            "2023-06-15",
+            exp::table_checksum(),
+            "MapleStory Wiki Module:Experience/data, KMS New Age 표. API 경험치율과 교차 검증 필요."
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn set_setting(connection: &Connection, key: &str, value: &str) -> Result<(), AppError> {
+    connection.execute(
+        "INSERT INTO settings(key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        params![key, value],
+    )?;
+    Ok(())
+}
+
+pub fn get_setting(connection: &Connection, key: &str) -> Result<Option<String>, AppError> {
+    Ok(connection
+        .query_row(
+            "SELECT value FROM settings WHERE key=?1",
+            params![key],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+pub fn save_setup(
+    connection: &Connection,
+    basic: &CharacterBasic,
+    ocid: &str,
+    guild_name: &str,
+    oguild_id: &str,
+) -> Result<i64, AppError> {
+    connection.execute("UPDATE characters SET is_primary=0", [])?;
+    connection.execute(
+        r#"INSERT INTO characters(current_name, world_name, character_class, is_primary, is_favorite)
+           VALUES (?1, ?2, ?3, 1, 1)
+           ON CONFLICT(current_name) DO UPDATE SET
+             world_name=excluded.world_name, character_class=excluded.character_class,
+             is_primary=1, is_favorite=1, updated_at=CURRENT_TIMESTAMP"#,
+        params![basic.character_name, basic.world_name, basic.character_class],
+    )?;
+    let character_id: i64 = connection.query_row(
+        "SELECT id FROM characters WHERE current_name=?1 COLLATE NOCASE",
+        params![basic.character_name],
+        |row| row.get(0),
+    )?;
+    connection.execute(
+        "INSERT OR IGNORE INTO character_identities(character_id, ocid) VALUES (?1, ?2)",
+        params![character_id, ocid],
+    )?;
+    set_setting(
+        connection,
+        "primary_character_id",
+        &character_id.to_string(),
+    )?;
+    set_setting(connection, "primary_name", &basic.character_name)?;
+    set_setting(connection, "world_name", &basic.world_name)?;
+    set_setting(connection, "guild_name", guild_name)?;
+    set_setting(connection, "oguild_id", oguild_id)?;
+    Ok(character_id)
+}
+
+pub fn upsert_character(
+    connection: &Connection,
+    name: &str,
+    world: &str,
+    class_name: &str,
+    ocid: &str,
+    favorite: bool,
+) -> Result<CharacterRecord, AppError> {
+    connection.execute(
+        r#"INSERT INTO characters(current_name, world_name, character_class, is_favorite)
+           VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT(current_name) DO UPDATE SET
+             world_name=excluded.world_name,
+             character_class=CASE WHEN excluded.character_class='' THEN characters.character_class ELSE excluded.character_class END,
+             is_favorite=MAX(characters.is_favorite, excluded.is_favorite),
+             updated_at=CURRENT_TIMESTAMP"#,
+        params![name, world, class_name, favorite as i64],
+    )?;
+    let id: i64 = connection.query_row(
+        "SELECT id FROM characters WHERE current_name=?1 COLLATE NOCASE",
+        params![name],
+        |row| row.get(0),
+    )?;
+    connection.execute(
+        "INSERT OR IGNORE INTO character_identities(character_id, ocid) VALUES (?1, ?2)",
+        params![id, ocid],
+    )?;
+    Ok(CharacterRecord {
+        id,
+        ocid: ocid.to_string(),
+    })
+}
+
+pub fn character_records(connection: &Connection) -> Result<Vec<CharacterRecord>, AppError> {
+    let mut statement = connection.prepare(
+        r#"SELECT c.id, ci.ocid
+           FROM characters c
+           JOIN character_identities ci ON ci.character_id=c.id AND ci.valid_to IS NULL"#,
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok(CharacterRecord {
+            id: row.get(0)?,
+            ocid: row.get(1)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+pub fn replace_memberships(
+    connection: &mut Connection,
+    date: &str,
+    members: &[String],
+) -> Result<(), AppError> {
+    let transaction = connection.transaction()?;
+    transaction.execute("DELETE FROM guild_memberships WHERE date=?1", params![date])?;
+    for name in members {
+        let character_id: Option<i64> = transaction
+            .query_row(
+                "SELECT id FROM characters WHERE current_name=?1 COLLATE NOCASE",
+                params![name],
+                |row| row.get(0),
+            )
+            .optional()?;
+        transaction.execute(
+            "INSERT INTO guild_memberships(date, member_name, character_id) VALUES (?1, ?2, ?3)",
+            params![date, name, character_id],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+pub fn link_memberships(
+    connection: &Connection,
+    name: &str,
+    character_id: i64,
+) -> Result<(), AppError> {
+    connection.execute(
+        "UPDATE guild_memberships SET character_id=?1 WHERE member_name=?2 COLLATE NOCASE",
+        params![character_id, name],
+    )?;
+    Ok(())
+}
+
+pub fn save_snapshot(connection: &Connection, snapshot: &Snapshot) -> Result<(), AppError> {
+    connection.execute(
+        r#"INSERT INTO daily_snapshots(character_id, date, level, exp, exp_rate, access_flag, raw_json)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+           ON CONFLICT(character_id, date) DO UPDATE SET
+             level=excluded.level, exp=excluded.exp, exp_rate=excluded.exp_rate,
+             access_flag=excluded.access_flag, raw_json=excluded.raw_json, fetched_at=CURRENT_TIMESTAMP"#,
+        params![snapshot.character_id, snapshot.date, snapshot.level, snapshot.exp, snapshot.exp_rate, snapshot.access_flag, snapshot.raw_json],
+    )?;
+    Ok(())
+}
+
+pub fn recalculate_character(connection: &Connection, character_id: i64) -> Result<(), AppError> {
+    let mut statement = connection.prepare(
+        "SELECT date, level, exp FROM daily_snapshots WHERE character_id=?1 ORDER BY date",
+    )?;
+    let snapshots = statement
+        .query_map(params![character_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    for pair in snapshots.windows(2) {
+        let (from_date, from_level, from_exp) = &pair[0];
+        let (to_date, to_level, to_exp) = &pair[1];
+        let calculation = exp::calculate_gain(*from_level, *from_exp, *to_level, *to_exp);
+        let (gained, status) = match calculation {
+            ExpCalculation::Ok(value) => (Some(value), "ok"),
+            ExpCalculation::MissingTable => (None, "table_update_required"),
+            ExpCalculation::InvalidDecrease => (None, "invalid_decrease"),
+            ExpCalculation::Overflow => (None, "overflow"),
+        };
+        connection.execute(
+            r#"INSERT INTO xp_deltas(character_id, date, from_date, gained_exp, table_version, status)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+               ON CONFLICT(character_id, date) DO UPDATE SET
+                 from_date=excluded.from_date, gained_exp=excluded.gained_exp,
+                 table_version=excluded.table_version, status=excluded.status"#,
+            params![character_id, to_date, from_date, gained, exp::EXP_TABLE_VERSION, status],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn app_status(connection: &Connection) -> Result<AppStatus, AppError> {
+    let primary_name = get_setting(connection, "primary_name")?;
+    let latest_date = connection.query_row("SELECT MAX(date) FROM daily_snapshots", [], |row| {
+        row.get::<_, Option<String>>(0)
+    })?;
+    let last_sync_at = connection
+        .query_row(
+            "SELECT finished_at FROM sync_runs WHERE status='success' ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(AppStatus {
+        configured: primary_name.is_some(),
+        primary_name,
+        world_name: get_setting(connection, "world_name")?,
+        guild_name: get_setting(connection, "guild_name")?,
+        latest_date,
+        last_sync_at,
+    })
+}
+
+fn period_dates(latest: &str, period: &str) -> Result<(String, String), AppError> {
+    let end = NaiveDate::parse_from_str(latest, "%Y-%m-%d")?;
+    if let Some(raw) = period.strip_prefix("custom:") {
+        let mut parts = raw.split(':');
+        let start = parts
+            .next()
+            .ok_or_else(|| AppError::Validation("시작일이 없습니다.".into()))?;
+        let finish = parts
+            .next()
+            .ok_or_else(|| AppError::Validation("종료일이 없습니다.".into()))?;
+        NaiveDate::parse_from_str(start, "%Y-%m-%d")?;
+        NaiveDate::parse_from_str(finish, "%Y-%m-%d")?;
+        return Ok((start.to_string(), finish.to_string()));
+    }
+    let days = match period {
+        "daily" => 1,
+        "30d" => 30,
+        _ => 7,
+    };
+    Ok((
+        (end - Duration::days(days - 1))
+            .format("%Y-%m-%d")
+            .to_string(),
+        latest.to_string(),
+    ))
+}
+
+pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData, AppError> {
+    let latest: Option<String> =
+        connection.query_row("SELECT MAX(date) FROM guild_memberships", [], |row| {
+            row.get(0)
+        })?;
+    let Some(latest_date) = latest else {
+        return Ok(DashboardData {
+            summary: DashboardSummary {
+                latest_date: None,
+                period_start: None,
+                period_end: None,
+                primary_daily_exp: None,
+                primary_period_exp: None,
+                primary_rank: None,
+                leader_gap: None,
+                last_sync_at: None,
+            },
+            rankings: vec![],
+            series: vec![],
+        });
+    };
+    let (start, end) = period_dates(&latest_date, period)?;
+    let primary_id = get_setting(connection, "primary_character_id")?
+        .and_then(|value| value.parse::<i64>().ok());
+
+    let mut statement = connection.prepare(
+        r#"SELECT c.id, c.current_name, c.character_class,
+                  COALESCE((SELECT level FROM daily_snapshots ds WHERE ds.character_id=c.id AND ds.date<=?2 ORDER BY ds.date DESC LIMIT 1), 0),
+                  SUM(CASE WHEN xd.status='ok' THEN xd.gained_exp ELSE NULL END),
+                  c.is_primary, c.is_favorite,
+                  EXISTS(SELECT 1 FROM guild_memberships gm WHERE gm.date=?2 AND gm.character_id=c.id),
+                  CASE WHEN SUM(CASE WHEN xd.status='ok' THEN 1 ELSE 0 END)=0 THEN '자료 없음' ELSE '정상' END
+           FROM characters c
+           LEFT JOIN xp_deltas xd ON xd.character_id=c.id AND xd.date BETWEEN ?1 AND ?2
+           WHERE c.is_favorite=1 OR EXISTS(SELECT 1 FROM guild_memberships gm WHERE gm.date=?2 AND gm.character_id=c.id)
+           GROUP BY c.id
+           ORDER BY SUM(CASE WHEN xd.status='ok' THEN xd.gained_exp ELSE NULL END) DESC, c.current_name"#,
+    )?;
+    let raw = statement
+        .query_map(params![start, end], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, bool>(5)?,
+                row.get::<_, bool>(6)?,
+                row.get::<_, bool>(7)?,
+                row.get::<_, String>(8)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let primary_exp = raw
+        .iter()
+        .find(|row| Some(row.0) == primary_id)
+        .and_then(|row| row.4);
+    let mut rankings = Vec::with_capacity(raw.len());
+    for (index, row) in raw.into_iter().enumerate() {
+        rankings.push(RankingRow {
+            character_id: row.0,
+            rank: index + 1,
+            character_name: row.1,
+            character_class: row.2,
+            level: row.3,
+            gained_exp: row.4,
+            gap_from_primary: match (row.4, primary_exp) {
+                (Some(value), Some(primary)) => Some(value - primary),
+                _ => None,
+            },
+            is_primary: row.5,
+            is_favorite: row.6,
+            is_current_member: row.7,
+            status: row.8,
+        });
+    }
+    let primary_rank = rankings
+        .iter()
+        .find(|row| row.is_primary)
+        .map(|row| row.rank);
+    let leader_gap = match (rankings.first().and_then(|row| row.gained_exp), primary_exp) {
+        (Some(leader), Some(primary)) => Some(leader - primary),
+        _ => None,
+    };
+    let primary_daily_exp = primary_id.and_then(|id| {
+        connection.query_row(
+        "SELECT gained_exp FROM xp_deltas WHERE character_id=?1 AND date=?2 AND status='ok'",
+        params![id, latest_date], |row| row.get(0)).optional().ok().flatten()
+    });
+
+    let selected_ids: Vec<i64> = rankings
+        .iter()
+        .filter(|row| row.is_primary || row.is_favorite)
+        .take(8)
+        .map(|row| row.character_id)
+        .collect();
+    let mut series = Vec::new();
+    for id in selected_ids {
+        let name = rankings
+            .iter()
+            .find(|row| row.character_id == id)
+            .map(|row| row.character_name.clone())
+            .unwrap_or_default();
+        let mut series_statement = connection.prepare(
+            "SELECT date, gained_exp FROM xp_deltas WHERE character_id=?1 AND date BETWEEN ?2 AND ?3 ORDER BY date",
+        )?;
+        for point in series_statement.query_map(params![id, start, end], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
+        })? {
+            let (date, gained_exp) = point?;
+            series.push(SeriesPoint {
+                date,
+                character_name: name.clone(),
+                gained_exp,
+            });
+        }
+    }
+    let last_sync_at = connection
+        .query_row(
+            "SELECT finished_at FROM sync_runs WHERE status='success' ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(DashboardData {
+        summary: DashboardSummary {
+            latest_date: Some(latest_date),
+            period_start: Some(start),
+            period_end: Some(end),
+            primary_daily_exp,
+            primary_period_exp: primary_exp,
+            primary_rank,
+            leader_gap,
+            last_sync_at,
+        },
+        rankings,
+        series,
+    })
+}
+
+pub fn set_favorite(
+    connection: &Connection,
+    character_id: i64,
+    favorite: bool,
+) -> Result<(), AppError> {
+    connection.execute(
+        "UPDATE characters SET is_favorite=CASE WHEN is_primary=1 THEN 1 ELSE ?2 END, updated_at=CURRENT_TIMESTAMP WHERE id=?1",
+        params![character_id, favorite as i64],
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn migration_and_settings_round_trip() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        set_setting(&connection, "guild_name", "테스트길드").unwrap();
+        assert_eq!(
+            get_setting(&connection, "guild_name").unwrap().as_deref(),
+            Some("테스트길드")
+        );
+    }
+
+    #[test]
+    fn thirty_one_snapshots_create_thirty_deltas() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO characters(current_name, world_name) VALUES ('테스트', '스카니아')",
+                [],
+            )
+            .unwrap();
+        for day in 1..=31 {
+            let date = format!("2026-07-{day:02}");
+            save_snapshot(
+                &connection,
+                &Snapshot {
+                    character_id: 1,
+                    date,
+                    level: 260,
+                    exp: day * 100,
+                    exp_rate: "0".into(),
+                    access_flag: None,
+                    raw_json: "{}".into(),
+                },
+            )
+            .unwrap();
+        }
+        recalculate_character(&connection, 1).unwrap();
+        let count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM xp_deltas", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 30);
+    }
+}
