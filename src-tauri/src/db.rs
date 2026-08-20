@@ -199,6 +199,81 @@ pub fn upsert_character(
     ocid: &str,
     favorite: bool,
 ) -> Result<CharacterRecord, AppError> {
+    let identity_owner = connection
+        .query_row(
+            "SELECT character_id FROM character_identities WHERE ocid=?1 AND valid_to IS NULL",
+            params![ocid],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?;
+    if let Some(owner_id) = identity_owner {
+        let duplicate_id = connection
+            .query_row(
+                r#"SELECT c.id FROM characters c
+                   WHERE c.current_name=?1 COLLATE NOCASE AND c.id<>?2
+                     AND NOT EXISTS(SELECT 1 FROM character_identities ci WHERE ci.character_id=c.id)"#,
+                params![name, owner_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        if let Some(duplicate_id) = duplicate_id {
+            let transaction = connection.unchecked_transaction()?;
+            transaction.execute(
+                "UPDATE guild_memberships SET character_id=?1 WHERE character_id=?2",
+                params![owner_id, duplicate_id],
+            )?;
+            transaction.execute(
+                r#"INSERT OR IGNORE INTO daily_snapshots(character_id,date,level,exp,exp_rate,access_flag,raw_json,fetched_at)
+                   SELECT ?1,date,level,exp,exp_rate,access_flag,raw_json,fetched_at FROM daily_snapshots WHERE character_id=?2"#,
+                params![owner_id, duplicate_id],
+            )?;
+            transaction.execute(
+                r#"INSERT OR IGNORE INTO xp_deltas(character_id,date,from_date,gained_exp,table_version,status)
+                   SELECT ?1,date,from_date,gained_exp,table_version,status FROM xp_deltas WHERE character_id=?2"#,
+                params![owner_id, duplicate_id],
+            )?;
+            transaction.execute(
+                r#"UPDATE characters SET
+                     is_primary=MAX(is_primary,(SELECT is_primary FROM characters WHERE id=?2)),
+                     is_favorite=MAX(is_favorite,(SELECT is_favorite FROM characters WHERE id=?2))
+                   WHERE id=?1"#,
+                params![owner_id, duplicate_id],
+            )?;
+            transaction.execute(
+                "UPDATE settings SET value=?1 WHERE key='primary_character_id' AND value=?2",
+                params![owner_id.to_string(), duplicate_id.to_string()],
+            )?;
+            transaction.execute("DELETE FROM characters WHERE id=?1", params![duplicate_id])?;
+            transaction.commit()?;
+        }
+        connection.execute(
+            r#"UPDATE characters SET current_name=?2, world_name=?3,
+                 character_class=CASE WHEN ?4='' THEN character_class ELSE ?4 END,
+                 image_url=COALESCE(?5,image_url), is_favorite=MAX(is_favorite,?6),
+                 updated_at=CURRENT_TIMESTAMP WHERE id=?1"#,
+            params![
+                owner_id,
+                name,
+                world,
+                class_name,
+                image_url,
+                favorite as i64
+            ],
+        )?;
+        let is_primary: bool = connection.query_row(
+            "SELECT is_primary FROM characters WHERE id=?1",
+            params![owner_id],
+            |row| row.get(0),
+        )?;
+        if is_primary {
+            set_setting(connection, "primary_character_id", &owner_id.to_string())?;
+            set_setting(connection, "primary_name", name)?;
+        }
+        return Ok(CharacterRecord {
+            id: owner_id,
+            ocid: ocid.to_string(),
+        });
+    }
     connection.execute(
         r#"INSERT INTO characters(current_name, world_name, character_class, image_url, is_favorite)
            VALUES (?1, ?2, ?3, ?4, ?5)
@@ -216,7 +291,7 @@ pub fn upsert_character(
         |row| row.get(0),
     )?;
     connection.execute(
-        "INSERT OR IGNORE INTO character_identities(character_id, ocid) VALUES (?1, ?2)",
+        "INSERT INTO character_identities(character_id, ocid) VALUES (?1, ?2)",
         params![id, ocid],
     )?;
     Ok(CharacterRecord {
@@ -303,6 +378,16 @@ pub fn finish_sync_run(
     connection.execute(
         "UPDATE sync_runs SET finished_at=CURRENT_TIMESTAMP, status=?2, success_count=?3, failure_count=?4, message=?5 WHERE id=?1",
         params![run_id, status, success_count as i64, failure_count as i64, message],
+    )?;
+    Ok(())
+}
+
+pub fn fail_stale_sync_runs(connection: &Connection) -> Result<(), AppError> {
+    connection.execute(
+        r#"UPDATE sync_runs SET finished_at=CURRENT_TIMESTAMP, status='failed',
+             message='이전 동기화가 비정상 종료되어 새 실행에서 정리했습니다.'
+           WHERE status='running' AND finished_at IS NULL"#,
+        [],
     )?;
     Ok(())
 }
@@ -898,5 +983,88 @@ mod tests {
             })
             .unwrap();
         assert_eq!(primary_id, 2);
+    }
+
+    #[test]
+    fn nickname_change_reuses_ocid_and_merges_duplicate_history() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection.execute(
+            "INSERT INTO characters(id,current_name,world_name) VALUES (1,'이전이름','스카니아'),(2,'새이름','스카니아')",
+            [],
+        ).unwrap();
+        connection
+            .execute(
+                "INSERT INTO character_identities(character_id,ocid) VALUES (1,'same-ocid')",
+                [],
+            )
+            .unwrap();
+        connection.execute(
+            "INSERT INTO guild_memberships(date,member_name,character_id) VALUES ('2026-08-19','새이름',2)",
+            [],
+        ).unwrap();
+        for (id, date, exp) in [(1, "2026-08-18", 100), (2, "2026-08-19", 200)] {
+            save_snapshot(
+                &connection,
+                &Snapshot {
+                    character_id: id,
+                    date: date.into(),
+                    level: 260,
+                    exp,
+                    exp_rate: "0".into(),
+                    access_flag: None,
+                    raw_json: "{}".into(),
+                },
+            )
+            .unwrap();
+        }
+        let record = upsert_character(
+            &connection,
+            "새이름",
+            "스카니아",
+            "은월",
+            None,
+            "same-ocid",
+            false,
+        )
+        .unwrap();
+        assert_eq!(record.id, 1);
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM characters", [], |row| row
+                    .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM daily_snapshots WHERE character_id=1",
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT character_id FROM guild_memberships", [], |row| row
+                    .get::<_, i64>(
+                    0
+                ))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT current_name FROM characters WHERE id=1",
+                    [],
+                    |row| row.get::<_, String>(0)
+                )
+                .unwrap(),
+            "새이름"
+        );
     }
 }

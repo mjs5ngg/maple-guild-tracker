@@ -59,6 +59,7 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     let end = latest_completed_date(Utc::now());
 
     let connection = db::open(&state.db_path)?;
+    db::fail_stale_sync_runs(&connection)?;
     let oguild_id = db::get_setting(&connection, "oguild_id")?
         .ok_or_else(|| AppError::Validation("먼저 대표 캐릭터를 설정해 주세요.".into()))?;
     let world_name = db::get_setting(&connection, "world_name")?.unwrap_or_default();
@@ -326,8 +327,24 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     }
 
     let connection = db::open(&state.db_path)?;
-    for character in &characters {
+    emit_progress(
+        &app,
+        "calculate",
+        0,
+        characters.len(),
+        "저장된 경험치를 계산하고 있습니다.",
+    );
+    for (index, character) in characters.iter().enumerate() {
         db::recalculate_character(&connection, character.id)?;
+        if (index + 1).is_multiple_of(10) || index + 1 == characters.len() {
+            emit_progress(
+                &app,
+                "calculate",
+                index + 1,
+                characters.len(),
+                format!("경험치 계산 {}/{}", index + 1, characters.len()),
+            );
+        }
     }
     let final_status = if success_count > 0 {
         "success"

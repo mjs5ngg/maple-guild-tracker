@@ -99,7 +99,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const rows = useMemo(() => data?.rankings.filter((row) => row.character_name.toLowerCase().includes(search.toLowerCase())) ?? [], [data, search]);
   const summary = data?.summary;
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
-  const syncVisible = busy || ["guild", "identity", "character", "live", "waiting"].includes(progress?.phase ?? "");
+  const syncVisible = busy || ["guild", "identity", "character", "calculate", "live", "waiting"].includes(progress?.phase ?? "");
   const syncWaiting = progress?.phase === "waiting";
 
   return (
