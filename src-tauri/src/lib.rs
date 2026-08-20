@@ -178,6 +178,8 @@ pub fn run() {
             commands::save_setup,
             commands::replace_api_key,
             commands::sync_now,
+            commands::sync_live_now,
+            commands::change_primary,
             commands::get_dashboard,
             commands::set_favorite,
             commands::add_external_favorite,

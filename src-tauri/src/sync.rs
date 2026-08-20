@@ -67,6 +67,7 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
             row.get(0)
         })?;
     let pending_backfill = db::get_setting(&connection, "backfill_start")?;
+    let earliest_missing = db::earliest_missing_snapshot_date(&connection)?;
     if requested_days.is_none() {
         if let Some(latest) = latest_local.as_deref() {
             let parsed = NaiveDate::parse_from_str(latest, "%Y-%m-%d")?;
@@ -88,6 +89,7 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
                 && missing_current == 0
                 && missing_favorites == 0
                 && pending_backfill.is_none()
+                && earliest_missing.is_none()
             {
                 return Ok(SyncReport {
                     target_start: latest.to_string(),
@@ -103,6 +105,8 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
         end - Duration::days(days.min(30) as i64)
     } else if let Some(pending) = pending_backfill {
         NaiveDate::parse_from_str(&pending, "%Y-%m-%d")?
+    } else if let Some(missing) = earliest_missing {
+        NaiveDate::parse_from_str(&missing, "%Y-%m-%d")?
     } else if let Some(latest) = latest_local {
         let parsed = NaiveDate::parse_from_str(&latest, "%Y-%m-%d")?;
         if parsed >= end {
@@ -137,6 +141,14 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
             dates.len(),
             format!("{date} 길드원 목록을 확인하고 있습니다."),
         );
+        let existing_members = {
+            let connection = db::open(&state.db_path)?;
+            db::membership_names(&connection, date)?
+        };
+        if !existing_members.is_empty() {
+            all_names.extend(existing_members);
+            continue;
+        }
         match client.guild_basic(&api_key, &oguild_id, date).await {
             Ok(guild) => {
                 let mut connection = db::open(&state.db_path)?;
@@ -349,6 +361,85 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     })
 }
 
+pub async fn sync_live(app: AppHandle) -> Result<SyncReport, AppError> {
+    let state = app.state::<AppState>();
+    let _guard = state.sync_lock.lock().await;
+    let api_key = Arc::new(credential_get()?);
+    let client = state.nexon.clone();
+    let connection = db::open(&state.db_path)?;
+    let characters = db::live_character_records(&connection)?;
+    drop(connection);
+    let total = characters.len();
+    emit_progress(&app, "live", 0, total, format!("최신 정보 0/{total}"));
+    let mut results = stream::iter(characters)
+        .map(|character| {
+            let client = client.clone();
+            let key = api_key.clone();
+            async move {
+                let result = client.character_basic(&key, &character.ocid, None).await;
+                (character, result)
+            }
+        })
+        .buffer_unordered(5);
+    let mut completed = 0_usize;
+    let mut success_count = 0_usize;
+    let mut failure_count = 0_usize;
+    while let Some((character, result)) = results.next().await {
+        completed += 1;
+        match result {
+            Ok(basic) => {
+                let raw_json = serde_json::to_string(&basic)?;
+                let connection = db::open(&state.db_path)?;
+                connection.execute(
+                    "UPDATE characters SET current_name=?2, world_name=?3, character_class=?4, image_url=COALESCE(?5,image_url), updated_at=CURRENT_TIMESTAMP WHERE id=?1",
+                    rusqlite::params![character.id, basic.character_name, basic.world_name, basic.character_class, basic.character_image],
+                )?;
+                db::save_live_snapshot(
+                    &connection,
+                    &Snapshot {
+                        character_id: character.id,
+                        date: String::new(),
+                        level: basic.character_level,
+                        exp: basic.character_exp,
+                        exp_rate: basic.character_exp_rate,
+                        access_flag: basic.access_flag,
+                        raw_json,
+                    },
+                )?;
+                success_count += 1;
+            }
+            Err(_) => failure_count += 1,
+        }
+        if completed.is_multiple_of(10) || completed == total {
+            emit_progress(
+                &app,
+                "live",
+                completed,
+                total,
+                format!("최신 정보 {completed}/{total}"),
+            );
+        }
+    }
+    emit_progress(
+        &app,
+        "complete",
+        total,
+        total,
+        "최신 정보 수집을 마쳤습니다.",
+    );
+    let now = Utc::now()
+        .with_timezone(&Seoul)
+        .format("%Y-%m-%d %H:%M")
+        .to_string();
+    Ok(SyncReport {
+        target_start: now.clone(),
+        target_end: now,
+        success_count,
+        failure_count,
+        unresolved_characters: vec![],
+    })
+}
+
 pub async fn background_loop(app: AppHandle) {
     tokio::time::sleep(std::time::Duration::from_secs(8)).await;
     loop {
@@ -358,10 +449,10 @@ pub async fn background_loop(app: AppHandle) {
                 .ok()
                 .flatten()
                 .is_some();
-        if configured {
-            let _ = sync_all(app.clone(), None).await;
+        if configured && sync_all(app.clone(), None).await.is_ok() {
+            let _ = sync_live(app.clone()).await;
         }
-        tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
     }
 }
 

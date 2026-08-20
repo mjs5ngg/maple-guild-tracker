@@ -9,6 +9,8 @@ export const native = {
   replaceApiKey: (apiKey: string) =>
     invoke<SetupResult>("replace_api_key", { apiKey }),
   sync: (days?: number) => invoke<SyncReport>("sync_now", { days }),
+  liveSync: () => invoke<SyncReport>("sync_live_now"),
+  changePrimary: (characterId: number) => invoke<AppStatus>("change_primary", { characterId }),
   dashboard: (period: string) => invoke<DashboardData>("get_dashboard", { period }),
   favorite: (characterId: number, favorite: boolean) =>
     invoke<void>("set_favorite", { characterId, favorite }),

@@ -18,6 +18,11 @@ export function formatExp(value: number | null | undefined, signed = false): str
   return `${sign}${value.toLocaleString("ko-KR")}`;
 }
 
+export function formatGain(value: number | null | undefined, percent: number | null | undefined): string {
+  if (value == null || percent == null) return "—";
+  return `${percent.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% (${formatExp(value, true)})`;
+}
+
 export function shortDate(value: string | null): string {
   if (!value) return "자료 없음";
   const [, month, day] = value.split("-");

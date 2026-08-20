@@ -62,6 +62,21 @@ pub async fn sync_now(app: AppHandle, days: Option<u32>) -> Result<SyncReport, S
 }
 
 #[tauri::command]
+pub async fn sync_live_now(app: AppHandle) -> Result<SyncReport, String> {
+    sync::sync_live(app).await.map_err(public_error)
+}
+
+#[tauri::command]
+pub fn change_primary(
+    state: tauri::State<'_, AppState>,
+    character_id: i64,
+) -> Result<AppStatus, String> {
+    let mut connection = db::open(&state.db_path).map_err(public_error)?;
+    db::set_primary(&mut connection, character_id).map_err(public_error)?;
+    db::app_status(&connection).map_err(public_error)
+}
+
+#[tauri::command]
 pub async fn replace_api_key(
     state: tauri::State<'_, AppState>,
     api_key: String,

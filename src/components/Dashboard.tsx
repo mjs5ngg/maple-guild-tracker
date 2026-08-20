@@ -1,8 +1,8 @@
 // 길드 경험치 요약, 순위, 그래프와 즐겨찾기 관리를 제공합니다.
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, KeyRound, RefreshCw, Search, Settings, Star, Trophy, Users, X } from "lucide-react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, Image, KeyRound, RefreshCw, Search, Settings, SlidersHorizontal, Star, Trophy, Type, Users, X } from "lucide-react";
 import { native } from "../native";
-import { formatExp, shortDate, syncTime } from "../format";
+import { formatExp, formatGain, shortDate, syncTime } from "../format";
 import type { AppStatus, DashboardData, SyncProgress } from "../types";
 import { ExperienceChart } from "./ExperienceChart";
 import { CharacterAvatar } from "./CharacterAvatar";
@@ -28,12 +28,22 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState("");
   const [keyMessage, setKeyMessage] = useState("");
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const [uiScale, setUiScale] = useState(() => Number(localStorage.getItem("ui-scale") || "1.06"));
+  const [avatarScale, setAvatarScale] = useState(() => Number(localStorage.getItem("avatar-scale") || "1"));
 
   async function load() {
     try { setData(await native.dashboard(period)); setError(""); }
     catch (reason) { setError(String(reason)); }
   }
   useEffect(() => { void load(); }, [period]);
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => void load(), 30_000);
+    return () => globalThis.clearInterval(timer);
+  }, [period]);
+  useEffect(() => {
+    if (progress?.phase === "complete") void Promise.all([load(), onRefreshStatus()]);
+  }, [progress?.phase]);
   useEffect(() => {
     if (data?.summary.latest_date && !customEnd) {
       const end = data.summary.latest_date;
@@ -46,7 +56,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
 
   async function sync() {
     setBusy(true); setError("");
-    try { await native.sync(); await Promise.all([load(), onRefreshStatus()]); }
+    try { await native.sync(); await native.liveSync(); await Promise.all([load(), onRefreshStatus()]); }
     catch (reason) { setError(String(reason)); }
     finally { setBusy(false); }
   }
@@ -76,14 +86,24 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
     finally { setBusy(false); }
   }
 
+  async function changePrimary(characterId: number) {
+    setBusy(true); setError("");
+    try { await native.changePrimary(characterId); await Promise.all([load(), onRefreshStatus()]); }
+    catch (reason) { setError(String(reason)); }
+    finally { setBusy(false); }
+  }
+
+  function changeUiScale(value: number) { setUiScale(value); localStorage.setItem("ui-scale", String(value)); }
+  function changeAvatarScale(value: number) { setAvatarScale(value); localStorage.setItem("avatar-scale", String(value)); }
+
   const rows = useMemo(() => data?.rankings.filter((row) => row.character_name.toLowerCase().includes(search.toLowerCase())) ?? [], [data, search]);
   const summary = data?.summary;
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
-  const syncVisible = busy || ["guild", "identity", "character", "waiting"].includes(progress?.phase ?? "");
+  const syncVisible = busy || ["guild", "identity", "character", "live", "waiting"].includes(progress?.phase ?? "");
   const syncWaiting = progress?.phase === "waiting";
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ "--ui-scale": uiScale, "--avatar-scale": avatarScale } as CSSProperties}>
       <aside className="sidebar">
         <div className="side-brand"><div className="brand-mark small"><BarChart3 size={20} /></div><div><b>길드원 따라가기</b><span>Guild EXP</span></div></div>
         <nav><button className="active"><BarChart3 />대시보드</button><button onClick={() => document.getElementById("ranking")?.scrollIntoView({ behavior: "smooth" })}><Users />길드 순위</button><button onClick={() => document.getElementById("history")?.scrollIntoView({ behavior: "smooth" })}><CalendarDays />성장 기록</button></nav>
@@ -94,10 +114,11 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
 
       <main className="dashboard-main">
         <header className="topbar">
-          <div><p className="eyebrow">GUILD OVERVIEW</p><h1>길드 성장 대시보드</h1><p>최근 완료일 {summary?.latest_date ?? status.latest_date ?? "동기화 전"} 기준입니다.</p></div>
+          <div><p className="eyebrow">GUILD OVERVIEW</p><h1>길드 성장 대시보드</h1><p>최근 완료일 {summary?.latest_date ?? status.latest_date ?? "동기화 전"} 기준이며, 활동 표시는 공식 API 특성상 평균 15분가량 늦을 수 있습니다.</p></div>
           <div className="top-actions">
             <div className="period-tabs">{periods.map((item) => <button key={item.key} className={period === item.key ? "active" : ""} onClick={() => { setPeriod(item.key); setCustomOpen(false); }}>{item.label}</button>)}<button className={period.startsWith("custom:") ? "active" : ""} onClick={() => setCustomOpen((value) => !value)}>직접 지정</button></div>
             <button className="icon-action" title="API 키 설정" onClick={() => setSettingsOpen(true)}><Settings /></button>
+            <div className="display-control-wrap"><button className="icon-action" title="화면 크기 조절" onClick={() => setDisplayOpen((value) => !value)}><SlidersHorizontal /></button>{displayOpen && <div className="display-controls"><label><Type />전체 크기 <b>{Math.round(uiScale * 100)}%</b><input type="range" min="0.9" max="1.3" step="0.02" value={uiScale} onChange={(event) => changeUiScale(Number(event.target.value))} /></label><label><Image />캐릭터 이미지 <b>{Math.round(avatarScale * 100)}%</b><input type="range" min="0.75" max="1.8" step="0.05" value={avatarScale} onChange={(event) => changeAvatarScale(Number(event.target.value))} /></label><button onClick={() => { changeUiScale(1.06); changeAvatarScale(1); }}>기본값</button></div>}</div>
             <button className="icon-action" title="동기화" onClick={sync} disabled={busy}><RefreshCw className={busy ? "spin" : ""} /></button>
           </div>
         </header>
@@ -108,7 +129,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         {error && <div className="error-banner dashboard-error">{error}</div>}
 
         <section className="summary-grid">
-          <article><div className="summary-icon orange"><Trophy /></div><span>{period === "daily" ? "일간 획득 경험치" : "선택 기간 경험치"}</span><strong>{formatExp(summary?.primary_period_exp)}</strong><small>{status.primary_name}의 공식 API 기록</small></article>
+          <article><div className="summary-icon orange"><Trophy /></div><span>{period === "daily" ? "일간 획득 경험치" : "선택 기간 경험치"}</span><strong>{formatGain(summary?.primary_period_exp, summary?.primary_period_percent)}</strong><small>{status.primary_name}의 현재 레벨 기준</small></article>
           <article><div className="summary-icon mint"><Crown /></div><span>길드 내 순위</span><strong>{summary?.primary_rank ? `${summary.primary_rank}위` : "—"}</strong><small>현재 길드원 기준</small></article>
           <article><div className="summary-icon blue"><ChevronRight /></div><span>선두와의 격차</span><strong>{formatExp(summary?.leader_gap)}</strong><small>{summary?.leader_gap === 0 ? "현재 공동 선두입니다." : "선두까지 남은 경험치"}</small></article>
           <article><div className="summary-icon violet"><CalendarDays /></div><span>최근 완료일</span><strong>{shortDate(summary?.latest_date ?? null)}</strong><small>{syncTime(summary?.last_sync_at ?? null)}</small></article>
@@ -116,12 +137,12 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
 
         <section className="content-grid">
           <article className="panel chart-panel" id="history"><div className="panel-heading"><div><p className="eyebrow">EXP HISTORY</p><h2>날짜별 성장 흐름</h2></div><span>{summary?.period_start ?? "—"} — {summary?.period_end ?? "—"}</span></div><ExperienceChart series={data?.series ?? []} /></article>
-          <article className="panel favorites-panel"><div className="panel-heading"><div><p className="eyebrow">QUICK ADD</p><h2>외부 즐겨찾기</h2></div><Star size={18} /></div><p>길드 밖 캐릭터도 최근 30일 기록과 함께 비교할 수 있습니다.</p><form onSubmit={addExternal}><input value={externalName} onChange={(event) => setExternalName(event.target.value)} placeholder="캐릭터명 입력" disabled={busy} /><button disabled={busy || !externalName.trim()}>추가</button></form><div className="favorite-list">{data?.rankings.filter((row) => row.is_favorite).slice(0, 5).map((row) => <div key={row.character_id}><CharacterAvatar image={row.character_image} name={row.character_name} /><div><b>{row.character_name}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatExp(row.gained_exp)}</strong></div>)}</div></article>
+          <article className="panel favorites-panel"><div className="panel-heading"><div><p className="eyebrow">QUICK ADD</p><h2>외부 즐겨찾기</h2></div><Star size={18} /></div><p>길드 밖 캐릭터도 최근 30일 기록과 함께 비교할 수 있습니다.</p><form onSubmit={addExternal}><input value={externalName} onChange={(event) => setExternalName(event.target.value)} placeholder="캐릭터명 입력" disabled={busy} /><button disabled={busy || !externalName.trim()}>추가</button></form><div className="favorite-list">{data?.rankings.filter((row) => row.is_favorite).slice(0, 5).map((row) => <div key={row.character_id}><CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatGain(row.gained_exp, row.gained_percent)}</strong></div>)}</div></article>
         </section>
 
         <section className="panel ranking-panel" id="ranking">
           <div className="panel-heading ranking-heading"><div><p className="eyebrow">GUILD RANKING</p><h2>경험치 순위</h2></div><label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="길드원 검색" /></label></div>
-          <div className="table-wrap"><table><thead><tr><th>순위</th><th>캐릭터</th><th>레벨</th><th>획득 경험치</th><th>나와의 격차</th><th>상태</th><th aria-label="즐겨찾기" /></tr></thead><tbody>{rows.map((row) => <tr key={row.character_id} className={row.is_primary ? "primary-row" : ""}><td><span className={`rank rank-${row.rank}`}>{row.rank}</span></td><td><div className="character-cell"><CharacterAvatar image={row.character_image} name={row.character_name} /><div><b>{row.character_name}{row.is_primary && <em>나</em>}</b><small>{row.character_class || "직업 확인 중"}{!row.is_current_member && " · 외부"}</small></div></div></td><td>Lv.{row.level || "—"}</td><td className="exp-cell">{formatExp(row.gained_exp)}</td><td className={row.gap_from_primary && row.gap_from_primary > 0 ? "positive" : "muted"}>{formatExp(row.gap_from_primary, true)}</td><td><span className={row.status === "정상" ? "status-ok" : "status-pending"}>{row.status}</span></td><td><button className={`star-button ${row.is_favorite ? "selected" : ""}`} onClick={() => toggleFavorite(row.character_id, row.is_favorite)} disabled={row.is_primary}><Star size={17} fill={row.is_favorite ? "currentColor" : "none"} /></button></td></tr>)}</tbody></table>{!rows.length && <div className="empty-table">표시할 캐릭터 기록이 없습니다.</div>}</div>
+          <div className="table-wrap"><table><thead><tr><th>순위</th><th>캐릭터</th><th>레벨</th><th>획득 경험치</th><th>나와의 격차</th><th>상태</th><th aria-label="대표 및 즐겨찾기" /></tr></thead><tbody>{rows.map((row) => <tr key={row.character_id} className={row.is_primary ? "primary-row" : ""}><td><span className={`rank rank-${row.rank}`}>{row.rank}</span></td><td><div className="character-cell"><CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em>나</em>}</b><small>{row.character_class || "직업 확인 중"}{!row.is_current_member && " · 외부"}</small></div></div></td><td>Lv.{row.level || "—"}</td><td className="exp-cell">{formatGain(row.gained_exp, row.gained_percent)}</td><td className={row.gap_from_primary && row.gap_from_primary > 0 ? "positive" : "muted"}>{formatExp(row.gap_from_primary, true)}</td><td><span className={row.status === "정상" ? "status-ok" : "status-pending"}>{row.status}</span></td><td><div className="row-actions">{row.is_current_member && !row.is_primary && <button className="primary-character-button" title="대표 캐릭터로 지정" onClick={() => void changePrimary(row.character_id)} disabled={busy}><Crown size={16} /></button>}<button className={`star-button ${row.is_favorite ? "selected" : ""}`} title="즐겨찾기" onClick={() => toggleFavorite(row.character_id, row.is_favorite)} disabled={row.is_primary}><Star size={17} fill={row.is_favorite ? "currentColor" : "none"} /></button></div></td></tr>)}</tbody></table>{!rows.length && <div className="empty-table">표시할 캐릭터 기록이 없습니다.</div>}</div>
         </section>
       </main>
       {settingsOpen && <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 Windows 자격 증명 관리자에 저장됩니다.</small></section></div>}

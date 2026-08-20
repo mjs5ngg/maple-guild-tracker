@@ -42,11 +42,14 @@ pub struct RankingRow {
     pub character_image: Option<String>,
     pub level: i64,
     pub gained_exp: Option<i64>,
+    pub gained_percent: Option<f64>,
     pub gap_from_primary: Option<i64>,
     pub is_primary: bool,
     pub is_favorite: bool,
     pub is_current_member: bool,
     pub status: String,
+    pub is_hunting: bool,
+    pub live_updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,6 +66,7 @@ pub struct DashboardSummary {
     pub period_end: Option<String>,
     pub primary_daily_exp: Option<i64>,
     pub primary_period_exp: Option<i64>,
+    pub primary_period_percent: Option<f64>,
     pub primary_rank: Option<usize>,
     pub leader_gap: Option<i64>,
     pub last_sync_at: Option<String>,

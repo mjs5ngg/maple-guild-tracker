@@ -22,11 +22,14 @@ export interface RankingRow {
   character_image: string | null;
   level: number;
   gained_exp: number | null;
+  gained_percent: number | null;
   gap_from_primary: number | null;
   is_primary: boolean;
   is_favorite: boolean;
   is_current_member: boolean;
   status: string;
+  is_hunting: boolean;
+  live_updated_at: string | null;
 }
 
 export interface SeriesPoint {
@@ -42,6 +45,7 @@ export interface DashboardData {
     period_end: string | null;
     primary_daily_exp: number | null;
     primary_period_exp: number | null;
+    primary_period_percent: number | null;
     primary_rank: number | null;
     leader_gap: number | null;
     last_sync_at: string | null;
