@@ -85,7 +85,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="side-brand"><div className="brand-mark small"><BarChart3 size={20} /></div><div><b>Maple Track</b><span>Guild EXP</span></div></div>
+        <div className="side-brand"><div className="brand-mark small"><BarChart3 size={20} /></div><div><b>길드원 따라가기</b><span>Guild EXP</span></div></div>
         <nav><button className="active"><BarChart3 />대시보드</button><button onClick={() => document.getElementById("ranking")?.scrollIntoView({ behavior: "smooth" })}><Users />길드 순위</button><button onClick={() => document.getElementById("history")?.scrollIntoView({ behavior: "smooth" })}><CalendarDays />성장 기록</button></nav>
         <div className="guild-card"><span>현재 추적 길드</span><strong>{status.guild_name}</strong><small>{status.world_name} · 대표 {status.primary_name}</small></div>
         <button className="widget-open" onClick={() => native.showWidget()}><ExternalLink size={16} />미니 위젯 열기</button>

@@ -14,12 +14,12 @@ try {
     }
 
     New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
-    $installerSource = Get-ChildItem -LiteralPath $installerDir -Filter "*-setup.exe" | Select-Object -First 1
+    $installerSource = Get-ChildItem -LiteralPath $installerDir -Filter "*-setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $installerSource) {
         throw "NSIS installer was not created."
     }
-    Copy-Item -LiteralPath $installerSource.FullName -Destination (Join-Path $releaseDir "Maple-Guild-Tracker-Setup.exe") -Force
-    Copy-Item -LiteralPath $portableSource -Destination (Join-Path $releaseDir "Maple-Guild-Tracker-Portable.exe") -Force
+    Copy-Item -LiteralPath $installerSource.FullName -Destination (Join-Path $releaseDir "Guildmate-Follow-Setup.exe") -Force
+    Copy-Item -LiteralPath $portableSource -Destination (Join-Path $releaseDir "Guildmate-Follow-Portable.exe") -Force
 }
 finally {
     Pop-Location

@@ -1,4 +1,4 @@
-// 메이플 길드 트래커의 Tauri 런타임과 네이티브 서비스를 구성합니다.
+// 길드원 따라가기의 Tauri 런타임과 네이티브 서비스를 구성합니다.
 mod commands;
 mod db;
 mod exp;
@@ -139,7 +139,7 @@ pub fn run() {
                 "widget",
                 WebviewUrl::App("index.html?view=widget".into()),
             )
-            .title("메이플 길드 트래커 위젯")
+            .title("길드원 따라가기 위젯")
             .inner_size(390.0, 480.0)
             .min_inner_size(320.0, 260.0)
             .always_on_top(true)
@@ -187,5 +187,5 @@ pub fn run() {
             commands::set_widget_opacity,
         ])
         .run(tauri::generate_context!())
-        .expect("메이플 길드 트래커 실행에 실패했습니다.");
+        .expect("길드원 따라가기 실행에 실패했습니다.");
 }

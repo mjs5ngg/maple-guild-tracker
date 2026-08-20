@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "메이플 길드 트래커",
+  "productName": "길드원 따라가기",
   "version": "0.1.0",
   "identifier": "com.local.maple-guild-tracker",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "dashboard",
-        "title": "메이플 길드 트래커",
+        "title": "길드원 따라가기",
         "width": 1280,
         "height": 820,
         "minWidth": 980,
@@ -29,8 +29,8 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "shortDescription": "메이플스토리 길드 경험치 기록 및 비교",
-    "longDescription": "NEXON Open API 기반의 개인용 길드 경험치 기록 및 비교 앱입니다.",
+    "shortDescription": "길드원 따라가기 — 메이플스토리 길드 경험치 기록 및 비교",
+    "longDescription": "길드원 따라가기는 NEXON Open API 기반의 개인용 길드 경험치 기록 및 비교 앱입니다.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

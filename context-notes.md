@@ -29,3 +29,5 @@
 - 캐릭터 외형은 NEXON CharacterBasic의 `character_image` URL을 사용하며, SQLite에는 URL만 저장하고 이미지 파일을 별도로 복제하지 않는다.
 - 기존 DB에는 마이그레이션으로 `characters.image_url`을 추가하며, 최신 완료일 기본 정보로 외형 URL을 갱신한다.
 - 키 교체·이미지 수정 후 Rust 테스트 11건, 프런트엔드 테스트 4건, Clippy 경고 0건과 Windows 릴리스 패키징을 확인했다.
+- 정식 사용자 표시 명칭은 `길드원 따라가기`로 확정한다. 내부 패키지명, 앱 식별자와 자격 증명 서비스명은 기존 설치 데이터 호환을 위해 유지한다.
+- 공개 저장소 주소는 `https://github.com/mjs5ngg/maple-guild-tracker`로 생성했다.

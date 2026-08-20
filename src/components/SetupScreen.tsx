@@ -39,7 +39,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
     <main className="setup-shell">
       <section className="setup-copy">
         <div className="brand-mark"><Sparkles size={25} /></div>
-        <p className="eyebrow">MAPLE GUILD TRACKER</p>
+        <p className="eyebrow">GUILDMATE FOLLOW</p>
         <h1>매일의 성장을<br /><span>한눈에 기록하세요.</span></h1>
         <p className="setup-description">
           길드원 전체의 공식 경험치 기록을 자동으로 모으고,<br />내 캐릭터와의 일간·주간 격차를 비교합니다.
