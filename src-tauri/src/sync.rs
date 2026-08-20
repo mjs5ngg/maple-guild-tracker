@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{
     credential_get, db,
-    models::{CharacterRecord, Snapshot, SyncProgress, SyncReport},
+    models::{Snapshot, SyncProgress, SyncReport},
     AppError, AppState,
 };
 
@@ -66,6 +66,7 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
         connection.query_row("SELECT MAX(date) FROM guild_memberships", [], |row| {
             row.get(0)
         })?;
+    let pending_backfill = db::get_setting(&connection, "backfill_start")?;
     if requested_days.is_none() {
         if let Some(latest) = latest_local.as_deref() {
             let parsed = NaiveDate::parse_from_str(latest, "%Y-%m-%d")?;
@@ -83,7 +84,11 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
                 rusqlite::params![end.format("%Y-%m-%d").to_string()],
                 |row| row.get(0),
             )?;
-            if parsed >= end && missing_current == 0 && missing_favorites == 0 {
+            if parsed >= end
+                && missing_current == 0
+                && missing_favorites == 0
+                && pending_backfill.is_none()
+            {
                 return Ok(SyncReport {
                     target_start: latest.to_string(),
                     target_end: latest.to_string(),
@@ -96,6 +101,8 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     }
     let start = if let Some(days) = requested_days {
         end - Duration::days(days.min(30) as i64)
+    } else if let Some(pending) = pending_backfill {
+        NaiveDate::parse_from_str(&pending, "%Y-%m-%d")?
     } else if let Some(latest) = latest_local {
         let parsed = NaiveDate::parse_from_str(&latest, "%Y-%m-%d")?;
         if parsed >= end {
@@ -109,6 +116,9 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     let dates = date_range(start, end);
     let start_string = start.format("%Y-%m-%d").to_string();
     let end_string = end.format("%Y-%m-%d").to_string();
+    if requested_days.is_some() {
+        db::set_setting(&connection, "backfill_start", &start_string)?;
+    }
     connection.execute(
         "INSERT INTO sync_runs(target_start, target_end, status) VALUES (?1, ?2, 'running')",
         rusqlite::params![start_string, end_string],
@@ -134,11 +144,46 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
                 all_names.extend(guild.guild_member);
                 success_count += 1;
             }
-            Err(_) => failure_count += 1,
+            Err(error) => {
+                failure_count += 1;
+                if matches!(error, AppError::Api { status: 429, .. }) {
+                    let connection = db::open(&state.db_path)?;
+                    db::finish_sync_run(
+                        &connection,
+                        run_id,
+                        "waiting",
+                        success_count,
+                        failure_count,
+                        "NEXON API 호출 한도에 도달하여 다음 실행에서 재개합니다.",
+                    )?;
+                    emit_progress(
+                        &app,
+                        "waiting",
+                        index,
+                        dates.len(),
+                        "API 호출 한도에 도달했습니다. 다음 실행에서 이어집니다.",
+                    );
+                    return Err(AppError::Validation(
+                        "NEXON API 호출 한도에 도달했습니다. 지금까지 받은 기록은 저장했으며 다음 실행에서 이어집니다.".into(),
+                    ));
+                }
+            }
         }
     }
 
-    let names: Vec<String> = all_names.into_iter().collect();
+    let mut characters = Vec::new();
+    let mut names = Vec::new();
+    let connection = db::open(&state.db_path)?;
+    for name in all_names {
+        if let Some(record) = db::character_record_by_name(&connection, &name)? {
+            db::link_memberships(&connection, &name, record.id)?;
+            characters.push(record);
+        } else {
+            names.push(name);
+        }
+    }
+    drop(connection);
+
     let resolution_results = stream::iter(names.iter().cloned())
         .map(|name| {
             let client = client.clone();
@@ -150,7 +195,6 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
         .await;
 
     let mut unresolved = Vec::new();
-    let mut characters = Vec::new();
     for (index, (name, result)) in resolution_results.into_iter().enumerate() {
         emit_progress(
             &app,
@@ -183,17 +227,18 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     }
     drop(connection);
 
-    let jobs: Vec<(CharacterRecord, String)> = characters
-        .iter()
-        .flat_map(|character| {
-            dates
-                .iter()
-                .cloned()
-                .map(move |date| (character.clone(), date))
-        })
-        .collect();
+    let connection = db::open(&state.db_path)?;
+    let jobs = db::missing_snapshot_jobs(&connection, &characters, &dates)?;
+    drop(connection);
     let total_jobs = jobs.len();
-    let results = stream::iter(jobs)
+    emit_progress(
+        &app,
+        "character",
+        0,
+        total_jobs,
+        format!("캐릭터 기록 0/{total_jobs}"),
+    );
+    let mut results = stream::iter(jobs)
         .map(|(character, date)| {
             let client = client.clone();
             let key = api_key.clone();
@@ -204,18 +249,18 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
                 (character, date, result)
             }
         })
-        .buffer_unordered(5)
-        .collect::<Vec<_>>()
-        .await;
+        .buffer_unordered(5);
 
-    for (index, (character, date, result)) in results.into_iter().enumerate() {
-        if index % 10 == 0 || index + 1 == total_jobs {
+    let mut index = 0_usize;
+    while let Some((character, date, result)) = results.next().await {
+        index += 1;
+        if index.is_multiple_of(10) || index == total_jobs {
             emit_progress(
                 &app,
                 "character",
-                index + 1,
+                index,
                 total_jobs,
-                format!("캐릭터 기록 {}/{}", index + 1, total_jobs),
+                format!("캐릭터 기록 {index}/{total_jobs}"),
             );
         }
         match result {
@@ -239,7 +284,30 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
                 )?;
                 success_count += 1;
             }
-            Err(_) => failure_count += 1,
+            Err(error) => {
+                failure_count += 1;
+                if matches!(error, AppError::Api { status: 429, .. }) {
+                    let connection = db::open(&state.db_path)?;
+                    db::finish_sync_run(
+                        &connection,
+                        run_id,
+                        "waiting",
+                        success_count,
+                        failure_count,
+                        "NEXON API 호출 한도에 도달하여 다음 실행에서 재개합니다.",
+                    )?;
+                    emit_progress(
+                        &app,
+                        "waiting",
+                        index,
+                        total_jobs,
+                        "API 호출 한도에 도달했습니다. 저장된 지점부터 다음 실행에서 이어집니다.",
+                    );
+                    return Err(AppError::Validation(
+                        "NEXON API 호출 한도에 도달했습니다. 지금까지 받은 기록은 저장했으며 다음 실행에서 이어집니다.".into(),
+                    ));
+                }
+            }
         }
     }
 
@@ -252,10 +320,17 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
     } else {
         "failed"
     };
-    connection.execute(
-        "UPDATE sync_runs SET finished_at=CURRENT_TIMESTAMP, status=?2, success_count=?3, failure_count=?4, message=?5 WHERE id=?1",
-        rusqlite::params![run_id, final_status, success_count as i64, failure_count as i64, format!("미연결 {}명", unresolved.len())],
+    db::finish_sync_run(
+        &connection,
+        run_id,
+        final_status,
+        success_count,
+        failure_count,
+        &format!("미연결 {}명", unresolved.len()),
     )?;
+    if failure_count == 0 {
+        db::delete_setting(&connection, "backfill_start")?;
+    }
     emit_progress(
         &app,
         "complete",

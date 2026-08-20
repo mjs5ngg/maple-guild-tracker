@@ -64,6 +64,8 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const rows = useMemo(() => data?.rankings.filter((row) => row.character_name.toLowerCase().includes(search.toLowerCase())) ?? [], [data, search]);
   const summary = data?.summary;
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const syncVisible = busy || ["guild", "identity", "character", "waiting"].includes(progress?.phase ?? "");
+  const syncWaiting = progress?.phase === "waiting";
 
   return (
     <div className="app-shell">
@@ -86,7 +88,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
 
         {customOpen && <div className="custom-period"><label>시작일<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><span>—</span><label>종료일<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label><button disabled={!customStart || !customEnd || customStart > customEnd} onClick={() => { setPeriod(`custom:${customStart}:${customEnd}`); setCustomOpen(false); }}>적용</button></div>}
 
-        {(busy || progress?.phase === "character" || progress?.phase === "guild") && <div className="sync-strip"><div><RefreshCw className="spin" size={15} /><span>{progress?.message ?? "공식 데이터를 동기화하고 있습니다."}</span></div><b>{progressPercent}%</b><i style={{ width: `${progressPercent}%` }} /></div>}
+        {syncVisible && <div className="sync-strip"><div><RefreshCw className={syncWaiting ? "" : "spin"} size={15} /><span>{progress?.message ?? "공식 데이터를 동기화하고 있습니다."}</span></div><b>{progressPercent}%</b><i style={{ width: `${progressPercent}%` }} /></div>}
         {error && <div className="error-banner dashboard-error">{error}</div>}
 
         <section className="summary-grid">

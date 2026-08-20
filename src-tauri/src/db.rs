@@ -1,5 +1,5 @@
 // SQLite 스키마와 앱 데이터 조회·저장 작업을 제공합니다.
-use std::path::Path;
+use std::{collections::HashSet, path::Path};
 
 use chrono::{Duration, NaiveDate};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -122,6 +122,11 @@ pub fn get_setting(connection: &Connection, key: &str) -> Result<Option<String>,
         .optional()?)
 }
 
+pub fn delete_setting(connection: &Connection, key: &str) -> Result<(), AppError> {
+    connection.execute("DELETE FROM settings WHERE key=?1", params![key])?;
+    Ok(())
+}
+
 pub fn save_setup(
     connection: &Connection,
     basic: &CharacterBasic,
@@ -205,6 +210,73 @@ pub fn character_records(connection: &Connection) -> Result<Vec<CharacterRecord>
         })
     })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+pub fn character_record_by_name(
+    connection: &Connection,
+    name: &str,
+) -> Result<Option<CharacterRecord>, AppError> {
+    Ok(connection
+        .query_row(
+            r#"SELECT c.id, ci.ocid
+               FROM characters c
+               JOIN character_identities ci ON ci.character_id=c.id AND ci.valid_to IS NULL
+               WHERE c.current_name=?1 COLLATE NOCASE"#,
+            params![name],
+            |row| {
+                Ok(CharacterRecord {
+                    id: row.get(0)?,
+                    ocid: row.get(1)?,
+                })
+            },
+        )
+        .optional()?)
+}
+
+pub fn missing_snapshot_jobs(
+    connection: &Connection,
+    characters: &[CharacterRecord],
+    dates: &[String],
+) -> Result<Vec<(CharacterRecord, String)>, AppError> {
+    if dates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut statement = connection
+        .prepare("SELECT character_id, date FROM daily_snapshots WHERE date BETWEEN ?1 AND ?2")?;
+    let existing = statement
+        .query_map(
+            params![dates.first().unwrap(), dates.last().unwrap()],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )?
+        .collect::<Result<HashSet<_>, _>>()?;
+    Ok(characters
+        .iter()
+        .flat_map(|character| {
+            let existing = &existing;
+            dates.iter().filter_map(move |date| {
+                if existing.contains(&(character.id, date.clone())) {
+                    None
+                } else {
+                    Some((character.clone(), date.clone()))
+                }
+            })
+        })
+        .collect())
+}
+
+pub fn finish_sync_run(
+    connection: &Connection,
+    run_id: i64,
+    status: &str,
+    success_count: usize,
+    failure_count: usize,
+    message: &str,
+) -> Result<(), AppError> {
+    connection.execute(
+        "UPDATE sync_runs SET finished_at=CURRENT_TIMESTAMP, status=?2, success_count=?3, failure_count=?4, message=?5 WHERE id=?1",
+        params![run_id, status, success_count as i64, failure_count as i64, message],
+    )?;
+    Ok(())
 }
 
 pub fn replace_memberships(
@@ -540,5 +612,42 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM xp_deltas", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 30);
+    }
+
+    #[test]
+    fn missing_snapshot_jobs_only_returns_uncollected_dates() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO characters(current_name, world_name) VALUES ('테스트', '스카니아')",
+                [],
+            )
+            .unwrap();
+        save_snapshot(
+            &connection,
+            &Snapshot {
+                character_id: 1,
+                date: "2026-08-18".into(),
+                level: 260,
+                exp: 100,
+                exp_rate: "0".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+        )
+        .unwrap();
+        let jobs = missing_snapshot_jobs(
+            &connection,
+            &[CharacterRecord {
+                id: 1,
+                ocid: "ocid".into(),
+            }],
+            &["2026-08-18".into(), "2026-08-19".into()],
+        )
+        .unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].1, "2026-08-19");
     }
 }
