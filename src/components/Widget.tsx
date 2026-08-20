@@ -5,6 +5,7 @@ import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/
 import { native } from "../native";
 import { formatExp, shortDate } from "../format";
 import type { DashboardData } from "../types";
+import { CharacterAvatar } from "./CharacterAvatar";
 
 type Mode = "favorites" | "guild";
 type Period = "daily" | "7d";
@@ -64,7 +65,7 @@ export function Widget() {
       </header>
       <section className="widget-title"><div><p>최근 완료일</p><h1>{shortDate(data?.summary.latest_date ?? null)}</h1></div><button className="mode-toggle" onClick={changeMode}>{mode === "favorites" ? <><Trophy />길드 상위<ChevronRight /></> : <><Star />즐겨찾기<ChevronRight /></>}</button></section>
       <div className="widget-tabs"><button className={period === "daily" ? "active" : ""} onClick={() => changePeriod("daily")}>일간</button><button className={period === "7d" ? "active" : ""} onClick={() => changePeriod("7d")}>최근 7일</button></div>
-      <section className="widget-list">{rows.map((row, index) => <article key={row.character_id} className={row.is_primary ? "me" : ""}><span className={`mini-rank mini-rank-${index + 1}`}>{index + 1}</span><span className="mini-avatar">{row.character_name.slice(0, 1)}</span><div><b>{row.character_name}{row.is_primary && <em>ME</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatExp(row.gained_exp)}</strong></article>)}{!rows.length && <div className="widget-empty">동기화된 기록이 없습니다.</div>}</section>
+      <section className="widget-list">{rows.map((row, index) => <article key={row.character_id} className={row.is_primary ? "me" : ""}><span className={`mini-rank mini-rank-${index + 1}`}>{index + 1}</span><CharacterAvatar image={row.character_image} name={row.character_name} mini /><div><b>{row.character_name}{row.is_primary && <em>ME</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatExp(row.gained_exp)}</strong></article>)}{!rows.length && <div className="widget-empty">동기화된 기록이 없습니다.</div>}</section>
       <footer><div className="opacity-control"><Eye size={13} /><input aria-label="투명도" type="range" min="0.65" max="1" step="0.05" value={opacity} onChange={(event) => changeOpacity(Number(event.target.value))} /></div><button onClick={() => native.showDashboard()}><LayoutDashboard />대시보드</button><span>Data based on NEXON Open API</span></footer>
     </main>
   );

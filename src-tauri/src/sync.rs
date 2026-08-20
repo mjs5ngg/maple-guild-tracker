@@ -207,7 +207,7 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
             Ok(ocid) => {
                 let connection = db::open(&state.db_path)?;
                 let record =
-                    db::upsert_character(&connection, &name, &world_name, "", &ocid, false)?;
+                    db::upsert_character(&connection, &name, &world_name, "", None, &ocid, false)?;
                 db::link_memberships(&connection, &name, record.id)?;
                 characters.push(record);
                 success_count += 1;
@@ -266,10 +266,12 @@ pub async fn sync_all(app: AppHandle, requested_days: Option<u32>) -> Result<Syn
         match result {
             Ok(basic) => {
                 let connection = db::open(&state.db_path)?;
-                connection.execute(
-                    "UPDATE characters SET current_name=?2, world_name=?3, character_class=?4, updated_at=CURRENT_TIMESTAMP WHERE id=?1",
-                    rusqlite::params![character.id, basic.character_name, basic.world_name, basic.character_class],
-                )?;
+                if date == end_string {
+                    connection.execute(
+                        "UPDATE characters SET current_name=?2, world_name=?3, character_class=?4, image_url=COALESCE(?5, image_url), updated_at=CURRENT_TIMESTAMP WHERE id=?1",
+                        rusqlite::params![character.id, basic.character_name, basic.world_name, basic.character_class, basic.character_image],
+                    )?;
+                }
                 db::save_snapshot(
                     &connection,
                     &Snapshot {

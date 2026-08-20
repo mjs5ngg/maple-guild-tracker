@@ -11,6 +11,8 @@ pub struct CharacterBasic {
     pub character_exp: i64,
     pub character_exp_rate: String,
     pub character_guild_name: Option<String>,
+    #[serde(default)]
+    pub character_image: Option<String>,
     pub access_flag: Option<String>,
 }
 
@@ -37,6 +39,7 @@ pub struct RankingRow {
     pub rank: usize,
     pub character_name: String,
     pub character_class: String,
+    pub character_image: Option<String>,
     pub level: i64,
     pub gained_exp: Option<i64>,
     pub gap_from_primary: Option<i64>,

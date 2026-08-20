@@ -62,6 +62,40 @@ pub async fn sync_now(app: AppHandle, days: Option<u32>) -> Result<SyncReport, S
 }
 
 #[tauri::command]
+pub async fn replace_api_key(
+    state: tauri::State<'_, AppState>,
+    api_key: String,
+) -> Result<SetupResult, String> {
+    let key = api_key.trim();
+    if key.is_empty() {
+        return Err("새 API 키를 입력해 주세요.".into());
+    }
+    let connection = db::open(&state.db_path).map_err(public_error)?;
+    let primary_name = db::get_setting(&connection, "primary_name")
+        .map_err(public_error)?
+        .ok_or_else(|| "먼저 대표 캐릭터를 설정해 주세요.".to_string())?;
+    drop(connection);
+    let ocid = state
+        .nexon
+        .ocid(key, &primary_name)
+        .await
+        .map_err(public_error)?;
+    let basic = state
+        .nexon
+        .character_basic(key, &ocid, None)
+        .await
+        .map_err(public_error)?;
+    credential_set(key).map_err(public_error)?;
+    Ok(SetupResult {
+        character_name: basic.character_name,
+        world_name: basic.world_name,
+        guild_name: basic
+            .character_guild_name
+            .unwrap_or_else(|| "길드 없음".into()),
+    })
+}
+
+#[tauri::command]
 pub fn get_dashboard(
     state: tauri::State<'_, AppState>,
     period: String,
@@ -103,6 +137,7 @@ pub async fn add_external_favorite(
         &basic.character_name,
         &basic.world_name,
         &basic.character_class,
+        basic.character_image.as_deref(),
         &ocid,
         true,
     )

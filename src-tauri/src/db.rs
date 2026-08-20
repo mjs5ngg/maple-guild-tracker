@@ -32,6 +32,7 @@ pub fn migrate(connection: &Connection) -> Result<(), AppError> {
             current_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
             world_name TEXT NOT NULL,
             character_class TEXT NOT NULL DEFAULT '',
+            image_url TEXT,
             is_primary INTEGER NOT NULL DEFAULT 0,
             is_favorite INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -92,6 +93,15 @@ pub fn migrate(connection: &Connection) -> Result<(), AppError> {
         CREATE INDEX IF NOT EXISTS idx_memberships_date ON guild_memberships(date);
         "#,
     )?;
+    let has_image_url = connection
+        .prepare("PRAGMA table_info(characters)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|column| column == "image_url");
+    if !has_image_url {
+        connection.execute("ALTER TABLE characters ADD COLUMN image_url TEXT", [])?;
+    }
     connection.execute(
         "INSERT OR REPLACE INTO exp_table_versions(version, effective_date, checksum, source_note) VALUES (?1, ?2, ?3, ?4)",
         params![
@@ -136,12 +146,18 @@ pub fn save_setup(
 ) -> Result<i64, AppError> {
     connection.execute("UPDATE characters SET is_primary=0", [])?;
     connection.execute(
-        r#"INSERT INTO characters(current_name, world_name, character_class, is_primary, is_favorite)
-           VALUES (?1, ?2, ?3, 1, 1)
+        r#"INSERT INTO characters(current_name, world_name, character_class, image_url, is_primary, is_favorite)
+           VALUES (?1, ?2, ?3, ?4, 1, 1)
            ON CONFLICT(current_name) DO UPDATE SET
              world_name=excluded.world_name, character_class=excluded.character_class,
+             image_url=COALESCE(excluded.image_url, characters.image_url),
              is_primary=1, is_favorite=1, updated_at=CURRENT_TIMESTAMP"#,
-        params![basic.character_name, basic.world_name, basic.character_class],
+        params![
+            basic.character_name,
+            basic.world_name,
+            basic.character_class,
+            basic.character_image
+        ],
     )?;
     let character_id: i64 = connection.query_row(
         "SELECT id FROM characters WHERE current_name=?1 COLLATE NOCASE",
@@ -169,18 +185,20 @@ pub fn upsert_character(
     name: &str,
     world: &str,
     class_name: &str,
+    image_url: Option<&str>,
     ocid: &str,
     favorite: bool,
 ) -> Result<CharacterRecord, AppError> {
     connection.execute(
-        r#"INSERT INTO characters(current_name, world_name, character_class, is_favorite)
-           VALUES (?1, ?2, ?3, ?4)
+        r#"INSERT INTO characters(current_name, world_name, character_class, image_url, is_favorite)
+           VALUES (?1, ?2, ?3, ?4, ?5)
            ON CONFLICT(current_name) DO UPDATE SET
              world_name=excluded.world_name,
              character_class=CASE WHEN excluded.character_class='' THEN characters.character_class ELSE excluded.character_class END,
+             image_url=COALESCE(excluded.image_url, characters.image_url),
              is_favorite=MAX(characters.is_favorite, excluded.is_favorite),
              updated_at=CURRENT_TIMESTAMP"#,
-        params![name, world, class_name, favorite as i64],
+        params![name, world, class_name, image_url, favorite as i64],
     )?;
     let id: i64 = connection.query_row(
         "SELECT id FROM characters WHERE current_name=?1 COLLATE NOCASE",
@@ -437,7 +455,7 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         .and_then(|value| value.parse::<i64>().ok());
 
     let mut statement = connection.prepare(
-        r#"SELECT c.id, c.current_name, c.character_class,
+        r#"SELECT c.id, c.current_name, c.character_class, c.image_url,
                   COALESCE((SELECT level FROM daily_snapshots ds WHERE ds.character_id=c.id AND ds.date<=?2 ORDER BY ds.date DESC LIMIT 1), 0),
                   SUM(CASE WHEN xd.status='ok' THEN xd.gained_exp ELSE NULL END),
                   c.is_primary, c.is_favorite,
@@ -455,19 +473,20 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, i64>(3)?,
-                row.get::<_, Option<i64>>(4)?,
-                row.get::<_, bool>(5)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, Option<i64>>(5)?,
                 row.get::<_, bool>(6)?,
                 row.get::<_, bool>(7)?,
-                row.get::<_, String>(8)?,
+                row.get::<_, bool>(8)?,
+                row.get::<_, String>(9)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let primary_exp = raw
         .iter()
         .find(|row| Some(row.0) == primary_id)
-        .and_then(|row| row.4);
+        .and_then(|row| row.5);
     let mut rankings = Vec::with_capacity(raw.len());
     for (index, row) in raw.into_iter().enumerate() {
         rankings.push(RankingRow {
@@ -475,16 +494,17 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             rank: index + 1,
             character_name: row.1,
             character_class: row.2,
-            level: row.3,
-            gained_exp: row.4,
-            gap_from_primary: match (row.4, primary_exp) {
+            character_image: row.3,
+            level: row.4,
+            gained_exp: row.5,
+            gap_from_primary: match (row.5, primary_exp) {
                 (Some(value), Some(primary)) => Some(value - primary),
                 _ => None,
             },
-            is_primary: row.5,
-            is_favorite: row.6,
-            is_current_member: row.7,
-            status: row.8,
+            is_primary: row.6,
+            is_favorite: row.7,
+            is_current_member: row.8,
+            status: row.9,
         });
     }
     let primary_rank = rankings
@@ -578,6 +598,35 @@ mod tests {
             get_setting(&connection, "guild_name").unwrap().as_deref(),
             Some("테스트길드")
         );
+    }
+
+    #[test]
+    fn migration_adds_character_image_column_to_existing_database() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        connection
+            .execute_batch(
+                r#"CREATE TABLE characters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    current_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    world_name TEXT NOT NULL,
+                    character_class TEXT NOT NULL DEFAULT '',
+                    is_primary INTEGER NOT NULL DEFAULT 0,
+                    is_favorite INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );"#,
+            )
+            .unwrap();
+        migrate(&connection).unwrap();
+        let columns = connection
+            .prepare("PRAGMA table_info(characters)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(columns.iter().any(|column| column == "image_url"));
     }
 
     #[test]

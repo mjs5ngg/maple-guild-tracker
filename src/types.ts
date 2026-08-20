@@ -19,6 +19,7 @@ export interface RankingRow {
   rank: number;
   character_name: string;
   character_class: string;
+  character_image: string | null;
   level: number;
   gained_exp: number | null;
   gap_from_primary: number | null;

@@ -176,6 +176,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_status,
             commands::save_setup,
+            commands::replace_api_key,
             commands::sync_now,
             commands::get_dashboard,
             commands::set_favorite,
