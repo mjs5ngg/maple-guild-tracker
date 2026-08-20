@@ -5,10 +5,22 @@ NEXON Open API를 이용해 대표 캐릭터, 길드원 전체, 외부 즐겨찾
 ## 사용 준비
 
 1. [NEXON Open API](https://openapi.nexon.com/)에서 애플리케이션을 등록하고 API 키를 발급합니다.
-2. 설치된 앱을 열고 API 키와 길드에 가입된 대표 캐릭터명을 입력합니다.
+2. 설치된 앱을 열고 첫 화면에 API 키와 길드에 가입된 대표 캐릭터명을 직접 입력합니다. 별도 키 파일은 만들지 않습니다.
 3. 월드와 길드 확인 후 최근 30일 수집이 끝날 때까지 앱을 종료하지 않습니다.
 
 API 키는 Windows 자격 증명 관리자에 저장됩니다. 기록 DB는 Windows의 앱 데이터 폴더 아래 `com.local.maple-guild-tracker/tracker.sqlite3`에 생성됩니다.
+
+## 설치 방법
+
+가장 쉬운 방법은 `release/Maple-Guild-Tracker-Setup.exe`를 더블클릭하고 안내에 따라 설치하는 것입니다. 현재 사용자 영역에 설치되므로 관리자 권한이 필요하지 않습니다.
+
+설치 없이 확인하려면 `release/Maple-Guild-Tracker-Portable.exe`를 실행할 수 있습니다. 자동 시작을 사용할 경우 실행 파일을 옮기면 등록된 경로가 달라지므로 설치본 사용을 권장합니다.
+
+두 배포 파일은 다음 명령으로 한 번에 다시 만들 수 있습니다.
+
+```powershell
+npm run package:windows
+```
 
 ## 개발 명령
 
@@ -17,7 +29,7 @@ npm install
 npm run test
 npm run build
 npm run tauri dev
-npm run tauri build
+npm run package:windows
 ```
 
 개발 중 미니 위젯만 확인하려면 빌드된 실행 파일에 `--widget` 인자를 전달합니다.

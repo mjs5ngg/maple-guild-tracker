@@ -33,7 +33,8 @@
     "longDescription": "NEXON Open API 기반의 개인용 길드 경험치 기록 및 비교 앱입니다.",
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "languages": ["Korean"]
       }
     }
   }
