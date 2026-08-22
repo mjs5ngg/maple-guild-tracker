@@ -18,9 +18,12 @@ export function formatExp(value: number | null | undefined, signed = false): str
   return `${sign}${value.toLocaleString("ko-KR")}`;
 }
 
-export function formatGain(value: number | null | undefined, percent: number | null | undefined): string {
-  if (value == null || percent == null) return "—";
-  return `${percent.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% (${formatExp(value, true)})`;
+export function formatCurrentProgress(rate: number | null | undefined, todayExp: number | null | undefined): string {
+  if (rate == null) return "—";
+  const percent = rate.toLocaleString("ko-KR", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  if (todayExp == null) return `${percent}% (오늘 집계 중)`;
+  const gain = todayExp >= 0 ? `+${formatExp(todayExp)}` : formatExp(todayExp);
+  return `${percent}% (${gain})`;
 }
 
 export function shortDate(value: string | null): string {

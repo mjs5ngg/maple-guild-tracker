@@ -22,7 +22,8 @@ export interface RankingRow {
   character_image: string | null;
   level: number;
   gained_exp: number | null;
-  gained_percent: number | null;
+  current_exp_rate: number | null;
+  today_exp: number | null;
   gap_from_primary: number | null;
   is_primary: boolean;
   is_favorite: boolean;
@@ -45,7 +46,8 @@ export interface DashboardData {
     period_end: string | null;
     primary_daily_exp: number | null;
     primary_period_exp: number | null;
-    primary_period_percent: number | null;
+    primary_current_exp_rate: number | null;
+    primary_today_exp: number | null;
     primary_rank: number | null;
     leader_gap: number | null;
     last_sync_at: string | null;

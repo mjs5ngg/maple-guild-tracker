@@ -560,6 +560,60 @@ fn live_activity(
     ))
 }
 
+#[derive(Debug, PartialEq)]
+struct CurrentProgress {
+    level: Option<i64>,
+    rate: Option<f64>,
+    today_exp: Option<i64>,
+}
+
+fn current_progress(
+    connection: &Connection,
+    character_id: i64,
+    completed_date: &str,
+) -> Result<CurrentProgress, AppError> {
+    let live = connection
+        .query_row(
+            "SELECT level, exp, exp_rate FROM live_snapshots WHERE character_id=?1 ORDER BY fetched_at DESC LIMIT 1",
+            params![character_id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)),
+        )
+        .optional()?;
+    let completed = connection
+        .query_row(
+            "SELECT level, exp, exp_rate FROM daily_snapshots WHERE character_id=?1 AND date=?2",
+            params![character_id, completed_date],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )
+        .optional()?;
+    let current_rate = live
+        .as_ref()
+        .and_then(|sample| sample.2.parse::<f64>().ok())
+        .or_else(|| {
+            completed
+                .as_ref()
+                .and_then(|sample| sample.2.parse::<f64>().ok())
+        });
+    let today_exp = match (&completed, &live) {
+        (Some(from), Some(to)) => match exp::calculate_gain(from.0, from.1, to.0, to.1) {
+            ExpCalculation::Ok(value) => Some(value),
+            _ => None,
+        },
+        _ => None,
+    };
+    Ok(CurrentProgress {
+        level: live.map(|sample| sample.0),
+        rate: current_rate,
+        today_exp,
+    })
+}
+
 pub fn recalculate_character(connection: &Connection, character_id: i64) -> Result<(), AppError> {
     let mut statement = connection.prepare(
         "SELECT date, level, exp FROM daily_snapshots WHERE character_id=?1 ORDER BY date",
@@ -657,7 +711,8 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                 period_end: None,
                 primary_daily_exp: None,
                 primary_period_exp: None,
-                primary_period_percent: None,
+                primary_current_exp_rate: None,
+                primary_today_exp: None,
                 primary_rank: None,
                 leader_gap: None,
                 last_sync_at: None,
@@ -709,9 +764,7 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         .and_then(|row| row.5);
     let mut rankings = Vec::with_capacity(raw.len());
     for (index, row) in raw.into_iter().enumerate() {
-        let gained_percent = row.5.and_then(|value| {
-            exp::required_exp(row.4).map(|required| value as f64 / required as f64 * 100.0)
-        });
+        let current = current_progress(connection, row.0, &latest_date)?;
         let (is_hunting, live_updated_at) = live_activity(connection, row.0)?;
         rankings.push(RankingRow {
             character_id: row.0,
@@ -719,9 +772,10 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             character_name: row.1,
             character_class: row.2,
             character_image: row.3,
-            level: row.4,
+            level: current.level.unwrap_or(row.4),
             gained_exp: row.5,
-            gained_percent,
+            current_exp_rate: current.rate,
+            today_exp: current.today_exp,
             gap_from_primary: match (row.5, primary_exp) {
                 (Some(value), Some(primary)) => Some(value - primary),
                 _ => None,
@@ -738,10 +792,14 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         .iter()
         .find(|row| row.is_primary)
         .map(|row| row.rank);
-    let primary_period_percent = rankings
+    let primary_current_exp_rate = rankings
         .iter()
         .find(|row| row.is_primary)
-        .and_then(|row| row.gained_percent);
+        .and_then(|row| row.current_exp_rate);
+    let primary_today_exp = rankings
+        .iter()
+        .find(|row| row.is_primary)
+        .and_then(|row| row.today_exp);
     let leader_gap = match (rankings.first().and_then(|row| row.gained_exp), primary_exp) {
         (Some(leader), Some(primary)) => Some(leader - primary),
         _ => None,
@@ -793,7 +851,8 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             period_end: Some(end),
             primary_daily_exp,
             primary_period_exp: primary_exp,
-            primary_period_percent,
+            primary_current_exp_rate,
+            primary_today_exp,
             primary_rank,
             leader_gap,
             last_sync_at,
@@ -983,6 +1042,64 @@ mod tests {
             })
             .unwrap();
         assert_eq!(primary_id, 2);
+    }
+
+    #[test]
+    fn any_positive_recent_exp_gain_marks_character_as_hunting() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO characters(current_name, world_name) VALUES ('테스트', '스카니아')",
+                [],
+            )
+            .unwrap();
+        connection.execute(
+            "INSERT INTO live_snapshots(character_id,fetched_at,level,exp,exp_rate,raw_json) VALUES (1,datetime('now','-10 minutes'),281,100,'10.000','{}'),(1,datetime('now'),281,101,'10.001','{}')",
+            [],
+        ).unwrap();
+
+        assert!(live_activity(&connection, 1).unwrap().0);
+    }
+
+    #[test]
+    fn current_progress_uses_api_rate_and_gain_since_completed_date() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO characters(current_name, world_name) VALUES ('테스트', '스카니아')",
+                [],
+            )
+            .unwrap();
+        save_snapshot(
+            &connection,
+            &Snapshot {
+                character_id: 1,
+                date: "2026-08-21".into(),
+                level: 281,
+                exp: 100,
+                exp_rate: "33.700".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+        )
+        .unwrap();
+        connection.execute(
+            "INSERT INTO live_snapshots(character_id,level,exp,exp_rate,raw_json) VALUES (1,281,220,'33.757','{}')",
+            [],
+        ).unwrap();
+
+        assert_eq!(
+            current_progress(&connection, 1, "2026-08-21").unwrap(),
+            CurrentProgress {
+                level: Some(281),
+                rate: Some(33.757),
+                today_exp: Some(120),
+            }
+        );
     }
 
     #[test]

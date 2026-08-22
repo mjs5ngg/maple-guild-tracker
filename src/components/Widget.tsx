@@ -3,7 +3,7 @@ import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Eye, GripHorizontal, LayoutDashboard, Minus, RefreshCw, Star, Trophy, X } from "lucide-react";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import { native } from "../native";
-import { formatGain, shortDate } from "../format";
+import { formatCurrentProgress, shortDate } from "../format";
 import type { DashboardData } from "../types";
 import { CharacterAvatar } from "./CharacterAvatar";
 
@@ -17,7 +17,7 @@ export function Widget() {
   const [loading, setLoading] = useState(true);
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem("widget-opacity") || "0.96"));
   const uiScale = Number(localStorage.getItem("ui-scale") || "1.06");
-  const avatarScale = Number(localStorage.getItem("avatar-scale") || "1");
+  const avatarScale = Number(localStorage.getItem("avatar-scale-v2") || "1.15");
 
   async function load() {
     setLoading(true);
@@ -71,7 +71,7 @@ export function Widget() {
       </header>
       <section className="widget-title"><div><p>최근 완료일</p><h1>{shortDate(data?.summary.latest_date ?? null)}</h1></div><button className="mode-toggle" onClick={changeMode}>{mode === "favorites" ? <><Trophy />길드 상위<ChevronRight /></> : <><Star />즐겨찾기<ChevronRight /></>}</button></section>
       <div className="widget-tabs"><button className={period === "daily" ? "active" : ""} onClick={() => changePeriod("daily")}>일간</button><button className={period === "7d" ? "active" : ""} onClick={() => changePeriod("7d")}>최근 7일</button></div>
-      <section className="widget-list">{rows.map((row, index) => <article key={row.character_id} className={row.is_primary ? "me" : ""}><span className={`mini-rank mini-rank-${index + 1}`}>{index + 1}</span><CharacterAvatar image={row.character_image} name={row.character_name} mini active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em>ME</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatGain(row.gained_exp, row.gained_percent)}</strong></article>)}{!rows.length && <div className="widget-empty">동기화된 기록이 없습니다.</div>}</section>
+      <section className="widget-list">{rows.map((row, index) => <article key={row.character_id} className={row.is_primary ? "me" : ""}><span className={`mini-rank mini-rank-${index + 1}`}>{index + 1}</span><CharacterAvatar image={row.character_image} name={row.character_name} mini active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em>ME</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatCurrentProgress(row.current_exp_rate, row.today_exp)}</strong></article>)}{!rows.length && <div className="widget-empty">동기화된 기록이 없습니다.</div>}</section>
       <footer><div className="opacity-control"><Eye size={13} /><input aria-label="투명도" type="range" min="0.65" max="1" step="0.05" value={opacity} onChange={(event) => changeOpacity(Number(event.target.value))} /></div><button onClick={() => native.showDashboard()}><LayoutDashboard />대시보드</button><span>Data based on NEXON Open API</span></footer>
     </main>
   );
