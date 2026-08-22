@@ -174,6 +174,7 @@ pub fn show_dashboard(app: AppHandle) -> Result<(), String> {
         .get_webview_window("dashboard")
         .ok_or_else(|| "대시보드 창을 찾을 수 없습니다.".to_string())?;
     window.show().map_err(|error| error.to_string())?;
+    window.unminimize().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())
 }
 
