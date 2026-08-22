@@ -44,6 +44,12 @@ describe("경험치 랭킹", () => {
     expect(moveFavorite([1, 2, 3], 1, 3)).toEqual([2, 3, 1]);
   });
 
+  it("버튼을 놓지 않고 세 번째에서 두 번째와 다시 세 번째로 이동한다", () => {
+    const movedUp = moveFavorite([1, 2, 3], 3, 2);
+    expect(movedUp).toEqual([1, 3, 2]);
+    expect(moveFavorite(movedUp, 3, 2)).toEqual([1, 2, 3]);
+  });
+
   it("기본 레벨순과 실제 순서가 같을 때만 정렬 완료로 판단한다", () => {
     const rows = [row("가", 282, 100, 10), row("나", 281, 100, 10)];
     expect(sameCharacterOrder(rows, [...rows])).toBe(true);

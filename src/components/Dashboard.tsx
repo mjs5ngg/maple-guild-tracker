@@ -109,7 +109,13 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
       event.preventDefault();
       const card = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-favorite-id]");
       const targetId = Number(card?.dataset.favoriteId);
-      if (!Number.isInteger(targetId) || targetId === draggedFavoriteId || favoriteDropTargetRef.current === targetId) return;
+      if (!Number.isInteger(targetId)) return;
+      if (targetId === draggedFavoriteId) {
+        favoriteDropTargetRef.current = draggedFavoriteId;
+        setFavoriteDropTarget(null);
+        return;
+      }
+      if (favoriteDropTargetRef.current === targetId) return;
       favoriteDropTargetRef.current = targetId;
       setFavoriteDropTarget(targetId);
       setFavoriteOrder((currentOrder) => {
