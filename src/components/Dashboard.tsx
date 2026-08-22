@@ -1,7 +1,7 @@
 // 길드 경험치 요약, 순위, 그래프와 즐겨찾기 관리를 제공합니다.
 import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
+import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
 import { native } from "../native";
 import { formatCurrentProgress, formatExp, shortDate, syncTime } from "../format";
 import type { AppStatus, DashboardData, SyncProgress } from "../types";
@@ -233,6 +233,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
       </main>
       {settingsOpen && <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 Windows 자격 증명 관리자에 저장됩니다.</small></section></div>}
     </div>
+    <button className="scroll-to-top" title="화면 최상단으로 이동" aria-label="화면 최상단으로 이동" onClick={() => globalThis.scrollTo({ top: 0, behavior: "smooth" })}><ArrowUp /></button>
     {displayOpen && createPortal(<div className="display-controls display-controls-fixed" style={displayPosition}><label><Type />전체 크기 <b>{Math.round(uiScale * 100)}%</b><input type="range" min="1" max="1.4" step="0.02" value={uiScale} onChange={(event) => changeUiScale(Number(event.target.value))} /></label><label><Image />캐릭터 이미지 <b>{Math.round(avatarScale * 100)}%</b><input type="range" min="0.65" max="1.5" step="0.05" value={avatarScale} onChange={(event) => changeAvatarScale(Number(event.target.value))} /></label><button onClick={resetDisplaySettings}>기본값</button></div>, document.body)}
     </>
   );

@@ -148,6 +148,10 @@ td { height: 78px; padding: 6px 16px; border-top: 1px solid #222730; color: #aeb
 .star-button { border: 0; color: #4e5765; background: transparent; cursor: pointer; }.star-button.selected { color: #f3b35e; }
 .row-actions { display: flex; align-items: center; gap: 3px; }.primary-character-button { display: grid; place-items: center; padding: 5px; border: 0; color: #738095; background: transparent; cursor: pointer; }.primary-character-button:hover { color: #ffb25f; }
 .empty-table { padding: 35px; text-align: center; color: #5b6471; font-size: 12px; }
+.scroll-to-top { position: fixed; z-index: 18; right: 26px; bottom: 26px; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 1px solid rgba(255,173,112,.75); border-radius: 14px; color: #fff7f1; background: linear-gradient(145deg, #ff9f5b, #db6d2f); box-shadow: 0 6px 0 #8d3d1b, 0 14px 30px rgba(213,91,31,.28); cursor: pointer; transition: transform .1s, box-shadow .1s, filter .15s; }
+.scroll-to-top:hover { filter: brightness(1.08); transform: translateY(-2px); }
+.scroll-to-top:active { transform: translateY(4px); box-shadow: 0 2px 0 #7b3417, 0 7px 14px rgba(213,91,31,.22); }
+.scroll-to-top svg { width: 21px; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(3,5,8,.72); backdrop-filter: blur(5px); }
 .settings-modal { position: relative; width: min(410px, 100%); padding: 28px; border: 1px solid #303744; border-radius: 16px; background: #171b22; box-shadow: 0 28px 80px rgba(0,0,0,.55); }
 .settings-modal h2 { margin: 13px 0 7px; font-size: 20px; }.settings-modal > p { margin: 0 0 20px; color: #737c89; font-size: 12px; line-height: 1.65; }
@@ -204,6 +208,7 @@ body:has(.widget-shell) { background: transparent; overflow: hidden; }
 :root[data-theme="light"] .avatar, :root[data-theme="light"] .mini-avatar { color: #4c5969; background: linear-gradient(145deg, #edf1f6, #dde3eb); }
 :root[data-theme="light"] .primary-row, :root[data-theme="light"] .widget-list article.me { background: rgba(236,126,56,.08); }
 :root[data-theme="light"] .widget-shell > header button:hover { color: #18202b; background: #e6eaf0; }
+:root[data-theme="light"] .scroll-to-top { border-color: #e67f3f; box-shadow: 0 6px 0 #a94d20, 0 12px 25px rgba(168,75,31,.2); }
 :root[data-theme="light"] body:has(.widget-shell) { background: transparent; }
 
 @media (max-width: 1120px) { .summary-grid { grid-template-columns: repeat(2, 1fr); }.content-grid { grid-template-columns: 1fr; }.favorites-panel { min-height: auto; } }
