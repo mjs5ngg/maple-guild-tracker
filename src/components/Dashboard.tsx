@@ -1,7 +1,7 @@
 // 길드 경험치 요약, 순위, 그래프와 즐겨찾기 관리를 제공합니다.
 import { CSSProperties, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
+import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, HelpCircle, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
 import { native } from "../native";
 import { formatCurrentProgress, formatExp, shortDate, syncTime } from "../format";
 import type { AppStatus, DashboardData, SyncProgress } from "../types";
@@ -10,6 +10,7 @@ import { CharacterAvatar } from "./CharacterAvatar";
 import { applyTheme, getStoredTheme, type AppTheme } from "../theme";
 import { avatarPhysicalBase, defaultDisplaySettings, getDisplaySettings, saveDisplaySettings } from "../displaySettings";
 import { currentGuildRows, sortByOverallProgress } from "../rankings";
+import { ApiKeyHelpModal } from "./ApiKeyHelpModal";
 
 interface Props {
   status: AppStatus;
@@ -43,6 +44,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [apiHelpOpen, setApiHelpOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState("");
   const [keyMessage, setKeyMessage] = useState("");
   const [displayOpen, setDisplayOpen] = useState(false);
@@ -233,7 +235,8 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
           <div className="table-wrap"><table><thead><tr><th>순위</th><th>캐릭터</th><th>레벨</th><th>현재 경험치 · {rankingMode === "period" ? `${periodDisplayName(period)} 동안 획득` : "오늘 획득"}</th><th>나와의 격차</th><th>상태</th><th aria-label="대표 및 즐겨찾기" /></tr></thead><tbody>{rows.map(({ row, displayRank }) => <tr id={`character-row-${row.character_id}`} key={row.character_id} className={row.is_primary ? "primary-row" : ""}><td><span className={`rank rank-${displayRank}`}>{displayRank}</span></td><td><div className="character-cell"><CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em>나</em>}</b><small>{row.character_class || "직업 확인 중"}{!row.is_current_member && " · 외부"}</small></div></div></td><td>Lv.{row.level || "—"}</td><td className="exp-cell">{formatCurrentProgress(row.current_exp_rate, rankingMode === "period" ? row.gained_exp : row.today_exp)}</td><td className={row.gap_from_primary && row.gap_from_primary > 0 ? "positive" : "muted"}>{formatExp(row.gap_from_primary, true)}</td><td><span className={row.status === "정상" ? "status-ok" : "status-pending"}>{row.status}</span></td><td><div className="row-actions">{row.is_current_member && !row.is_primary && <button className="primary-character-button" title="대표 캐릭터로 지정" onClick={() => void changePrimary(row.character_id)} disabled={busy}><Crown size={16} /></button>}<button className={`star-button ${row.is_favorite ? "selected" : ""}`} title="즐겨찾기" onClick={() => toggleFavorite(row.character_id, row.is_favorite)} disabled={row.is_primary}><Star size={17} fill={row.is_favorite ? "currentColor" : "none"} /></button></div></td></tr>)}</tbody></table>{!rows.length && <div className="empty-table">표시할 캐릭터 기록이 없습니다.</div>}</div>
         </section>
       </main>
-      {settingsOpen && <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 Windows 자격 증명 관리자에 저장됩니다.</small></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="settings-help-trigger" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button><button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 Windows 자격 증명 관리자에 저장됩니다.</small></section></div>}
+      {apiHelpOpen && <ApiKeyHelpModal onClose={() => setApiHelpOpen(false)} />}
     </div>
     <button className="scroll-to-top" title="화면 최상단으로 이동" aria-label="화면 최상단으로 이동" onClick={() => globalThis.scrollTo({ top: 0, behavior: "smooth" })}><ArrowUp /></button>
     {displayOpen && createPortal(<div className="display-controls display-controls-fixed" style={displayPosition}><label><Type />전체 크기 <b>{Math.round(uiScale * 100)}%</b><input type="range" min="1" max="1.4" step="0.02" value={uiScale} onChange={(event) => changeUiScale(Number(event.target.value))} /></label><label><Image />캐릭터 이미지 <b>{Math.round(avatarScale * 100)}%</b><input type="range" min="0.65" max="1.5" step="0.05" value={avatarScale} onChange={(event) => changeAvatarScale(Number(event.target.value))} /></label><button onClick={resetDisplaySettings}>기본값</button></div>, document.body)}

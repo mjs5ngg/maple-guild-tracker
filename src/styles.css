@@ -158,7 +158,22 @@ td { height: 78px; padding: 6px 16px; border-top: 1px solid #222730; color: #aeb
 .settings-modal label { display: block; margin-bottom: 7px; color: #aab1bd; font-size: 12px; }.settings-modal input { box-sizing: border-box; width: 100%; height: 44px; padding: 0 13px; border: 1px solid #353c48; border-radius: 9px; outline: 0; color: #fff; background: #10141a; }.settings-modal input:focus { border-color: #d77c42; }
 .settings-modal .primary-button { width: 100%; margin-top: 11px; }.settings-modal .confirmed, .settings-modal .error-banner { margin-top: 12px; }.settings-modal > small { display: block; margin-top: 15px; color: #596270; font-size: 10px; line-height: 1.5; }
 .settings-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #ff9b52; background: rgba(255,155,82,.1); }.settings-icon svg { width: 18px; }
+.settings-help-trigger { position: absolute; top: 15px; right: 51px; display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 1px solid #303744; border-radius: 7px; color: #ffad70; background: #20252d; cursor: pointer; }.settings-help-trigger:hover { color: #fff; border-color: #b96735; background: #6d3d25; }.settings-help-trigger svg { width: 15px; }
 .modal-close { position: absolute; top: 15px; right: 15px; display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 7px; color: #6e7785; background: transparent; cursor: pointer; }.modal-close:hover { color: #fff; background: #262c35; }.modal-close svg { width: 15px; }
+.api-help-backdrop { z-index: 30; }
+.api-help-modal { position: relative; width: min(720px, 100%); max-height: calc(100vh - 48px); padding: 27px; overflow-y: auto; border: 1px solid #303744; border-radius: 17px; background: #171b22; box-shadow: 0 30px 90px rgba(0,0,0,.62); }
+.api-help-heading { display: flex; align-items: center; gap: 12px; padding-right: 35px; }
+.api-help-heading > span { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; border-radius: 11px; color: #ff9b52; background: rgba(255,155,82,.1); }.api-help-heading > span svg { width: 20px; }
+.api-help-heading h2 { margin: 0; font-size: 21px; }.api-help-heading .eyebrow { margin-bottom: 3px; font-size: 9px !important; }
+.api-help-steps { display: grid; gap: 7px; margin: 20px 0; padding: 15px 17px 15px 36px; border: 1px solid #2b323d; border-radius: 11px; color: #aeb6c2; background: #11151b; font-size: 12px; line-height: 1.55; }.api-help-steps b { color: #f1f3f6; }
+.api-registration-fields { display: grid; gap: 8px; }
+.api-copy-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid #2a313b; border-radius: 10px; background: #13171d; }
+.api-copy-row > div { min-width: 0; }.api-copy-row b, .api-copy-row code { display: block; }.api-copy-row b { margin-bottom: 5px; color: #8993a2; font-size: 10px; }.api-copy-row code { color: #dce1e8; font-family: "Segoe UI", "Noto Sans KR", sans-serif; font-size: 11px; line-height: 1.5; white-space: normal; word-break: break-all; user-select: text; }
+.api-copy-row button { display: flex; align-items: center; gap: 5px; height: 31px; padding: 0 9px; border: 1px solid #3b4552; border-radius: 7px; color: #cbd2dc; background: #242a33; font-size: 10px; cursor: pointer; }.api-copy-row button:hover { color: #fff; border-color: #b96735; background: #6d3d25; }.api-copy-row button svg { width: 13px; }
+.api-copy-row.official-row { border-color: rgba(255,155,82,.25); background: rgba(255,155,82,.055); }.api-copy-row.official-row code { color: #ffb47c; }
+.api-help-error { margin: 10px 0 0; }
+.api-key-warning { display: flex; gap: 9px; margin-top: 14px; padding: 11px 12px; border: 1px solid rgba(255,183,84,.22); border-radius: 10px; color: #eab45f; background: rgba(234,180,95,.06); }.api-key-warning > svg { width: 17px; flex: 0 0 auto; }.api-key-warning p { margin: 0; }.api-key-warning b, .api-key-warning span { display: block; }.api-key-warning b { font-size: 11px; }.api-key-warning span { margin-top: 3px; color: #9e8765; font-size: 10px; line-height: 1.5; }
+.api-help-source { display: block; margin-top: 13px; color: #596270; font-size: 9px; line-height: 1.55; }
 
 /* Widget */
 body:has(.widget-shell) { background: transparent; overflow: hidden; }
@@ -196,6 +211,10 @@ body:has(.widget-shell) { background: transparent; overflow: hidden; }
 :root[data-theme="light"] .setup-copy > p, :root[data-theme="light"] .setup-card > p, :root[data-theme="light"] .setup-card label, :root[data-theme="light"] .confirmed span, :root[data-theme="light"] .loading-screen { color: #667085; }
 :root[data-theme="light"] .sidebar, :root[data-theme="light"] .period-tabs, :root[data-theme="light"] .custom-period, :root[data-theme="light"] .widget-shell > header { border-color: #d8dee7; background: #f8f9fb; }
 :root[data-theme="light"] .panel, :root[data-theme="light"] .summary-grid article, :root[data-theme="light"] .guild-card, :root[data-theme="light"] .icon-action, :root[data-theme="light"] .display-controls, :root[data-theme="light"] .settings-modal, :root[data-theme="light"] .widget-shell, :root[data-theme="light"] .widget-open { border-color: #d9dfe8; background: #ffffff; box-shadow: none; }
+:root[data-theme="light"] .api-help-modal { color: #18202b; border-color: #d9dfe8; background: #fff; box-shadow: 0 25px 70px rgba(50,65,85,.18); }
+:root[data-theme="light"] .settings-help-trigger, :root[data-theme="light"] .api-copy-row button { color: #8c4b24; border-color: #d4dae3; background: #f0f3f7; }
+:root[data-theme="light"] .api-help-steps, :root[data-theme="light"] .api-copy-row { color: #4e5968; border-color: #dce2ea; background: #f7f9fb; }
+:root[data-theme="light"] .api-help-steps b, :root[data-theme="light"] .api-copy-row code { color: #18202b; }
 :root[data-theme="light"] .period-tabs button.active, :root[data-theme="light"] .sidebar nav button:hover, :root[data-theme="light"] .sidebar nav button.active, :root[data-theme="light"] .display-controls > button, :root[data-theme="light"] .widget-tabs button.active { color: #18202b; background: #e6eaf0; }
 :root[data-theme="light"] .chart-kind-tabs { border-color: #d3dae4; background: #f4f6f9; }
 :root[data-theme="light"] .chart-kind-tabs button.active { color: #17202b; background: #dfe5ed; box-shadow: none; }
