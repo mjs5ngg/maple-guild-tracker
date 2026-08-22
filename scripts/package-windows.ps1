@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseDir = Join-Path $projectRoot "release"
 $installerDir = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis"
-$portableSource = Join-Path $projectRoot "src-tauri\target\release\maple-guild-tracker.exe"
+$portableSource = Join-Path $projectRoot "src-tauri\target\release\guildmate-follow.exe"
 
 Push-Location $projectRoot
 try {
