@@ -3,8 +3,9 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: #0e1117; }
-* { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
-*::-webkit-scrollbar { width: 20px; height: 20px; }
+* { scrollbar-width: auto; scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
+*::-webkit-scrollbar { width: 20px !important; height: 20px !important; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { width: 20px !important; height: 20px !important; }
 *::-webkit-scrollbar-track { background: var(--scroll-track); }
 *::-webkit-scrollbar-thumb { border: 2px solid var(--scroll-track); border-radius: 999px; background: var(--scroll-thumb); }
 *::-webkit-scrollbar-thumb:hover { background: #536071; }
