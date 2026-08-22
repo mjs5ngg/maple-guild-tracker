@@ -99,12 +99,12 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   function changeUiScale(value: number) { setUiScale(value); localStorage.setItem("ui-scale-v2", String(value)); }
   function changeAvatarScale(value: number) { setAvatarScale(value); localStorage.setItem("avatar-scale-v2", String(value)); }
 
-  function scrollToPrimary() {
-    const primary = data?.rankings.find((row) => row.is_primary);
-    if (!primary) return;
+  function scrollToCharacter(characterId: number) {
+    const target = data?.rankings.find((row) => row.character_id === characterId);
+    if (!target?.is_current_member) return;
     setSearch("");
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      document.getElementById(`character-row-${primary.character_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`character-row-${characterId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }));
   }
 
@@ -150,7 +150,19 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
 
         <section className="content-grid">
           <article className="panel chart-panel" id="history"><div className="panel-heading"><div><p className="eyebrow">EXP HISTORY</p><h2>날짜별 성장 흐름</h2></div><span>{summary?.period_start ?? "—"} — {summary?.period_end ?? "—"}</span></div><ExperienceChart series={data?.series ?? []} theme={theme} /></article>
-          <article className="panel favorites-panel"><div className="panel-heading"><div><p className="eyebrow">QUICK ADD</p><h2>외부 즐겨찾기</h2></div><Star size={18} /></div><p>길드 밖 캐릭터도 최근 30일 기록과 함께 비교할 수 있습니다.</p><form onSubmit={addExternal}><input value={externalName} onChange={(event) => setExternalName(event.target.value)} placeholder="캐릭터명 입력" disabled={busy} /><button disabled={busy || !externalName.trim()}>추가</button></form><div className="favorite-list">{data?.rankings.filter((row) => row.is_favorite).slice(0, 5).map((row) => <div key={row.character_id} className={row.is_primary ? "favorite-character-card primary-card" : "favorite-character-card"} role={row.is_primary ? "button" : undefined} tabIndex={row.is_primary ? 0 : undefined} onClick={row.is_primary ? scrollToPrimary : undefined} onKeyDown={row.is_primary ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); scrollToPrimary(); } } : undefined}><CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em className="primary-badge">대표캐릭터</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div><strong>{formatCurrentProgress(row.current_exp_rate, row.today_exp)}</strong></div>)}</div></article>
+          <article className="panel favorites-panel">
+            <div className="panel-heading"><div><p className="eyebrow">QUICK ADD</p><h2>즐겨찾기</h2></div><Star size={18} /></div>
+            <p>길드 밖 캐릭터도 최근 30일 기록과 함께 비교할 수 있습니다.</p>
+            <form onSubmit={addExternal}><input value={externalName} onChange={(event) => setExternalName(event.target.value)} placeholder="캐릭터명 입력" disabled={busy} /><button disabled={busy || !externalName.trim()}>추가</button></form>
+            <div className="favorite-list">{data?.rankings.filter((row) => row.is_favorite).slice(0, 5).map((row) => {
+              const canScroll = row.is_current_member;
+              return <div key={row.character_id} className={`favorite-character-card${row.is_primary ? " primary-card" : ""}${canScroll ? " scrollable-card" : ""}`} role={canScroll ? "button" : undefined} tabIndex={canScroll ? 0 : undefined} onClick={canScroll ? () => scrollToCharacter(row.character_id) : undefined} onKeyDown={canScroll ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); scrollToCharacter(row.character_id); } } : undefined}>
+                <CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} />
+                <div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em className="primary-badge">대표캐릭터</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div>
+                <div className="favorite-card-actions"><strong>{formatCurrentProgress(row.current_exp_rate, row.today_exp)}</strong>{!row.is_primary && <button className="star-button selected" title="즐겨찾기 해제" aria-label={`${row.character_name} 즐겨찾기 해제`} onClick={(event) => { event.stopPropagation(); void toggleFavorite(row.character_id, true); }}><Star size={17} fill="currentColor" /></button>}</div>
+              </div>;
+            })}</div>
+          </article>
         </section>
 
         <section className="panel ranking-panel" id="ranking">

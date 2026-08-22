@@ -1,7 +1,8 @@
 // SQLite 스키마와 앱 데이터 조회·저장 작업을 제공합니다.
 use std::{collections::HashSet, path::Path};
 
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, Utc};
+use chrono_tz::Asia::Seoul;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{
@@ -841,6 +842,10 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         .take(8)
         .map(|row| row.character_id)
         .collect();
+    let today_date = Utc::now()
+        .with_timezone(&Seoul)
+        .format("%Y-%m-%d")
+        .to_string();
     let mut series = Vec::new();
     for id in selected_ids {
         let name = rankings
@@ -861,6 +866,23 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                 character_name: name.clone(),
                 gained_exp,
             });
+        }
+        if !series
+            .iter()
+            .any(|point| point.character_id == id && point.date == today_date)
+        {
+            if let Some(today_exp) = rankings
+                .iter()
+                .find(|row| row.character_id == id)
+                .and_then(|row| row.today_exp)
+            {
+                series.push(SeriesPoint {
+                    date: today_date.clone(),
+                    character_id: id,
+                    character_name: name,
+                    gained_exp: Some(today_exp),
+                });
+            }
         }
     }
     let last_sync_at = connection
@@ -1127,6 +1149,77 @@ mod tests {
                 today_exp: Some(120),
             }
         );
+    }
+
+    #[test]
+    fn dashboard_series_includes_today_live_gain() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection.execute(
+            "INSERT INTO characters(id,current_name,world_name,is_primary,is_favorite) VALUES (1,'대표','스카니아',1,1)",
+            [],
+        ).unwrap();
+        connection.execute(
+            "INSERT INTO guild_memberships(date,member_name,character_id) VALUES ('2026-08-21','대표',1)",
+            [],
+        ).unwrap();
+        set_setting(&connection, "primary_character_id", "1").unwrap();
+        save_snapshot(
+            &connection,
+            &Snapshot {
+                character_id: 1,
+                date: "2026-08-21".into(),
+                level: 281,
+                exp: 100,
+                exp_rate: "33.700".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+        )
+        .unwrap();
+        connection.execute(
+            "INSERT INTO live_snapshots(character_id,level,exp,exp_rate,raw_json) VALUES (1,281,220,'33.757','{}')",
+            [],
+        ).unwrap();
+
+        let today = Utc::now()
+            .with_timezone(&Seoul)
+            .format("%Y-%m-%d")
+            .to_string();
+        let data = dashboard(&connection, "daily").unwrap();
+        assert!(data.series.iter().any(|point| {
+            point.character_id == 1 && point.date == today && point.gained_exp == Some(120)
+        }));
+    }
+
+    #[test]
+    fn disabled_external_favorite_is_excluded_from_refreshed_dashboard() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection.execute(
+            "INSERT INTO characters(id,current_name,world_name,is_primary,is_favorite) VALUES (1,'대표','스카니아',1,1),(2,'외부','루나',0,1)",
+            [],
+        ).unwrap();
+        connection.execute(
+            "INSERT INTO guild_memberships(date,member_name,character_id) VALUES ('2026-08-21','대표',1)",
+            [],
+        ).unwrap();
+        set_setting(&connection, "primary_character_id", "1").unwrap();
+        assert!(dashboard(&connection, "daily")
+            .unwrap()
+            .rankings
+            .iter()
+            .any(|row| row.character_id == 2));
+
+        set_favorite(&connection, 2, false).unwrap();
+
+        assert!(!dashboard(&connection, "daily")
+            .unwrap()
+            .rankings
+            .iter()
+            .any(|row| row.character_id == 2));
     }
 
     #[test]

@@ -112,8 +112,11 @@ button:disabled { opacity: .5; cursor: not-allowed !important; }
 .avatar img, .mini-avatar img { width: 100%; height: 100%; object-fit: contain; object-position: center; transform: scale(2.2); }
 .favorite-list b, .favorite-list small { display: block; }
 .favorite-list b { font-size: 12px; }.favorite-list small { margin-top: 2px; color: #5d6674; font-size: 10px; }.favorite-list strong { color: #bfc6d0; font-size: 11px; }
-.favorite-character-card.primary-card { cursor: pointer; border-radius: 9px; transition: background .15s, box-shadow .15s; }
-.favorite-character-card.primary-card:hover, .favorite-character-card.primary-card:focus-visible { outline: 0; background: rgba(255,155,82,.06); box-shadow: inset 0 0 0 1px rgba(255,155,82,.22); }
+.favorite-character-card { border-radius: 9px; transition: background .15s, box-shadow .15s; }
+.favorite-character-card.scrollable-card { cursor: pointer; }
+.favorite-character-card.scrollable-card:hover, .favorite-character-card.scrollable-card:focus-visible { outline: 0; background: rgba(255,155,82,.06); box-shadow: inset 0 0 0 1px rgba(255,155,82,.22); }
+.favorite-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.favorite-card-actions .star-button { display: grid; place-items: center; padding: 5px; }
 .primary-badge { display: inline-block; margin-left: 7px; padding: 2px 7px; border: 1px solid rgba(255,155,82,.32); border-radius: 999px; color: #ffad70; background: rgba(255,155,82,.09); font-size: 9px; font-style: normal; vertical-align: 1px; }
 .ranking-panel { margin-top: 13px; overflow: hidden; }
 .ranking-heading { align-items: center; padding: 19px 20px 14px; margin: 0; }

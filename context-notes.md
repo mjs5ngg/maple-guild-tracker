@@ -68,3 +68,7 @@
 - 새 앱 아이콘은 투명 배경의 주황·빨강 단풍잎을 새로 생성해 Tauri 전체 아이콘 세트로 변환했다. 생성 원본은 `src-tauri/icons/maple-leaf-v2.png`에 보관한다.
 - `v0.1.3`은 Rust 테스트 18건, 프런트엔드 테스트 10건, Clippy 경고 0건, TypeScript 프로덕션 빌드와 Tauri NSIS 빌드를 통과했다.
 - `Guildmate-Follow-Setup.exe`와 `Guildmate-Follow-Portable.exe`의 제품명은 `길드원 따라가기`, 파일 버전은 `0.1.3`으로 확인했다.
+- 오늘자 성장 그래프 값은 순위표의 `today_exp`와 동일하게 최신 완료일 스냅샷부터 최신 API 표본까지의 증가량을 사용한다. 계산 가능한 최신 표본이 없으면 0으로 추정하지 않고 점을 추가하지 않는다.
+- 외부 즐겨찾기는 순위표에 포함되지만 현재 길드원 행이 아니므로 카드 클릭 이동을 제공하지 않는다. 별 해제는 카드 안에서 즉시 저장하고 다시 조회해 목록에서 제거한다.
+- `v0.1.4`는 Rust 테스트 20건, 프런트엔드 테스트 10건, Clippy 경고 0건과 TypeScript·Tauri NSIS 빌드를 통과했다.
+- `Guildmate-Follow-Setup.exe`와 `Guildmate-Follow-Portable.exe`의 제품명은 `길드원 따라가기`, 파일 버전은 `0.1.4`로 확인한다.
