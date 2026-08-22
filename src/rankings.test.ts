@@ -1,6 +1,6 @@
 // 전체 성장 위치와 오늘 획득량 랭킹 기준을 검증합니다.
 import { describe, expect, it } from "vitest";
-import { currentGuildRows, moveFavorite, orderFavorites, sortByOverallProgress, sortByTodayGain } from "./rankings";
+import { currentGuildRows, moveFavorite, orderFavorites, sameCharacterOrder, sortByOverallProgress, sortByTodayGain } from "./rankings";
 import type { RankingRow } from "./types";
 
 function row(character_name: string, level: number, current_exp: number | null, today_exp: number | null): RankingRow {
@@ -34,8 +34,19 @@ describe("경험치 랭킹", () => {
     expect(orderFavorites(rows, [rows[1].character_id, rows[0].character_id]).map((value) => value.character_name)).toEqual(["나", "가", "다"]);
   });
 
+  it("저장 순서가 없으면 즐겨찾기를 레벨과 현재 경험치 순으로 정렬한다", () => {
+    const rows = [row("가", 281, 900, 10), row("나", 282, 10, 10), row("다", 281, 1_000, 10)];
+    expect(orderFavorites(rows, []).map((value) => value.character_name)).toEqual(["나", "다", "가"]);
+  });
+
   it("드래그한 즐겨찾기를 놓은 카드 위치로 이동한다", () => {
     expect(moveFavorite([1, 2, 3], 3, 1)).toEqual([3, 1, 2]);
     expect(moveFavorite([1, 2, 3], 1, 3)).toEqual([2, 3, 1]);
+  });
+
+  it("기본 레벨순과 실제 순서가 같을 때만 정렬 완료로 판단한다", () => {
+    const rows = [row("가", 282, 100, 10), row("나", 281, 100, 10)];
+    expect(sameCharacterOrder(rows, [...rows])).toBe(true);
+    expect(sameCharacterOrder(rows, [...rows].reverse())).toBe(false);
   });
 });

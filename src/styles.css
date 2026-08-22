@@ -114,6 +114,10 @@ button:disabled { opacity: .5; cursor: not-allowed !important; }
 .chart-kind-tabs button.active { color: #fff; background: #2b323d; box-shadow: 0 2px 5px rgba(0,0,0,.25); }
 .empty-chart { display: grid; place-items: center; height: 270px; color: #59616e; font-size: 13px; }
 .favorites-panel { padding: 19px; }
+.favorites-title-row { display: flex; align-items: center; gap: 8px; }
+.favorite-sort-button { height: 25px; padding: 0 9px; border: 1px solid rgba(255,155,82,.45); border-radius: 7px; color: #ffad70; background: rgba(255,155,82,.09); font-size: 10px; font-weight: 800; cursor: pointer; }
+.favorite-sort-button:hover:not(:disabled) { background: rgba(255,155,82,.17); }
+.favorite-sort-button:disabled { color: #626b78; border-color: #303640; background: #1b2027; opacity: .65; }
 .favorites-panel > p { min-height: 35px; margin: 0 0 12px; color: #697280; font-size: 12px; line-height: 1.65; }
 .favorites-panel form { display: flex; gap: 7px; }
 .favorites-panel input { height: 39px; margin: 0; font-size: 12px; }

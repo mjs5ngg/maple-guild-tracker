@@ -18,9 +18,14 @@ export function sortByTodayGain(rows: RankingRow[]): RankingRow[] {
     || left.character_name.localeCompare(right.character_name));
 }
 
+export function sortFavoritesByLevel(rows: RankingRow[]): RankingRow[] {
+  return sortByOverallProgress(rows);
+}
+
 export function orderFavorites(rows: RankingRow[], savedOrder: number[]): RankingRow[] {
+  const defaults = sortFavoritesByLevel(rows);
   const positions = new Map(savedOrder.map((id, index) => [id, index]));
-  return rows
+  return defaults
     .map((row, index) => ({ row, index }))
     .sort((left, right) => {
       const leftPosition = positions.get(left.row.character_id);
@@ -39,4 +44,9 @@ export function moveFavorite(ids: number[], draggedId: number, targetId: number)
   const next = ids.filter((id) => id !== draggedId);
   next.splice(targetIndex, 0, draggedId);
   return next;
+}
+
+export function sameCharacterOrder(left: RankingRow[], right: RankingRow[]): boolean {
+  return left.length === right.length
+    && left.every((row, index) => row.character_id === right[index]?.character_id);
 }
