@@ -1,6 +1,6 @@
 // 전체 성장 위치와 오늘 획득량 랭킹 기준을 검증합니다.
 import { describe, expect, it } from "vitest";
-import { sortByOverallProgress, sortByTodayGain } from "./rankings";
+import { currentGuildRows, sortByOverallProgress, sortByTodayGain } from "./rankings";
 import type { RankingRow } from "./types";
 
 function row(character_name: string, level: number, current_exp: number | null, today_exp: number | null): RankingRow {
@@ -21,5 +21,11 @@ describe("경험치 랭킹", () => {
   it("오늘 랭킹은 완료일 획득량이 아니라 today_exp를 사용한다", () => {
     const rows = [row("가", 282, 10, 20), row("나", 281, 1_000, 300)];
     expect(sortByTodayGain(rows).map((value) => value.character_name)).toEqual(["나", "가"]);
+  });
+
+  it("길드 랭킹에서는 외부 즐겨찾기를 제외한다", () => {
+    const member = row("길드원", 281, 100, 10);
+    const external = { ...row("외부", 290, 100, 20), is_current_member: false, is_favorite: true };
+    expect(currentGuildRows([external, member])).toEqual([member]);
   });
 });

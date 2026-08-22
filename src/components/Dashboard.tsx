@@ -9,7 +9,7 @@ import { ExperienceChart, seriesForPeriod, type ChartKind } from "./ExperienceCh
 import { CharacterAvatar } from "./CharacterAvatar";
 import { applyTheme, getStoredTheme, type AppTheme } from "../theme";
 import { avatarPhysicalBase, defaultDisplaySettings, getDisplaySettings, saveDisplaySettings } from "../displaySettings";
-import { sortByOverallProgress } from "../rankings";
+import { currentGuildRows, sortByOverallProgress } from "../rankings";
 
 interface Props {
   status: AppStatus;
@@ -163,7 +163,8 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   }
 
   const rankedRows = useMemo(() => {
-    const source = rankingMode === "overall" ? sortByOverallProgress(data?.rankings ?? []) : [...(data?.rankings ?? [])];
+    const guildRows = currentGuildRows(data?.rankings ?? []);
+    const source = rankingMode === "overall" ? sortByOverallProgress(guildRows) : guildRows;
     return source.map((row, index) => ({ row, displayRank: index + 1 }));
   }, [data, rankingMode]);
   const rows = useMemo(() => rankedRows.filter(({ row }) => row.character_name.toLowerCase().includes(search.toLowerCase())), [rankedRows, search]);

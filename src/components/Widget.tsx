@@ -8,14 +8,14 @@ import type { DashboardData } from "../types";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { applyTheme, getStoredTheme, themeStorageKey, type AppTheme } from "../theme";
 import { avatarPhysicalBase, getDisplaySettings, listenDisplaySettings } from "../displaySettings";
-import { sortByOverallProgress, sortByTodayGain } from "../rankings";
+import { currentGuildRows, sortByOverallProgress, sortByTodayGain } from "../rankings";
 
 type Mode = "favorites" | "guild";
 type RankingBasis = "today" | "overall";
 
 export function Widget() {
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem("widget-mode") as Mode) || "favorites");
-  const [rankingBasis, setRankingBasis] = useState<RankingBasis>(() => (localStorage.getItem("widget-ranking-basis") as RankingBasis) || "today");
+  const [rankingBasis, setRankingBasis] = useState<RankingBasis>(() => (localStorage.getItem("widget-ranking-basis-v2") as RankingBasis) || "overall");
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem("widget-opacity") || "0.96"));
@@ -74,12 +74,12 @@ export function Widget() {
     const next = mode === "favorites" ? "guild" : "favorites";
     setMode(next); localStorage.setItem("widget-mode", next);
   }
-  function changeRankingBasis(next: RankingBasis) { setRankingBasis(next); localStorage.setItem("widget-ranking-basis", next); }
+  function changeRankingBasis(next: RankingBasis) { setRankingBasis(next); localStorage.setItem("widget-ranking-basis-v2", next); }
   function changeOpacity(value: number) { setOpacity(value); localStorage.setItem("widget-opacity", String(value)); void native.setWidgetOpacity(value); }
 
   const rows = useMemo(() => {
     const source = data?.rankings ?? [];
-    const filtered = source.filter((row) => mode === "favorites" ? row.is_primary || row.is_favorite : row.is_current_member);
+    const filtered = mode === "favorites" ? source.filter((row) => row.is_primary || row.is_favorite) : currentGuildRows(source);
     return rankingBasis === "today" ? sortByTodayGain(filtered) : sortByOverallProgress(filtered);
   }, [data, mode, rankingBasis]);
 
