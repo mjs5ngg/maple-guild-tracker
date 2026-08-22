@@ -21,6 +21,7 @@ export interface RankingRow {
   character_class: string;
   character_image: string | null;
   level: number;
+  current_exp: number | null;
   gained_exp: number | null;
   current_exp_rate: number | null;
   today_exp: number | null;
@@ -35,6 +36,7 @@ export interface RankingRow {
 
 export interface SeriesPoint {
   date: string;
+  character_id: number;
   character_name: string;
   gained_exp: number | null;
 }

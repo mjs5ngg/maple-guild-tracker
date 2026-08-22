@@ -2,8 +2,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+import { getStoredTheme } from "./theme";
 
 const isWidget = new URLSearchParams(location.search).get("view") === "widget";
+document.documentElement.dataset.theme = getStoredTheme();
 const root = createRoot(document.getElementById("root")!);
 
 if (isWidget) {

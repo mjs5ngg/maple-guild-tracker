@@ -1,7 +1,7 @@
 // 레벨별 필요 경험치와 날짜 간 획득 경험치 계산을 담당합니다.
 use sha2::{Digest, Sha256};
 
-pub const EXP_TABLE_VERSION: &str = "kms-new-age-2023-06-15-v1";
+pub const EXP_TABLE_VERSION: &str = "kms-2026-03-19-v2";
 
 const EXP_200_TO_299: [i64; 100] = [
     2_207_026_470,
@@ -14,56 +14,56 @@ const EXP_200_TO_299: [i64; 100] = [
     4_879_032_378,
     5_464_516_263,
     6_120_258_214,
-    7_956_335_678,
-    8_831_532_602,
-    9_803_001_188,
-    10_881_331_318,
-    12_078_277_762,
-    15_701_761_090,
-    17_114_919_588,
-    18_655_262_350,
-    20_334_235_961,
-    22_164_317_197,
-    28_813_612_356,
-    30_830_565_220,
-    32_988_704_785,
-    35_297_914_119,
-    37_768_768_107,
-    49_099_398_539,
-    52_536_356_436,
-    56_213_901_386,
-    60_148_874_483,
-    64_359_295_696,
-    83_667_084_404,
-    86_177_096_936,
-    88_762_409_844,
-    91_425_282_139,
-    94_168_040_603,
-    122_418_452_783,
-    126_091_006_366,
-    129_873_736_556,
-    133_769_948_652,
-    137_783_047_111,
-    179_117_961_244,
-    184_491_500_081,
-    190_026_245_083,
-    195_727_032_435,
-    201_598_843_408,
-    262_078_496_430,
-    269_940_851_322,
-    278_039_076_861,
-    286_380_249_166,
-    294_971_656_640,
-    442_457_484_960,
-    455_731_209_508,
-    469_403_145_793,
-    483_485_240_166,
-    497_989_797_370,
-    512_929_491_291,
-    528_317_376_029,
-    544_166_897_309,
-    560_491_904_228,
-    577_306_661_354,
+    7_344_309_856,
+    8_152_183_940,
+    9_048_924_173,
+    10_044_305_832,
+    11_149_179_473,
+    13_379_015_367,
+    14_583_126_750,
+    15_895_608_157,
+    17_326_212_891,
+    18_885_572_051,
+    22_662_686_461,
+    24_249_074_513,
+    25_946_509_728,
+    27_762_765_408,
+    29_706_158_986,
+    35_647_390_783,
+    38_142_708_137,
+    40_812_697_706,
+    43_669_586_545,
+    46_726_457_603,
+    56_071_749_123,
+    57_753_901_596,
+    59_486_518_643,
+    61_271_114_202,
+    63_109_247_628,
+    75_731_097_153,
+    78_003_030_067,
+    80_343_120_969,
+    82_753_414_598,
+    85_236_017_035,
+    102_283_220_442,
+    105_351_717_055,
+    108_512_268_566,
+    111_767_636_622,
+    115_120_665_720,
+    138_144_798_864,
+    142_289_142_829,
+    146_557_817_113,
+    150_954_551_626,
+    155_483_188_174,
+    186_579_825_808,
+    192_177_220_582,
+    197_942_537_199,
+    203_880_813_314,
+    209_997_237_713,
+    216_297_154_844,
+    222_786_069_489,
+    229_469_651_573,
+    236_353_741_120,
+    243_444_353_353,
     1_731_919_984_062,
     1_749_239_183_902,
     1_766_731_575_741,
@@ -165,6 +165,42 @@ pub fn calculate_gain(
     }
 }
 
+pub fn calculate_progress_gap(
+    primary_level: i64,
+    primary_exp: i64,
+    target_level: i64,
+    target_exp: i64,
+) -> ExpCalculation {
+    if primary_exp < 0 || target_exp < 0 {
+        return ExpCalculation::InvalidDecrease;
+    }
+    if primary_level == target_level {
+        return match target_exp.checked_sub(primary_exp) {
+            Some(value) => ExpCalculation::Ok(value),
+            None => ExpCalculation::Overflow,
+        };
+    }
+    let (calculation, target_is_ahead) = if target_level > primary_level {
+        (
+            calculate_gain(primary_level, primary_exp, target_level, target_exp),
+            true,
+        )
+    } else {
+        (
+            calculate_gain(target_level, target_exp, primary_level, primary_exp),
+            false,
+        )
+    };
+    match calculation {
+        ExpCalculation::Ok(value) if target_is_ahead => ExpCalculation::Ok(value),
+        ExpCalculation::Ok(value) => match value.checked_neg() {
+            Some(value) => ExpCalculation::Ok(value),
+            None => ExpCalculation::Overflow,
+        },
+        other => other,
+    }
+}
+
 pub fn table_checksum() -> String {
     let mut hasher = Sha256::new();
     for value in EXP_200_TO_299 {
@@ -217,5 +253,25 @@ mod tests {
     #[test]
     fn unsupported_level_requires_table_update() {
         assert_eq!(calculate_gain(199, 0, 200, 0), ExpCalculation::MissingTable);
+    }
+
+    #[test]
+    fn progress_gap_includes_level_distance() {
+        let required = required_exp(281).unwrap();
+        assert_eq!(
+            calculate_progress_gap(281, required - 100, 282, 25),
+            ExpCalculation::Ok(125)
+        );
+        assert_eq!(
+            calculate_progress_gap(282, 25, 281, required - 100),
+            ExpCalculation::Ok(-125)
+        );
+    }
+
+    #[test]
+    fn current_kms_table_includes_2026_reduced_range() {
+        assert_eq!(required_exp(210), Some(7_344_309_856));
+        assert_eq!(required_exp(259), Some(243_444_353_353));
+        assert_eq!(required_exp(260), Some(1_731_919_984_062));
     }
 }

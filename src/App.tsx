@@ -5,6 +5,7 @@ import { native } from "./native";
 import type { AppStatus, SyncProgress } from "./types";
 import { SetupScreen } from "./components/SetupScreen";
 import { Dashboard } from "./components/Dashboard";
+import { applyTheme, getStoredTheme } from "./theme";
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
@@ -16,6 +17,7 @@ export default function App() {
     catch (reason) { setFatal(String(reason)); }
   }
   useEffect(() => {
+    applyTheme(getStoredTheme());
     void loadStatus();
     const unlisten = listen<SyncProgress>("sync-progress", (event) => setProgress(event.payload));
     return () => { void unlisten.then((fn) => fn()); };

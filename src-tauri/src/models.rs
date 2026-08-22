@@ -41,6 +41,7 @@ pub struct RankingRow {
     pub character_class: String,
     pub character_image: Option<String>,
     pub level: i64,
+    pub current_exp: Option<i64>,
     pub gained_exp: Option<i64>,
     pub current_exp_rate: Option<f64>,
     pub today_exp: Option<i64>,
@@ -56,6 +57,7 @@ pub struct RankingRow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeriesPoint {
     pub date: String,
+    pub character_id: i64,
     pub character_name: String,
     pub gained_exp: Option<i64>,
 }

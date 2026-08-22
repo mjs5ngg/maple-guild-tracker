@@ -6,6 +6,7 @@ import { native } from "../native";
 import { formatCurrentProgress, shortDate } from "../format";
 import type { DashboardData } from "../types";
 import { CharacterAvatar } from "./CharacterAvatar";
+import { applyTheme, getStoredTheme, themeStorageKey, type AppTheme } from "../theme";
 
 type Mode = "favorites" | "guild";
 type Period = "daily" | "7d";
@@ -16,7 +17,8 @@ export function Widget() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem("widget-opacity") || "0.96"));
-  const uiScale = Number(localStorage.getItem("ui-scale") || "1.06");
+  const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
+  const uiScale = Number(localStorage.getItem("ui-scale-v2") || "1.10");
   const avatarScale = Number(localStorage.getItem("avatar-scale-v2") || "1.15");
 
   async function load() {
@@ -24,6 +26,14 @@ export function Widget() {
     try { setData(await native.dashboard(period)); } finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, [period]);
+  useEffect(() => {
+    applyTheme(theme);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === themeStorageKey) setTheme(getStoredTheme());
+    };
+    globalThis.addEventListener("storage", onStorage);
+    return () => globalThis.removeEventListener("storage", onStorage);
+  }, [theme]);
   useEffect(() => {
     const timer = globalThis.setInterval(() => void load(), 30_000);
     return () => globalThis.clearInterval(timer);
@@ -60,7 +70,7 @@ export function Widget() {
 
   const rows = useMemo(() => {
     const source = data?.rankings ?? [];
-    return source.filter((row) => mode === "favorites" ? row.is_primary || row.is_favorite : row.is_current_member).slice(0, 8);
+    return source.filter((row) => mode === "favorites" ? row.is_primary || row.is_favorite : row.is_current_member);
   }, [data, mode]);
 
   return (

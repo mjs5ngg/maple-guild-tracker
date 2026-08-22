@@ -116,9 +116,9 @@ pub fn migrate(connection: &Connection) -> Result<(), AppError> {
         "INSERT OR REPLACE INTO exp_table_versions(version, effective_date, checksum, source_note) VALUES (?1, ?2, ?3, ?4)",
         params![
             exp::EXP_TABLE_VERSION,
-            "2023-06-15",
+            "2026-03-19",
             exp::table_checksum(),
-            "MapleStory Wiki Module:Experience/data, KMS New Age 표. API 경험치율과 교차 검증 필요."
+            "KMS 1.2.413 성장 동선 개편 및 현재 Non-GMS 레벨링 표. API 경험치율과 교차 검증."
         ],
     )?;
     Ok(())
@@ -563,6 +563,7 @@ fn live_activity(
 #[derive(Debug, PartialEq)]
 struct CurrentProgress {
     level: Option<i64>,
+    exp: Option<i64>,
     rate: Option<f64>,
     today_exp: Option<i64>,
 }
@@ -608,7 +609,14 @@ fn current_progress(
         _ => None,
     };
     Ok(CurrentProgress {
-        level: live.map(|sample| sample.0),
+        level: live
+            .as_ref()
+            .map(|sample| sample.0)
+            .or_else(|| completed.as_ref().map(|sample| sample.0)),
+        exp: live
+            .as_ref()
+            .map(|sample| sample.1)
+            .or_else(|| completed.as_ref().map(|sample| sample.1)),
         rate: current_rate,
         today_exp,
     })
@@ -773,13 +781,11 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             character_class: row.2,
             character_image: row.3,
             level: current.level.unwrap_or(row.4),
+            current_exp: current.exp,
             gained_exp: row.5,
             current_exp_rate: current.rate,
             today_exp: current.today_exp,
-            gap_from_primary: match (row.5, primary_exp) {
-                (Some(value), Some(primary)) => Some(value - primary),
-                _ => None,
-            },
+            gap_from_primary: None,
             is_primary: row.6,
             is_favorite: row.7,
             is_current_member: row.8,
@@ -787,6 +793,25 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             is_hunting,
             live_updated_at,
         });
+    }
+    let primary_position = rankings
+        .iter()
+        .find(|row| row.is_primary)
+        .and_then(|row| row.current_exp.map(|value| (row.level, value)));
+    if let Some((primary_level, primary_current_exp)) = primary_position {
+        for row in &mut rankings {
+            row.gap_from_primary = row.current_exp.and_then(|target_exp| {
+                match exp::calculate_progress_gap(
+                    primary_level,
+                    primary_current_exp,
+                    row.level,
+                    target_exp,
+                ) {
+                    ExpCalculation::Ok(value) => Some(value),
+                    _ => None,
+                }
+            });
+        }
     }
     let primary_rank = rankings
         .iter()
@@ -832,6 +857,7 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             let (date, gained_exp) = point?;
             series.push(SeriesPoint {
                 date,
+                character_id: id,
                 character_name: name.clone(),
                 gained_exp,
             });
@@ -1096,6 +1122,7 @@ mod tests {
             current_progress(&connection, 1, "2026-08-21").unwrap(),
             CurrentProgress {
                 level: Some(281),
+                exp: Some(220),
                 rate: Some(33.757),
                 today_exp: Some(120),
             }
