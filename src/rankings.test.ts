@@ -1,6 +1,6 @@
 // 전체 성장 위치와 오늘 획득량 랭킹 기준을 검증합니다.
 import { describe, expect, it } from "vitest";
-import { currentGuildRows, sortByOverallProgress, sortByTodayGain } from "./rankings";
+import { currentGuildRows, moveFavorite, orderFavorites, sortByOverallProgress, sortByTodayGain } from "./rankings";
 import type { RankingRow } from "./types";
 
 function row(character_name: string, level: number, current_exp: number | null, today_exp: number | null): RankingRow {
@@ -27,5 +27,15 @@ describe("경험치 랭킹", () => {
     const member = row("길드원", 281, 100, 10);
     const external = { ...row("외부", 290, 100, 20), is_current_member: false, is_favorite: true };
     expect(currentGuildRows([external, member])).toEqual([member]);
+  });
+
+  it("저장된 즐겨찾기 순서를 적용하고 새 캐릭터는 뒤에 둔다", () => {
+    const rows = [row("가", 281, 100, 10), row("나", 281, 100, 10), row("다", 281, 100, 10)];
+    expect(orderFavorites(rows, [rows[1].character_id, rows[0].character_id]).map((value) => value.character_name)).toEqual(["나", "가", "다"]);
+  });
+
+  it("드래그한 즐겨찾기를 놓은 카드 위치로 이동한다", () => {
+    expect(moveFavorite([1, 2, 3], 3, 1)).toEqual([3, 1, 2]);
+    expect(moveFavorite([1, 2, 3], 1, 3)).toEqual([2, 3, 1]);
   });
 });

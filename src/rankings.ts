@@ -17,3 +17,26 @@ export function sortByTodayGain(rows: RankingRow[]): RankingRow[] {
     (right.today_exp ?? -1) - (left.today_exp ?? -1)
     || left.character_name.localeCompare(right.character_name));
 }
+
+export function orderFavorites(rows: RankingRow[], savedOrder: number[]): RankingRow[] {
+  const positions = new Map(savedOrder.map((id, index) => [id, index]));
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      const leftPosition = positions.get(left.row.character_id);
+      const rightPosition = positions.get(right.row.character_id);
+      if (leftPosition !== undefined && rightPosition !== undefined) return leftPosition - rightPosition;
+      if (leftPosition !== undefined) return -1;
+      if (rightPosition !== undefined) return 1;
+      return left.index - right.index;
+    })
+    .map(({ row }) => row);
+}
+
+export function moveFavorite(ids: number[], draggedId: number, targetId: number): number[] {
+  if (draggedId === targetId || !ids.includes(draggedId) || !ids.includes(targetId)) return ids;
+  const targetIndex = ids.indexOf(targetId);
+  const next = ids.filter((id) => id !== draggedId);
+  next.splice(targetIndex, 0, draggedId);
+  return next;
+}

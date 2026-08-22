@@ -1,8 +1,9 @@
 // 최초 API 키와 대표 캐릭터 설정 화면을 제공합니다.
 import { FormEvent, useState } from "react";
-import { KeyRound, ShieldCheck, Sparkles } from "lucide-react";
+import { HelpCircle, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { native } from "../native";
 import type { SyncProgress } from "../types";
+import { ApiKeyHelpModal } from "./ApiKeyHelpModal";
 
 interface Props {
   progress: SyncProgress | null;
@@ -15,6 +16,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState<string | null>(null);
+  const [apiHelpOpen, setApiHelpOpen] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -56,7 +58,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
           <div><h2>처음 시작하기</h2><p>두 가지 정보만 입력하면 됩니다.</p></div>
         </div>
         <form onSubmit={submit}>
-          <label>NEXON Open API 키</label>
+          <div className="setup-api-label"><label>NEXON Open API 키</label><button type="button" onClick={() => setApiHelpOpen(true)}><HelpCircle />API 키 발급 방법</button></div>
           <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} autoComplete="off" placeholder="발급받은 API 키" disabled={busy} />
           <label>대표 캐릭터명</label>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="길드에 가입된 캐릭터" disabled={busy} />
@@ -73,6 +75,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
         </form>
         <p className="source-note">Data based on NEXON Open API</p>
       </section>
+      {apiHelpOpen && <ApiKeyHelpModal onClose={() => setApiHelpOpen(false)} />}
     </main>
   );
 }
