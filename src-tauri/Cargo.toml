@@ -1,6 +1,6 @@
 [package]
 name = "maple-guild-tracker"
-version = "0.1.12"
+version = "0.1.13"
 description = "메이플스토리 길드 경험치 기록 및 비교 앱"
 authors = ["local"]
 edition = "2021"
