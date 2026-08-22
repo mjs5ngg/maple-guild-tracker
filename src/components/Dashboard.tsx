@@ -5,7 +5,7 @@ import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, Im
 import { native } from "../native";
 import { formatCurrentProgress, formatExp, shortDate, syncTime } from "../format";
 import type { AppStatus, DashboardData, SyncProgress } from "../types";
-import { ExperienceChart, type ChartKind } from "./ExperienceChart";
+import { ExperienceChart, seriesForPeriod, type ChartKind } from "./ExperienceChart";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { applyTheme, getStoredTheme, type AppTheme } from "../theme";
 import { avatarPhysicalBase, defaultDisplaySettings, getDisplaySettings, saveDisplaySettings } from "../displaySettings";
@@ -168,6 +168,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   }, [data, rankingMode]);
   const rows = useMemo(() => rankedRows.filter(({ row }) => row.character_name.toLowerCase().includes(search.toLowerCase())), [rankedRows, search]);
   const summary = data?.summary;
+  const chartSeries = seriesForPeriod(data?.series ?? [], period, summary?.period_end);
   const displayedPrimaryRank = rankedRows.find(({ row }) => row.is_primary)?.displayRank;
   const displayedLeaderGap = rankingMode === "overall" ? rankedRows[0]?.row.gap_from_primary : summary?.leader_gap;
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
@@ -210,7 +211,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         </section>
 
         <section className="content-grid">
-          <article className="panel chart-panel" id="history"><div className="panel-heading"><div><p className="eyebrow">EXP HISTORY</p><h2>날짜별 성장 흐름</h2></div><div className="chart-heading-actions"><div className="chart-kind-tabs"><button className={chartKind === "smooth" ? "active" : ""} onClick={() => changeChartKind("smooth")}>부드러운 선</button><button className={chartKind === "line" ? "active" : ""} onClick={() => changeChartKind("line")}>꺾은선</button><button className={chartKind === "bar" ? "active" : ""} onClick={() => changeChartKind("bar")}>막대</button></div><span>{summary?.period_start ?? "—"} — {summary?.period_end ?? "—"}</span></div></div><ExperienceChart series={data?.series ?? []} theme={theme} kind={chartKind} /></article>
+          <article className="panel chart-panel" id="history"><div className="panel-heading"><div><p className="eyebrow">EXP HISTORY</p><h2>날짜별 성장 흐름</h2></div><div className="chart-heading-actions"><div className="chart-kind-tabs"><button className={chartKind === "smooth" ? "active" : ""} onClick={() => changeChartKind("smooth")}>부드러운 선</button><button className={chartKind === "line" ? "active" : ""} onClick={() => changeChartKind("line")}>꺾은선</button><button className={chartKind === "bar" ? "active" : ""} onClick={() => changeChartKind("bar")}>막대</button></div><span>{period === "daily" ? "오늘" : `${summary?.period_start ?? "—"} — ${summary?.period_end ?? "—"}`}</span></div></div><ExperienceChart series={chartSeries} theme={theme} kind={chartKind} /></article>
           <article className="panel favorites-panel">
             <div className="panel-heading"><div><p className="eyebrow">QUICK ADD</p><h2>즐겨찾기</h2></div><Star size={18} /></div>
             <p>길드 밖 캐릭터도 최근 30일 기록과 함께 비교할 수 있습니다.</p>

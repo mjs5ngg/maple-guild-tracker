@@ -5,6 +5,11 @@ import { formatExp } from "../format";
 
 export type ChartKind = "smooth" | "line" | "bar";
 
+export function seriesForPeriod(series: SeriesPoint[], period: string, completedEnd: string | null | undefined): SeriesPoint[] {
+  if (period !== "daily" || !completedEnd) return series;
+  return series.filter((point) => point.date > completedEnd);
+}
+
 export function seriesColor(characterId: number): string {
   const hue = Math.round((characterId * 137.508 + 24) % 360);
   return `hsl(${hue} 72% 58%)`;
