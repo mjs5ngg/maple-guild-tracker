@@ -207,7 +207,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         {error && <div className="error-banner dashboard-error">{error}</div>}
 
         <section className="summary-grid">
-          <article><div className="summary-icon orange"><Trophy /></div><span>현재 경험치 · 오늘 획득</span><strong>{formatCurrentProgress(summary?.primary_current_exp_rate, summary?.primary_today_exp)}</strong><small>{status.primary_name} · 선택 기간 {formatExp(summary?.primary_period_exp, true)}</small></article>
+          <article><div className="summary-icon orange"><Trophy /></div><span>현재 경험치 · 오늘 획득</span><strong>{formatCurrentProgress(summary?.primary_current_exp_rate, summary?.primary_today_exp)}</strong><small>{status.primary_name} · {period === "daily" ? "오늘 실시간" : `선택 기간 ${formatExp(summary?.primary_period_exp, true)}`}</small></article>
           <article><div className="summary-icon mint"><Crown /></div><span>길드 내 순위</span><strong>{displayedPrimaryRank ? `${displayedPrimaryRank}위` : "—"}</strong><small>{rankingMode === "overall" ? "전체 성장 위치 기준" : "선택 기간 획득량 기준"}</small></article>
           <article><div className="summary-icon blue"><ChevronRight /></div><span>선두와의 격차</span><strong>{formatExp(displayedLeaderGap)}</strong><small>{displayedLeaderGap === 0 ? "현재 공동 선두입니다." : "선두까지 남은 경험치"}</small></article>
           <article><div className="summary-icon violet"><CalendarDays /></div><span>최근 완료일</span><strong>{shortDate(summary?.latest_date ?? null)}</strong><small>{syncTime(summary?.last_sync_at ?? null)}</small></article>

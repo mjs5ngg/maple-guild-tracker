@@ -534,7 +534,10 @@ fn live_activity(
     character_id: i64,
 ) -> Result<(bool, Option<String>), AppError> {
     let mut statement = connection.prepare(
-        "SELECT fetched_at, level, exp FROM live_snapshots WHERE character_id=?1 ORDER BY fetched_at DESC LIMIT 2",
+        r#"SELECT fetched_at, level, exp
+           FROM live_snapshots
+           WHERE character_id=?1 AND fetched_at >= datetime('now', '-20 minutes')
+           ORDER BY fetched_at"#,
     )?;
     let samples = statement
         .query_map(params![character_id], |row| {
@@ -545,18 +548,15 @@ fn live_activity(
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let latest_at = samples.first().map(|sample| sample.0.clone());
+    let latest_at = samples.last().map(|sample| sample.0.clone());
     if samples.len() < 2 {
         return Ok((false, latest_at));
     }
-    let recent: bool = connection.query_row(
-        "SELECT ?1 >= datetime('now', '-20 minutes')",
-        params![samples[0].0],
-        |row| row.get(0),
-    )?;
-    let gain = exp::calculate_gain(samples[1].1, samples[1].2, samples[0].1, samples[0].2);
+    let first = &samples[0];
+    let last = &samples[samples.len() - 1];
+    let gain = exp::calculate_gain(first.1, first.2, last.1, last.2);
     Ok((
-        recent && matches!(gain, ExpCalculation::Ok(value) if value > 0),
+        matches!(gain, ExpCalculation::Ok(value) if value > 0),
         latest_at,
     ))
 }
@@ -767,10 +767,6 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let primary_exp = raw
-        .iter()
-        .find(|row| Some(row.0) == primary_id)
-        .and_then(|row| row.5);
     let mut rankings = Vec::with_capacity(raw.len());
     for (index, row) in raw.into_iter().enumerate() {
         let current = current_progress(connection, row.0, &latest_date)?;
@@ -795,6 +791,25 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             live_updated_at,
         });
     }
+    if period == "daily" {
+        for row in &mut rankings {
+            row.gained_exp = row.today_exp;
+        }
+        rankings.sort_by(|left, right| {
+            right
+                .gained_exp
+                .unwrap_or(-1)
+                .cmp(&left.gained_exp.unwrap_or(-1))
+                .then_with(|| left.character_name.cmp(&right.character_name))
+        });
+        for (index, row) in rankings.iter_mut().enumerate() {
+            row.rank = index + 1;
+        }
+    }
+    let primary_exp = rankings
+        .iter()
+        .find(|row| Some(row.character_id) == primary_id)
+        .and_then(|row| row.gained_exp);
     let primary_position = rankings
         .iter()
         .find(|row| row.is_primary)
@@ -830,11 +845,15 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         (Some(leader), Some(primary)) => Some(leader - primary),
         _ => None,
     };
-    let primary_daily_exp = primary_id.and_then(|id| {
-        connection.query_row(
-        "SELECT gained_exp FROM xp_deltas WHERE character_id=?1 AND date=?2 AND status='ok'",
-        params![id, latest_date], |row| row.get(0)).optional().ok().flatten()
-    });
+    let primary_daily_exp = if period == "daily" {
+        primary_today_exp
+    } else {
+        primary_id.and_then(|id| {
+            connection.query_row(
+            "SELECT gained_exp FROM xp_deltas WHERE character_id=?1 AND date=?2 AND status='ok'",
+            params![id, latest_date], |row| row.get(0)).optional().ok().flatten()
+        })
+    };
 
     let selected_ids: Vec<i64> = rankings
         .iter()
@@ -1112,6 +1131,25 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_manual_refresh_keeps_recent_hunting_activity() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO characters(current_name, world_name) VALUES ('테스트', '스카니아')",
+                [],
+            )
+            .unwrap();
+        connection.execute(
+            "INSERT INTO live_snapshots(character_id,fetched_at,level,exp,exp_rate,raw_json) VALUES (1,datetime('now','-15 minutes'),281,100,'10.000','{}'),(1,datetime('now','-5 minutes'),281,200,'10.100','{}'),(1,datetime('now'),281,200,'10.100','{}')",
+            [],
+        ).unwrap();
+
+        assert!(live_activity(&connection, 1).unwrap().0);
+    }
+
+    #[test]
     fn current_progress_uses_api_rate_and_gain_since_completed_date() {
         let file = NamedTempFile::new().unwrap();
         let connection = open(file.path()).unwrap();
@@ -1191,6 +1229,77 @@ mod tests {
         assert!(data.series.iter().any(|point| {
             point.character_id == 1 && point.date == today && point.gained_exp == Some(120)
         }));
+    }
+
+    #[test]
+    fn daily_dashboard_ranks_and_summarizes_by_today_live_gain() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection.execute(
+            "INSERT INTO characters(id,current_name,world_name,is_primary,is_favorite) VALUES (1,'대표','스카니아',1,1),(2,'길드원','스카니아',0,0)",
+            [],
+        ).unwrap();
+        connection.execute(
+            "INSERT INTO guild_memberships(date,member_name,character_id) VALUES ('2026-08-21','대표',1),('2026-08-21','길드원',2)",
+            [],
+        ).unwrap();
+        set_setting(&connection, "primary_character_id", "1").unwrap();
+        for snapshot in [
+            Snapshot {
+                character_id: 1,
+                date: "2026-08-20".into(),
+                level: 281,
+                exp: 100,
+                exp_rate: "10.000".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+            Snapshot {
+                character_id: 1,
+                date: "2026-08-21".into(),
+                level: 281,
+                exp: 1_000,
+                exp_rate: "10.900".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+            Snapshot {
+                character_id: 2,
+                date: "2026-08-20".into(),
+                level: 281,
+                exp: 100,
+                exp_rate: "10.000".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+            Snapshot {
+                character_id: 2,
+                date: "2026-08-21".into(),
+                level: 281,
+                exp: 200,
+                exp_rate: "10.100".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+        ] {
+            save_snapshot(&connection, &snapshot).unwrap();
+        }
+        recalculate_character(&connection, 1).unwrap();
+        recalculate_character(&connection, 2).unwrap();
+        connection.execute(
+            "INSERT INTO live_snapshots(character_id,level,exp,exp_rate,raw_json) VALUES (1,281,1010,'10.910','{}'),(2,281,400,'10.300','{}')",
+            [],
+        ).unwrap();
+
+        let data = dashboard(&connection, "daily").unwrap();
+        assert_eq!(data.rankings[0].character_name, "길드원");
+        assert_eq!(data.rankings[0].gained_exp, Some(200));
+        assert_eq!(data.rankings[1].gained_exp, Some(10));
+        assert_eq!(data.summary.primary_today_exp, Some(10));
+        assert_eq!(data.summary.primary_period_exp, Some(10));
+        assert_eq!(data.summary.primary_daily_exp, Some(10));
+        assert_eq!(data.summary.leader_gap, Some(190));
     }
 
     #[test]
