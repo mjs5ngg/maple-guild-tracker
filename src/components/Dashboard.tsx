@@ -1,5 +1,5 @@
 // 길드 경험치 요약, 순위, 그래프와 즐겨찾기 관리를 제공합니다.
-import { CSSProperties, DragEvent as ReactDragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, GripVertical, HelpCircle, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
 import { native } from "../native";
@@ -69,6 +69,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [favoriteOrder, setFavoriteOrder] = useState(storedFavoriteOrder);
   const [draggedFavoriteId, setDraggedFavoriteId] = useState<number | null>(null);
   const [favoriteDropTarget, setFavoriteDropTarget] = useState<number | null>(null);
+  const favoriteDropTargetRef = useRef<number | null>(null);
 
   async function load() {
     try { setData(await native.dashboard(period)); setError(""); }
@@ -93,6 +94,40 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
       setCustomStart(startDate.toISOString().slice(0, 10));
     }
   }, [data?.summary.latest_date]);
+  useEffect(() => {
+    if (draggedFavoriteId === null) return;
+    const finish = () => {
+      setDraggedFavoriteId(null);
+      setFavoriteDropTarget(null);
+      favoriteDropTargetRef.current = null;
+    };
+    const move = (event: PointerEvent) => {
+      if ((event.buttons & 1) === 0) {
+        finish();
+        return;
+      }
+      event.preventDefault();
+      const card = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-favorite-id]");
+      const targetId = Number(card?.dataset.favoriteId);
+      if (!Number.isInteger(targetId) || targetId === draggedFavoriteId || favoriteDropTargetRef.current === targetId) return;
+      favoriteDropTargetRef.current = targetId;
+      setFavoriteDropTarget(targetId);
+      setFavoriteOrder((currentOrder) => {
+        const rows = orderFavorites(data?.rankings.filter((row) => row.is_favorite) ?? [], currentOrder);
+        const next = moveFavorite(rows.map((row) => row.character_id), draggedFavoriteId, targetId);
+        localStorage.setItem(favoriteOrderStorageKey, JSON.stringify(next));
+        return next;
+      });
+    };
+    globalThis.addEventListener("pointermove", move, { passive: false });
+    globalThis.addEventListener("pointerup", finish);
+    globalThis.addEventListener("pointercancel", finish);
+    return () => {
+      globalThis.removeEventListener("pointermove", move);
+      globalThis.removeEventListener("pointerup", finish);
+      globalThis.removeEventListener("pointercancel", finish);
+    };
+  }, [draggedFavoriteId, data?.rankings]);
 
   async function sync() {
     setBusy(true); setError("");
@@ -178,22 +213,12 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
     }));
   }
 
-  function startFavoriteDrag(event: ReactDragEvent<HTMLElement>, characterId: number) {
-    event.stopPropagation();
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(characterId));
-    setDraggedFavoriteId(characterId);
-  }
-
-  function dropFavorite(event: ReactDragEvent<HTMLElement>, targetId: number, favoriteIds: number[]) {
+  function startFavoriteDrag(event: ReactPointerEvent<HTMLElement>, characterId: number) {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    if (draggedFavoriteId === null) return;
-    const next = moveFavorite(favoriteIds, draggedFavoriteId, targetId);
-    setFavoriteOrder(next);
-    localStorage.setItem(favoriteOrderStorageKey, JSON.stringify(next));
-    setDraggedFavoriteId(null);
-    setFavoriteDropTarget(null);
+    favoriteDropTargetRef.current = characterId;
+    setDraggedFavoriteId(characterId);
   }
 
   const rankedRows = useMemo(() => {
@@ -205,7 +230,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const summary = data?.summary;
   const chartSeries = seriesForPeriod(data?.series ?? [], period, summary?.period_end);
   const favoriteRows = orderFavorites(data?.rankings.filter((row) => row.is_favorite) ?? [], favoriteOrder);
-  const favoriteIds = favoriteRows.map((row) => row.character_id);
   const displayedPrimaryRank = rankedRows.find(({ row }) => row.is_primary)?.displayRank;
   const displayedLeaderGap = rankingMode === "overall" ? rankedRows[0]?.row.gap_from_primary : summary?.leader_gap;
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
@@ -253,10 +277,10 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
             <div className="panel-heading"><div><p className="eyebrow">QUICK ADD</p><h2>즐겨찾기</h2></div><Star size={18} /></div>
             <p>길드 밖 캐릭터도 최근 30일 기록과 함께 비교할 수 있습니다.</p>
             <form onSubmit={addExternal}><input value={externalName} onChange={(event) => setExternalName(event.target.value)} placeholder="캐릭터명 입력" disabled={busy} /><button disabled={busy || !externalName.trim()}>추가</button></form>
-            <div className="favorite-list">{favoriteRows.slice(0, 5).map((row) => {
+            <div className={`favorite-list${draggedFavoriteId !== null ? " dragging" : ""}`}>{favoriteRows.slice(0, 5).map((row) => {
               const canScroll = row.is_current_member;
-              return <div key={row.character_id} className={`favorite-character-card${row.is_primary ? " primary-card" : ""}${canScroll ? " scrollable-card" : ""}${draggedFavoriteId === row.character_id ? " dragging" : ""}${favoriteDropTarget === row.character_id && draggedFavoriteId !== row.character_id ? " drop-target" : ""}`} role={canScroll ? "button" : undefined} tabIndex={canScroll ? 0 : undefined} onClick={canScroll ? () => scrollToCharacter(row.character_id) : undefined} onKeyDown={canScroll ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); scrollToCharacter(row.character_id); } } : undefined} onDragOver={(event) => { if (draggedFavoriteId !== null && draggedFavoriteId !== row.character_id) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setFavoriteDropTarget(row.character_id); } }} onDrop={(event) => dropFavorite(event, row.character_id, favoriteIds)}>
-                <span className="favorite-drag-handle" role="button" tabIndex={0} draggable title={`${row.character_name} 순서 이동`} aria-label={`${row.character_name} 즐겨찾기 순서 이동`} onClick={(event) => event.stopPropagation()} onDragStart={(event) => startFavoriteDrag(event, row.character_id)} onDragEnd={() => { setDraggedFavoriteId(null); setFavoriteDropTarget(null); }}><GripVertical /></span>
+              return <div key={row.character_id} data-favorite-id={row.character_id} className={`favorite-character-card${row.is_primary ? " primary-card" : ""}${canScroll ? " scrollable-card" : ""}${draggedFavoriteId === row.character_id ? " dragging" : ""}${favoriteDropTarget === row.character_id && draggedFavoriteId !== row.character_id ? " drop-target" : ""}`} role={canScroll ? "button" : undefined} tabIndex={canScroll ? 0 : undefined} onClick={canScroll ? () => scrollToCharacter(row.character_id) : undefined} onKeyDown={canScroll ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); scrollToCharacter(row.character_id); } } : undefined}>
+                <span className="favorite-drag-handle" role="button" tabIndex={0} title={`${row.character_name} 순서 이동`} aria-label={`${row.character_name} 즐겨찾기 순서 이동`} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => startFavoriteDrag(event, row.character_id)}><GripVertical /></span>
                 <CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} />
                 <div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em className="primary-badge">대표캐릭터</em>}</b><small>Lv.{row.level} · {row.character_class}</small></div>
                 <div className="favorite-card-actions"><strong>{formatCurrentProgress(row.current_exp_rate, row.today_exp)}</strong>{!row.is_primary && <button className="star-button selected" title="즐겨찾기 해제" aria-label={`${row.character_name} 즐겨찾기 해제`} onClick={(event) => { event.stopPropagation(); void toggleFavorite(row.character_id, true); }}><Star size={17} fill="currentColor" /></button>}</div>

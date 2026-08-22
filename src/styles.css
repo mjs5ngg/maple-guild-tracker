@@ -119,6 +119,7 @@ button:disabled { opacity: .5; cursor: not-allowed !important; }
 .favorites-panel input { height: 39px; margin: 0; font-size: 12px; }
 .favorites-panel form button { padding: 0 12px; border: 0; border-radius: 8px; background: #ec8a49; font-size: 12px; font-weight: 700; cursor: pointer; }
 .favorite-list { display: grid; gap: 4px; margin-top: 13px; }
+.favorite-list.dragging, .favorite-list.dragging * { cursor: grabbing !important; user-select: none; }
 .favorite-list > div { display: grid; grid-template-columns: 22px auto 1fr auto; align-items: center; gap: 8px; padding: 7px 5px; border-top: 1px solid #222730; }
 .avatar { display: grid; place-items: center; width: calc(58px * var(--avatar-scale, 1)); height: calc(58px * var(--avatar-scale, 1)); flex: 0 0 auto; overflow: hidden; border-radius: 10px; color: #cdd4df; background: linear-gradient(145deg, #343c49, #242a34); font-size: 12px; font-weight: 800; transition: width .15s, height .15s; }
 .avatar img, .mini-avatar img { width: 100%; height: 100%; object-fit: contain; object-position: center; transform: scale(2.2); }
@@ -129,7 +130,7 @@ button:disabled { opacity: .5; cursor: not-allowed !important; }
 .favorite-character-card.scrollable-card:hover, .favorite-character-card.scrollable-card:focus-visible { outline: 0; background: rgba(255,155,82,.06); box-shadow: inset 0 0 0 1px rgba(255,155,82,.22); }
 .favorite-character-card.dragging { opacity: .45; }
 .favorite-character-card.drop-target { background: rgba(255,155,82,.1); box-shadow: inset 0 0 0 1px rgba(255,155,82,.5); }
-.favorite-drag-handle { display: grid; place-items: center; width: 22px; height: 34px; border: 1px solid #303744; border-radius: 7px; color: #737d8c; background: #1d222a; cursor: grab; }
+.favorite-drag-handle { display: grid; place-items: center; width: 22px; height: 34px; border: 1px solid #303744; border-radius: 7px; color: #737d8c; background: #1d222a; cursor: grab; touch-action: none; user-select: none; }
 .favorite-drag-handle:hover, .favorite-drag-handle:focus-visible { outline: 0; color: #ffad70; border-color: rgba(255,155,82,.5); background: rgba(255,155,82,.08); }
 .favorite-drag-handle:active { cursor: grabbing; }
 .favorite-drag-handle svg { width: 15px; pointer-events: none; }
