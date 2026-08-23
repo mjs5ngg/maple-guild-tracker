@@ -91,3 +91,5 @@
 - [x] Android 빌드 환경과 Rust 대상을 준비하고 모바일 프로젝트를 초기화한다.
 - [x] 자동 테스트, Windows 회귀 빌드와 Android APK 빌드를 완료한다.
 - [x] Android 이식본의 사용·설치 안내를 기록하고 GitHub에 반영한다.
+- [x] Windows 배포 뒤 Android APK를 자동 생성하는 통합 흐름을 연결한다.
+- [x] 통합 배포 명령으로 EXE와 APK가 같은 `release` 폴더에 생성되는지 검증한다.

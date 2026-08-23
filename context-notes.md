@@ -110,3 +110,4 @@
 - Windows 개발자 모드가 꺼진 환경에서는 Tauri CLI가 Rust `.so` 심볼릭 링크 생성 단계에서 실패한다. `package-android.ps1`은 이 오류만 식별해 파일 복사와 Gradle 패키징으로 이어가며, 다른 빌드 오류는 숨기지 않고 중단한다.
 - Android 직접 설치본은 ARM64 릴리스 APK로 만들고 로컬 개발 서명으로 v2·v3 서명을 적용한다. Play Store 배포 시에는 개발 서명을 사용하지 않고 정식 업로드 키와 AAB로 교체해야 한다.
 - `v0.2.0`은 프런트엔드 테스트 19건, Rust 테스트 22건, Clippy 경고 0건, Windows NSIS 빌드와 Android ARM64 APK 빌드를 통과했다. APK 메타데이터는 앱 ID `com.mjs5ngg.guildmatefollow`, 최소 SDK 24, 대상 SDK 36이며 v2·v3 서명을 검증했다.
+- 앞으로 앱 업데이트 시 사용하던 `npm run package:windows`가 Windows 설치본·포터블 EXE 생성 후 `package-android.ps1`을 연속 실행한다. Android 단계까지 성공해야 통합 배포가 성공한 것으로 처리하며 세 파일을 같은 `release` 폴더에 모은다.

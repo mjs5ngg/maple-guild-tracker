@@ -5,6 +5,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseDir = Join-Path $projectRoot "release"
 $installerDir = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis"
 $portableSource = Join-Path $projectRoot "src-tauri\target\release\guildmate-follow.exe"
+$androidPackageScript = Join-Path $PSScriptRoot "package-android.ps1"
 
 Push-Location $projectRoot
 try {
@@ -25,4 +26,9 @@ finally {
     Pop-Location
 }
 
-Write-Host "Windows distribution files were created in the release directory."
+& powershell -NoProfile -ExecutionPolicy Bypass -File $androidPackageScript
+if ($LASTEXITCODE -ne 0) {
+    throw "Android APK packaging failed."
+}
+
+Write-Host "Windows EXE and Android APK distribution files were created in the release directory."

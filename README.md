@@ -20,7 +20,7 @@ API 키는 Windows에서는 자격 증명 관리자, Android에서는 Android Ke
 
 설치 없이 확인하려면 `release/Guildmate-Follow-Portable.exe`를 실행할 수 있습니다. 자동 시작을 사용할 경우 실행 파일을 옮기면 등록된 경로가 달라지므로 설치본 사용을 권장합니다.
 
-두 배포 파일은 다음 명령으로 한 번에 다시 만들 수 있습니다.
+다음 명령은 Windows 설치본과 포터블 EXE를 만든 뒤 같은 버전의 Android APK도 자동으로 생성합니다. 모든 결과물은 프로젝트의 `release` 폴더에 저장됩니다.
 
 ```powershell
 npm run package:windows
@@ -32,7 +32,7 @@ npm run package:windows
 
 Android판은 메인 대시보드, 설정, 동기화, 길드 순위, 즐겨찾기와 성장 그래프를 제공합니다. Windows 전용 트레이, 로그인 자동 시작과 다른 앱 위에 떠 있는 미니 위젯은 포함하지 않습니다. Android가 백그라운드 앱을 정지할 수 있으므로 앱을 다시 열 때 누락 기록을 보충하고, 화면을 보고 있을 때 주기 동기화를 수행합니다.
 
-Android Studio에서 SDK와 NDK를 설치한 Windows 개발 환경에서는 다음 명령으로 설치용 ARM64 APK를 다시 만들 수 있습니다.
+Android Studio에서 SDK와 NDK를 설치한 Windows 개발 환경에서는 다음 명령으로 Android APK만 따로 다시 만들 수 있습니다.
 
 ```powershell
 rustup target add aarch64-linux-android
