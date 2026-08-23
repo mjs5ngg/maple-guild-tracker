@@ -12,6 +12,7 @@ export const native = {
   liveSync: () => invoke<SyncReport>("sync_live_now"),
   notificationStatus: () => invoke<MobileNotificationStatus>("get_mobile_notification_status"),
   openNotificationSettings: () => invoke<void>("open_mobile_notification_settings"),
+  openBackgroundSettings: () => invoke<void>("open_mobile_background_settings"),
   retryNotificationMonitor: () => invoke<void>("retry_mobile_notification_monitor"),
   changePrimary: (characterId: number) => invoke<AppStatus>("change_primary", { characterId }),
   dashboard: (period: string) => invoke<DashboardData>("get_dashboard", { period }),

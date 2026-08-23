@@ -6,6 +6,7 @@ import android.app.Activity
 import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
@@ -32,14 +33,19 @@ class NotificationStatusPlugin(private val activity: Activity) : Plugin(activity
     }
     val preferences = FavoriteNotificationMonitor.preferences(activity)
     val issue = FavoriteNotificationMonitor.currentIssue(activity)
+    val lastSuccess = preferences.getLong(FavoriteNotificationMonitor.KEY_LAST_SUCCESS_AT, 0L)
+    val storedError = preferences.getString(FavoriteNotificationMonitor.KEY_LAST_ERROR, "").orEmpty().trim()
+    val hasError = storedError.isNotBlank() && !storedError.equals("null", ignoreCase = true)
+    val monitoringHealthy = permissionGranted && systemEnabled && channelEnabled &&
+      lastSuccess > 0L && System.currentTimeMillis() - lastSuccess <= 60 * 60 * 1000L && !hasError
     invoke.resolve(JSObject().apply {
       put("supported", true)
       put("permission_granted", permissionGranted)
       put("system_enabled", systemEnabled)
       put("channel_enabled", channelEnabled)
-      put("monitoring_healthy", permissionGranted && systemEnabled && channelEnabled && issue == null)
-      put("issue", issue)
-      put("last_success_at", preferences.getLong(FavoriteNotificationMonitor.KEY_LAST_SUCCESS_AT, 0L).takeIf { it > 0L })
+      put("monitoring_healthy", monitoringHealthy)
+      put("issue", issue.orEmpty())
+      put("last_success_at", lastSuccess.takeIf { it > 0L })
     })
   }
 
@@ -47,6 +53,14 @@ class NotificationStatusPlugin(private val activity: Activity) : Plugin(activity
   fun openSettings(invoke: Invoke) {
     activity.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
       putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+    })
+    invoke.resolve()
+  }
+
+  @Command
+  fun openBackgroundSettings(invoke: Invoke) {
+    activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+      data = Uri.parse("package:${activity.packageName}")
     })
     invoke.resolve()
   }

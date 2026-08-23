@@ -217,6 +217,7 @@ pub fn run() {
             commands::sync_live_now,
             commands::get_mobile_notification_status,
             commands::open_mobile_notification_settings,
+            commands::open_mobile_background_settings,
             commands::retry_mobile_notification_monitor,
             commands::change_primary,
             commands::get_dashboard,

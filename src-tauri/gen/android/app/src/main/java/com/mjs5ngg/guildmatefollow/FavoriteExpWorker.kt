@@ -33,7 +33,14 @@ class FavoriteExpWorker(context: Context, parameters: WorkerParameters) : Corout
         }
       }
       val ok = payload.optBoolean("ok", false)
-      val error = if (allowed) payload.optString("error", "") else "즐겨찾기 경험치 알림 권한이 꺼져 있습니다."
+      val errorValue = payload.opt("error")
+      val error = if (!allowed) {
+        "즐겨찾기 경험치 알림 권한이 꺼져 있습니다."
+      } else if (errorValue is String) {
+        errorValue
+      } else {
+        ""
+      }
       preferences.edit()
         .putLong(FavoriteNotificationMonitor.KEY_LAST_SUCCESS_AT, if (ok) System.currentTimeMillis() else preferences.getLong(FavoriteNotificationMonitor.KEY_LAST_SUCCESS_AT, 0L))
         .putString(FavoriteNotificationMonitor.KEY_LAST_ERROR, error)

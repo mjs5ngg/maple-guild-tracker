@@ -38,6 +38,15 @@ pub fn open_mobile_notification_settings(_app: AppHandle) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub fn open_mobile_background_settings(_app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile_notifications::open_background_settings(&_app);
+
+    #[cfg(not(target_os = "android"))]
+    Err("모바일 알림은 Android 앱에서만 지원합니다.".into())
+}
+
+#[tauri::command]
 pub fn retry_mobile_notification_monitor(_app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     return crate::mobile_notifications::retry(&_app);

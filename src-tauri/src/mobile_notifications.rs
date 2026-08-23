@@ -37,6 +37,13 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+pub fn open_background_settings<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    app.state::<MobileNotifications<R>>()
+        .0
+        .run_mobile_plugin("openBackgroundSettings", ())
+        .map_err(|error| error.to_string())
+}
+
 pub fn retry<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     app.state::<MobileNotifications<R>>()
         .0

@@ -64,8 +64,8 @@ object FavoriteNotificationMonitor {
   fun currentIssue(context: Context): String? {
     if (!notificationsAllowed(context)) return "즐겨찾기 경험치 알림 권한이 꺼져 있습니다."
     val preferences = preferences(context)
-    val error = preferences.getString(KEY_LAST_ERROR, "").orEmpty()
-    if (error.isNotBlank()) return error
+    val error = preferences.getString(KEY_LAST_ERROR, "").orEmpty().trim()
+    if (error.isNotBlank() && !error.equals("null", ignoreCase = true)) return error
     val now = System.currentTimeMillis()
     val lastSuccess = preferences.getLong(KEY_LAST_SUCCESS_AT, 0L)
     val started = preferences.getLong(KEY_STARTED_AT, now)
