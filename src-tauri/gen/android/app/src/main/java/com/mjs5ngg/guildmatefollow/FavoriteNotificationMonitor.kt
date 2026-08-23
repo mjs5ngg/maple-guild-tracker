@@ -46,7 +46,6 @@ object FavoriteNotificationMonitor {
       ExistingPeriodicWorkPolicy.KEEP,
       periodic,
     )
-    runNow(context)
   }
 
   fun runNow(context: Context) {

@@ -19,7 +19,17 @@ class MainActivity : TauriActivity() {
   override val handleBackNavigation: Boolean = true
   private val issueHandler = Handler(Looper.getMainLooper())
   private var issueDialogVisible = false
-  private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+  private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    if (granted) FavoriteNotificationMonitor.runNow(applicationContext)
+  }
+  private val foregroundNotificationCheck = object : Runnable {
+    override fun run() {
+      if (FavoriteNotificationMonitor.notificationsAllowed(this@MainActivity)) {
+        FavoriteNotificationMonitor.runNow(applicationContext)
+      }
+      issueHandler.postDelayed(this, 5 * 60 * 1000L)
+    }
+  }
   private val issueCheck = object : Runnable {
     override fun run() {
       showNotificationIssueIfNeeded()
@@ -37,17 +47,15 @@ class MainActivity : TauriActivity() {
 
   override fun onResume() {
     super.onResume()
-    val preferences = FavoriteNotificationMonitor.preferences(this)
-    if (FavoriteNotificationMonitor.notificationsAllowed(this) &&
-      preferences.getString(FavoriteNotificationMonitor.KEY_LAST_ERROR, "").orEmpty().contains("권한")) {
-      FavoriteNotificationMonitor.runNow(applicationContext)
-    }
     issueHandler.removeCallbacks(issueCheck)
+    issueHandler.removeCallbacks(foregroundNotificationCheck)
     issueHandler.postDelayed(issueCheck, 2_000L)
+    issueHandler.post(foregroundNotificationCheck)
   }
 
   override fun onPause() {
     issueHandler.removeCallbacks(issueCheck)
+    issueHandler.removeCallbacks(foregroundNotificationCheck)
     super.onPause()
   }
 
