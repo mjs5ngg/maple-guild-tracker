@@ -1,5 +1,5 @@
 // 프런트엔드에서 호출하는 설정·동기화·조회 명령을 제공합니다.
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "windows")]
 use tauri_plugin_autostart::ManagerExt;
 
@@ -13,6 +13,18 @@ fn public_error(error: AppError) -> String {
     error.public_message()
 }
 
+fn emit_setup_progress(app: &AppHandle, completed: usize, message: &str) {
+    let _ = app.emit(
+        "sync-progress",
+        crate::models::SyncProgress {
+            phase: "setup".to_string(),
+            completed,
+            total: 5,
+            message: message.to_string(),
+        },
+    );
+}
+
 #[tauri::command]
 pub fn get_app_status(state: tauri::State<'_, AppState>) -> Result<AppStatus, String> {
     let connection = db::open(&state.db_path).map_err(public_error)?;
@@ -21,7 +33,7 @@ pub fn get_app_status(state: tauri::State<'_, AppState>) -> Result<AppStatus, St
 
 #[tauri::command]
 pub async fn save_setup(
-    _app: AppHandle,
+    app: AppHandle,
     state: tauri::State<'_, AppState>,
     api_key: String,
     primary_name: String,
@@ -31,7 +43,9 @@ pub async fn save_setup(
     if key.is_empty() || name.is_empty() {
         return Err("API 키와 대표 캐릭터명을 모두 입력해 주세요.".into());
     }
+    emit_setup_progress(&app, 1, "캐릭터 식별 정보를 확인하고 있습니다.");
     let ocid = state.nexon.ocid(key, name).await.map_err(public_error)?;
+    emit_setup_progress(&app, 2, "캐릭터와 월드 정보를 확인하고 있습니다.");
     let basic = state
         .nexon
         .character_basic(key, &ocid, None)
@@ -41,16 +55,32 @@ pub async fn save_setup(
         .character_guild_name
         .clone()
         .ok_or_else(|| "대표 캐릭터가 현재 길드에 가입되어 있지 않습니다.".to_string())?;
+    emit_setup_progress(&app, 3, "길드 정보를 확인하고 있습니다.");
     let oguild_id = state
         .nexon
         .guild_id(key, &guild_name, &basic.world_name)
         .await
         .map_err(public_error)?;
+    emit_setup_progress(&app, 4, "API 키를 보안 저장소에 저장하고 있습니다.");
+    #[cfg(target_os = "android")]
+    {
+        let owned_key = key.to_string();
+        let store_task = tokio::task::spawn_blocking(move || credential_set(&owned_key));
+        tokio::time::timeout(std::time::Duration::from_secs(15), store_task)
+            .await
+            .map_err(|_| {
+                "Android 보안 저장소가 응답하지 않습니다. 앱을 다시 실행해 주세요.".to_string()
+            })?
+            .map_err(|error| format!("Android 보안 저장 작업이 중단되었습니다. {error}"))?
+            .map_err(public_error)?;
+    }
+    #[cfg(not(target_os = "android"))]
     credential_set(key).map_err(public_error)?;
     let connection = db::open(&state.db_path).map_err(public_error)?;
     db::save_setup(&connection, &basic, &ocid, &guild_name, &oguild_id).map_err(public_error)?;
     #[cfg(target_os = "windows")]
-    let _ = _app.autolaunch().enable();
+    let _ = app.autolaunch().enable();
+    emit_setup_progress(&app, 5, "기본 설정을 완료했습니다.");
     Ok(SetupResult {
         character_name: basic.character_name,
         world_name: basic.world_name,

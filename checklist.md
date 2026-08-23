@@ -93,3 +93,6 @@
 - [x] Android 이식본의 사용·설치 안내를 기록하고 GitHub에 반영한다.
 - [x] Windows 배포 뒤 Android APK를 자동 생성하는 통합 흐름을 연결한다.
 - [x] 통합 배포 명령으로 EXE와 APK가 같은 `release` 폴더에 생성되는지 검증한다.
+- [x] Android 최초 설정의 세부 단계 진행률을 추가한다.
+- [x] Android 보안 저장소 호출에 응답 제한을 적용한다.
+- [x] 최초 설정 수정본의 자동 테스트와 Windows·Android 통합 배포를 검증한다.
