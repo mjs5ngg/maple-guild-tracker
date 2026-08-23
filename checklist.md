@@ -96,3 +96,5 @@
 - [x] Android 최초 설정의 세부 단계 진행률을 추가한다.
 - [x] Android 보안 저장소 호출에 응답 제한을 적용한다.
 - [x] 최초 설정 수정본의 자동 테스트와 Windows·Android 통합 배포를 검증한다.
+- [x] Android Keystore용 애플리케이션 컨텍스트 초기화 클래스를 추가한다.
+- [x] Kotlin·JNI 연결과 새 Android APK 빌드를 검증한다.

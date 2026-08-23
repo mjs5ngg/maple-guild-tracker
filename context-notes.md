@@ -113,3 +113,5 @@
 - 앞으로 앱 업데이트 시 사용하던 `npm run package:windows`가 Windows 설치본·포터블 EXE 생성 후 `package-android.ps1`을 연속 실행한다. Android 단계까지 성공해야 통합 배포가 성공한 것으로 처리하며 세 파일을 같은 `release` 폴더에 모은다.
 - Android 최초 설정은 `save_setup`이 끝난 뒤에만 첫 동기화 진행률을 내보내므로 OCID·기본 정보·길드 조회 동안 화면이 0%로 고정되어 실제 정지처럼 보였다. 설정 자체를 5단계로 알리고 Android 보안 저장 호출은 차단 작업과 15초 제한으로 감싼다.
 - `v0.2.1`은 최초 설정 진행 상태 개선 후 프런트엔드 19건, Rust 22건, Clippy 경고 0건과 Windows·Android 통합 배포를 통과했다. 새 ARM64 APK는 v2·v3 서명 검증을 완료했다.
+- `v0.2.1` 실기기 오류의 실제 원인은 `android-native-keyring-store`가 참조하는 `ndk-context`를 현재 Tauri 런타임이 초기화하지 않는 점이다. `Keyring.kt`가 메인 Rust 라이브러리를 먼저 불러오고 JNI 초기화 함수로 `applicationContext`를 전달한 다음 기존 Tauri `onCreate`를 실행한다.
+- `v0.2.2`는 내보낸 JNI 초기화 심볼, Kotlin 컴파일, 프런트엔드 19건, Rust 22건, Clippy 경고 0건, Windows·Android 통합 배포와 APK v2·v3 서명 검증을 통과했다.
