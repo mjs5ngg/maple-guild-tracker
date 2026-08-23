@@ -8,6 +8,16 @@ export interface AppStatus {
   last_sync_at: string | null;
 }
 
+export interface MobileNotificationStatus {
+  supported: boolean;
+  permission_granted: boolean;
+  system_enabled: boolean;
+  channel_enabled: boolean;
+  monitoring_healthy: boolean;
+  issue: string | null;
+  last_success_at: number | null;
+}
+
 export interface SetupResult {
   character_name: string;
   world_name: string;

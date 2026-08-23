@@ -1,10 +1,10 @@
 // 길드 경험치 요약, 순위, 그래프와 즐겨찾기 관리를 제공합니다.
 import { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, GripVertical, HelpCircle, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowUp, BarChart3, Bell, CalendarDays, CheckCircle2, ChevronRight, Crown, ExternalLink, GripVertical, HelpCircle, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
 import { native } from "../native";
 import { formatCurrentProgress, formatExp, shortDate, syncTime } from "../format";
-import type { AppStatus, DashboardData, SyncProgress } from "../types";
+import type { AppStatus, DashboardData, MobileNotificationStatus, SyncProgress } from "../types";
 import { ExperienceChart, seriesForPeriod, type ChartKind } from "./ExperienceChart";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { applyTheme, getStoredTheme, type AppTheme } from "../theme";
@@ -13,6 +13,7 @@ import { currentGuildRows, favoriteRankingRows, moveFavorite, orderFavorites, sa
 import { ApiKeyHelpModal } from "./ApiKeyHelpModal";
 import { useBackDismiss } from "../useBackDismiss";
 import { saveDashboardPeriod, saveDashboardRankingMode, storedDashboardPeriod, storedDashboardRankingMode, type DashboardPeriod } from "../dashboardPreferences";
+import { desktopRankingTabOrder, type DesktopRankingView } from "../desktopRanking";
 
 interface Props {
   status: AppStatus;
@@ -73,6 +74,10 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [draggedFavoriteId, setDraggedFavoriteId] = useState<number | null>(null);
   const [favoriteDropTarget, setFavoriteDropTarget] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<DashboardView>("main");
+  const [desktopRankingView, setDesktopRankingView] = useState<DesktopRankingView>("guild");
+  const [notificationStatus, setNotificationStatus] = useState<MobileNotificationStatus | null>(null);
+  const [notificationStatusError, setNotificationStatusError] = useState("");
+  const [notificationStatusLoading, setNotificationStatusLoading] = useState(false);
   const favoriteDropTargetRef = useRef<number | null>(null);
   const activityFollowupTimerRef = useRef<number | null>(null);
   const closeCustomPeriod = useBackDismiss(customOpen, () => setCustomOpen(false));
@@ -87,6 +92,12 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   useEffect(() => saveDashboardRankingMode(rankingMode), [rankingMode]);
   useEffect(() => setChartKind(storedChartKind(period)), [period]);
   useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => {
+    if (!isAndroidRuntime || !settingsOpen) return;
+    void loadNotificationStatus();
+    const timer = globalThis.setInterval(() => void loadNotificationStatus(), 10_000);
+    return () => globalThis.clearInterval(timer);
+  }, [settingsOpen]);
   useEffect(() => {
     const timer = globalThis.setInterval(() => void load(), 30_000);
     return () => globalThis.clearInterval(timer);
@@ -187,6 +198,43 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   function showFavorites() {
     setActiveView("favorites");
     globalThis.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function showDesktopRanking(view: DesktopRankingView) {
+    setActiveView("main");
+    setDesktopRankingView(view);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.getElementById("ranking")?.scrollIntoView({ behavior: "smooth" });
+    }));
+  }
+
+  async function loadNotificationStatus() {
+    if (!isAndroidRuntime) return;
+    setNotificationStatusLoading(true);
+    try {
+      setNotificationStatus(await native.notificationStatus());
+      setNotificationStatusError("");
+    } catch (reason) {
+      setNotificationStatusError(String(reason));
+    } finally {
+      setNotificationStatusLoading(false);
+    }
+  }
+
+  async function openNotificationSettings() {
+    try { await native.openNotificationSettings(); }
+    catch (reason) { setNotificationStatusError(String(reason)); }
+  }
+
+  async function retryNotificationMonitor() {
+    setNotificationStatusLoading(true);
+    try {
+      await native.retryNotificationMonitor();
+      globalThis.setTimeout(() => void loadNotificationStatus(), 1_000);
+    } catch (reason) {
+      setNotificationStatusError(String(reason));
+      setNotificationStatusLoading(false);
+    }
   }
 
   async function addExternal(event: FormEvent) {
@@ -295,18 +343,25 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
     const source = favoriteRankingRows(data?.rankings ?? [], rankingMode === "overall");
     return source.map((row, index) => ({ row, displayRank: index + 1 }));
   }, [data, rankingMode]);
+  const mainRankingIsFavorites = !isAndroidRuntime && desktopRankingView === "favorites";
+  const mainRankingRows = mainRankingIsFavorites ? favoriteRankedRows : rows;
   const displayedPrimaryRank = rankedRows.find(({ row }) => row.is_primary)?.displayRank;
   const displayedLeaderGap = rankingMode === "overall" ? rankedRows[0]?.row.gap_from_primary : summary?.leader_gap;
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
   const syncVisible = busy || ["guild", "identity", "character", "calculate", "live", "waiting"].includes(progress?.phase ?? "");
   const syncWaiting = progress?.phase === "waiting";
+  const notificationAvailable = Boolean(notificationStatus?.supported && notificationStatus.permission_granted && notificationStatus.system_enabled && notificationStatus.channel_enabled);
+  const notificationLastSuccess = notificationStatus?.last_success_at
+    ? new Date(notificationStatus.last_success_at).toLocaleString("ko-KR")
+    : "아직 성공 기록 없음";
+  const desktopRankingTabs = desktopRankingTabOrder(desktopRankingView);
 
   return (
     <>
     <div className="app-shell" style={{ "--ui-scale": uiScale, "--avatar-scale": avatarScale * avatarPhysicalBase } as CSSProperties}>
       <aside className="sidebar">
         <div className="side-brand"><div className="brand-mark small"><BarChart3 size={20} /></div><div><b>길드원 따라가기</b><span>Guild EXP</span></div></div>
-        <nav><button className={activeView === "main" ? "active" : ""} onClick={() => showMainSection()}><BarChart3 />대시보드</button><button onClick={() => showMainSection("history")}><CalendarDays />성장 기록</button><button className={activeView === "favorites" ? "active" : ""} onClick={showFavorites}><Star />즐겨찾기 순위</button><button onClick={() => showMainSection("ranking")}><Users />길드 순위</button></nav>
+        <nav><button className={activeView === "main" ? "active" : ""} onClick={() => showMainSection()}><BarChart3 />대시보드</button><button onClick={() => showMainSection("history")}><CalendarDays />성장 기록</button><div className="sidebar-ranking-switch">{desktopRankingTabs.map((view, index) => <button key={view} className={index === 0 ? "ranking-primary" : "ranking-secondary"} onClick={() => showDesktopRanking(view)}>{view === "guild" ? <Users /> : <Star />}{view === "guild" ? "길드 순위" : "즐겨찾기 순위"}</button>)}</div></nav>
         <div className="guild-card"><span>현재 추적 길드</span><strong>{status.guild_name}</strong><small>{status.world_name} · 대표 {status.primary_name}</small></div>
         {!isAndroidRuntime && <button className="widget-open" onClick={() => native.showWidget()}><ExternalLink size={16} />미니 위젯 열기</button>}
         <div className="side-source">Data based on<br />NEXON Open API</div>
@@ -359,13 +414,30 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         </section>
 
         <section className="panel ranking-panel" id="ranking">
-          <div className="panel-heading ranking-heading"><div><p className="eyebrow">GUILD RANKING</p><h2><button className={`ranking-mode-button ${rankingMode === "period" ? "pressed" : ""}`} onClick={() => setRankingMode((value) => value === "overall" ? "period" : "overall")}>{rankingMode === "overall" ? "경험치" : "기간별 경험치"}</button> 순위</h2><small>{rankingMode === "overall" ? "현재 레벨과 현재 경험치 위치 기준 순위입니다." : "선택 기간 획득량 기준 순위입니다."} 격차는 대표 캐릭터와의 현재 성장 위치 차이입니다.</small></div><label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="길드원 검색" /></label></div>
-          <div className="table-wrap"><table><thead><tr><th>순위</th><th>캐릭터</th><th>레벨</th><th>현재 경험치 · {rankingMode === "period" ? `${periodDisplayName(period)} 동안 획득` : "오늘 획득"}</th><th>나와의 격차</th><th>상태</th><th aria-label="대표 및 즐겨찾기" /></tr></thead><tbody>{rows.map(({ row, displayRank }) => <tr id={`character-row-${row.character_id}`} key={row.character_id} className={row.is_primary ? "primary-row" : ""}><td><span className={`rank rank-${displayRank}`}>{displayRank}</span></td><td><div className="character-cell"><CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em>나</em>}</b><small>{row.character_class || "직업 확인 중"}{!row.is_current_member && " · 외부"}</small></div></div></td><td>Lv.{row.level || "—"}</td><td className="exp-cell">{formatCurrentProgress(row.current_exp_rate, rankingMode === "period" ? row.gained_exp : row.today_exp)}</td><td className={row.gap_from_primary && row.gap_from_primary > 0 ? "positive" : "muted"}>{formatExp(row.gap_from_primary, true)}</td><td><span className={row.status === "정상" ? "status-ok" : "status-pending"}>{row.status}</span></td><td><div className="row-actions">{row.is_current_member && !row.is_primary && <button className="primary-character-button" title="대표 캐릭터로 지정" onClick={() => void changePrimary(row.character_id)} disabled={busy}><Crown size={16} /></button>}<button className={`star-button ${row.is_favorite ? "selected" : ""}`} title="즐겨찾기" onClick={() => toggleFavorite(row.character_id, row.is_favorite)} disabled={row.is_primary}><Star size={17} fill={row.is_favorite ? "currentColor" : "none"} /></button></div></td></tr>)}</tbody></table>{!rows.length && <div className="empty-table">표시할 캐릭터 기록이 없습니다.</div>}</div>
+          <div className="panel-heading ranking-heading"><div><p className="eyebrow">{mainRankingIsFavorites ? "FAVORITE RANKING" : "GUILD RANKING"}</p><h2>{mainRankingIsFavorites && "즐겨찾기 "}<button className={`ranking-mode-button ${rankingMode === "period" ? "pressed" : ""}`} onClick={() => setRankingMode((value) => value === "overall" ? "period" : "overall")}>{rankingMode === "overall" ? "경험치" : "기간별 경험치"}</button> 순위</h2><small>{mainRankingIsFavorites ? "대표 캐릭터와 길드 밖 캐릭터를 포함한 즐겨찾기만 표시합니다." : <>{rankingMode === "overall" ? "현재 레벨과 현재 경험치 위치 기준 순위입니다." : "선택 기간 획득량 기준 순위입니다."} 격차는 대표 캐릭터와의 현재 성장 위치 차이입니다.</>}</small></div>{mainRankingIsFavorites ? <Star size={20} /> : <label className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="길드원 검색" /></label>}</div>
+          <div className="table-wrap"><table><thead><tr><th>순위</th><th>캐릭터</th><th>레벨</th><th>현재 경험치 · {rankingMode === "period" ? `${periodDisplayName(period)} 동안 획득` : "오늘 획득"}</th><th>나와의 격차</th><th>상태</th><th aria-label="대표 및 즐겨찾기" /></tr></thead><tbody>{mainRankingRows.map(({ row, displayRank }) => <tr id={`character-row-${row.character_id}`} key={row.character_id} className={row.is_primary ? "primary-row" : ""}><td><span className={`rank rank-${displayRank}`}>{displayRank}</span></td><td><div className="character-cell"><CharacterAvatar image={row.character_image} name={row.character_name} active={row.is_hunting} /><div><b>{row.character_name}{row.is_hunting && " 🔥"}{row.is_primary && <em>나</em>}</b><small>{row.character_class || "직업 확인 중"}{!row.is_current_member && " · 외부"}</small></div></div></td><td>Lv.{row.level || "—"}</td><td className="exp-cell">{formatCurrentProgress(row.current_exp_rate, rankingMode === "period" ? row.gained_exp : row.today_exp)}</td><td className={row.gap_from_primary && row.gap_from_primary > 0 ? "positive" : "muted"}>{formatExp(row.gap_from_primary, true)}</td><td><span className={row.status === "정상" ? "status-ok" : "status-pending"}>{row.status}</span></td><td><div className="row-actions">{row.is_current_member && !row.is_primary && <button className="primary-character-button" title="대표 캐릭터로 지정" onClick={() => void changePrimary(row.character_id)} disabled={busy}><Crown size={16} /></button>}<button className={`star-button ${row.is_favorite ? "selected" : ""}`} title="즐겨찾기" onClick={() => toggleFavorite(row.character_id, row.is_favorite)} disabled={row.is_primary}><Star size={17} fill={row.is_favorite ? "currentColor" : "none"} /></button></div></td></tr>)}</tbody></table>{!mainRankingRows.length && <div className="empty-table">{mainRankingIsFavorites ? "즐겨찾기 캐릭터가 없습니다." : "표시할 캐릭터 기록이 없습니다."}</div>}</div>
         </section>
         </>}
       </main>
       <nav className="mobile-nav"><button className={activeView === "main" ? "active" : ""} onClick={() => showMainSection()}><BarChart3 />대시보드</button><button onClick={() => showMainSection("history")}><CalendarDays />성장 기록</button><button className={activeView === "favorites" ? "active" : ""} onClick={showFavorites}><Star />즐겨찾기</button><button onClick={() => showMainSection("ranking")}><Users />길드 순위</button></nav>
-      {settingsOpen && <div className="modal-backdrop" onMouseDown={closeSettings}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="settings-help-trigger" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button><button className="modal-close" onClick={closeSettings} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 운영체제 보안 저장소에 저장됩니다.</small></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onMouseDown={closeSettings}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="settings-help-trigger" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button>
+        <button className="modal-close" onClick={closeSettings} aria-label="닫기"><X /></button>
+        {isAndroidRuntime && <div className={`notification-status-card ${notificationAvailable ? "available" : "unavailable"}`}>
+          <div className="notification-status-heading"><div className="notification-status-icon"><Bell /></div><div><span>모바일 알림 환경</span><strong>{notificationStatusLoading && !notificationStatus ? "확인 중" : notificationAvailable ? "알림 사용 가능" : "알림 사용 불가"}</strong></div>{notificationAvailable ? <CheckCircle2 /> : <AlertTriangle />}</div>
+          <div className="notification-status-details">
+            <span>알림 권한 <b>{notificationStatus?.permission_granted ? "허용" : "차단"}</b></span>
+            <span>시스템 알림 <b>{notificationStatus?.system_enabled && notificationStatus?.channel_enabled ? "켜짐" : "꺼짐"}</b></span>
+            <span>백그라운드 감시 <b>{notificationStatus?.monitoring_healthy ? "정상" : "확인 필요"}</b></span>
+            <span>마지막 정상 확인 <b>{notificationLastSuccess}</b></span>
+          </div>
+          {(notificationStatus?.issue || notificationStatusError) && <p>{notificationStatusError || notificationStatus?.issue}</p>}
+          <div className="notification-status-actions"><button type="button" onClick={() => void openNotificationSettings()}>알림 설정 열기</button><button type="button" onClick={() => void retryNotificationMonitor()} disabled={notificationStatusLoading}>{notificationStatusLoading ? "확인 중" : "지금 다시 확인"}</button></div>
+        </div>}
+        <div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p>
+        <form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>
+        {keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 운영체제 보안 저장소에 저장됩니다.</small>
+      </section></div>}
       {apiHelpOpen && <ApiKeyHelpModal onClose={() => setApiHelpOpen(false)} />}
     </div>
     <button className="scroll-to-top" title="화면 최상단으로 이동" aria-label="화면 최상단으로 이동" onClick={() => globalThis.scrollTo({ top: 0, behavior: "smooth" })}><ArrowUp /></button>

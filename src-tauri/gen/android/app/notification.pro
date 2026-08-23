@@ -1,1 +1,2 @@
 -keep class com.mjs5ngg.guildmatefollow.FavoriteExpWorker { *; }
+-keep class com.mjs5ngg.guildmatefollow.NotificationStatusPlugin { *; }

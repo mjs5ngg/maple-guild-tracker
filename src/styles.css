@@ -65,6 +65,10 @@ button:disabled { opacity: .5; cursor: not-allowed !important; }
 .sidebar nav button svg { width: 17px; }
 .sidebar nav button:hover, .sidebar nav button.active { color: #fff; background: #202630; }
 .sidebar nav button.active { box-shadow: inset 3px 0 #ff9b52; }
+.sidebar-ranking-switch { display: grid; gap: 3px; }
+.sidebar nav .ranking-primary { color: #fff; background: #202630; }
+.sidebar nav .ranking-secondary { height: 29px; padding-left: 30px; color: #687282; font-size: 11px; font-weight: 600; }
+.sidebar nav .ranking-secondary svg { width: 13px; height: 13px; }
 .guild-card { margin-top: auto; padding: 14px; border: 1px solid #282e38; border-radius: 11px; background: #171b22; }
 .guild-card span, .guild-card strong, .guild-card small { display: block; }
 .guild-card span { color: #6f7785; font-size: 11px; }
@@ -178,6 +182,22 @@ td { height: 78px; padding: 6px 16px; border-top: 1px solid #222730; color: #aeb
 .settings-modal .primary-button { width: 100%; margin-top: 11px; }.settings-modal .confirmed, .settings-modal .error-banner { margin-top: 12px; }.settings-modal > small { display: block; margin-top: 15px; color: #596270; font-size: 10px; line-height: 1.5; }
 .settings-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #ff9b52; background: rgba(255,155,82,.1); }.settings-icon svg { width: 18px; }
 .settings-help-trigger { position: absolute; top: 15px; right: 51px; display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 1px solid #303744; border-radius: 7px; color: #ffad70; background: #20252d; cursor: pointer; }.settings-help-trigger:hover { color: #fff; border-color: #b96735; background: #6d3d25; }.settings-help-trigger svg { width: 15px; }
+.notification-status-card { display: grid; gap: 12px; margin: 0 0 22px; padding: 16px; border: 1px solid #3a3030; border-radius: 13px; background: rgba(199,82,82,.08); }
+.notification-status-card.available { border-color: rgba(85,210,169,.32); background: rgba(85,210,169,.07); }
+.notification-status-heading { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+.notification-status-heading > svg { width: 20px; color: #ef8d83; }
+.notification-status-card.available .notification-status-heading > svg { color: #55d2a9; }
+.notification-status-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #ffad70; background: rgba(255,155,82,.11); }
+.notification-status-icon svg { width: 17px; }
+.notification-status-heading span { display: block; margin-bottom: 2px; color: #858e9c; font-size: 10px; font-weight: 700; }
+.notification-status-heading strong { display: block; color: #fff; font-size: 16px; }
+.notification-status-details { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06); }
+.notification-status-details span { color: #7f8997; font-size: 10px; }
+.notification-status-details b { display: block; margin-top: 2px; color: #cdd3dc; font-size: 11px; }
+.notification-status-card > p { margin: 0; color: #e49a92; font-size: 10px; line-height: 1.5; }
+.notification-status-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.notification-status-actions button { min-height: 34px; border: 1px solid #3b424d; border-radius: 8px; color: #c7ced8; background: #222831; font-size: 11px; font-weight: 700; cursor: pointer; }
+.notification-status-actions button:disabled { opacity: .5; cursor: default; }
 .modal-close { position: absolute; top: 15px; right: 15px; display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 7px; color: #6e7785; background: transparent; cursor: pointer; }.modal-close:hover { color: #fff; background: #262c35; }.modal-close svg { width: 15px; }
 .api-help-backdrop { z-index: 30; }
 .api-help-modal { position: relative; width: min(720px, 100%); max-height: calc(100vh - 48px); padding: 27px; overflow-y: auto; border: 1px solid #303744; border-radius: 17px; background: #171b22; box-shadow: 0 30px 90px rgba(0,0,0,.62); }
@@ -232,6 +252,11 @@ body:has(.widget-shell) { background: transparent; overflow: hidden; }
 :root[data-theme="light"] .panel, :root[data-theme="light"] .summary-grid article, :root[data-theme="light"] .guild-card, :root[data-theme="light"] .icon-action, :root[data-theme="light"] .display-controls, :root[data-theme="light"] .settings-modal, :root[data-theme="light"] .widget-shell, :root[data-theme="light"] .widget-open { border-color: #d9dfe8; background: #ffffff; box-shadow: none; }
 :root[data-theme="light"] .api-help-modal { color: #18202b; border-color: #d9dfe8; background: #fff; box-shadow: 0 25px 70px rgba(50,65,85,.18); }
 :root[data-theme="light"] .settings-help-trigger, :root[data-theme="light"] .api-copy-row button { color: #8c4b24; border-color: #d4dae3; background: #f0f3f7; }
+:root[data-theme="light"] .notification-status-card { border-color: #e7c6c2; background: #fff6f5; }
+:root[data-theme="light"] .notification-status-card.available { border-color: #b8dfd1; background: #f0fbf7; }
+:root[data-theme="light"] .notification-status-heading strong, :root[data-theme="light"] .notification-status-details b { color: #24303d; }
+:root[data-theme="light"] .notification-status-details { border-color: #e3e7ed; }
+:root[data-theme="light"] .notification-status-actions button { color: #344253; border-color: #d3dae4; background: #f1f4f8; }
 :root[data-theme="light"] .api-help-steps, :root[data-theme="light"] .api-copy-row { color: #4e5968; border-color: #dce2ea; background: #f7f9fb; }
 :root[data-theme="light"] .api-help-steps b, :root[data-theme="light"] .api-copy-row code { color: #18202b; }
 :root[data-theme="light"] .period-tabs button.active, :root[data-theme="light"] .sidebar nav button:hover, :root[data-theme="light"] .sidebar nav button.active, :root[data-theme="light"] .display-controls > button, :root[data-theme="light"] .widget-tabs button.active { color: #18202b; background: #e6eaf0; }

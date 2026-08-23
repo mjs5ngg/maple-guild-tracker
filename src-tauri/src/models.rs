@@ -34,6 +34,17 @@ pub struct AppStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MobileNotificationStatus {
+    pub supported: bool,
+    pub permission_granted: bool,
+    pub system_enabled: bool,
+    pub channel_enabled: bool,
+    pub monitoring_healthy: bool,
+    pub issue: Option<String>,
+    pub last_success_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RankingRow {
     pub character_id: i64,
     pub rank: usize,

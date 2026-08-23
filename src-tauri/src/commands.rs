@@ -5,9 +5,46 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::{
     credential_set, db,
-    models::{AppStatus, DashboardData, SetupResult, SyncReport},
+    models::{AppStatus, DashboardData, MobileNotificationStatus, SetupResult, SyncReport},
     sync, AppError, AppState,
 };
+
+#[tauri::command]
+pub fn get_mobile_notification_status(
+    _app: AppHandle,
+) -> Result<MobileNotificationStatus, String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile_notifications::get_status(&_app);
+
+    #[cfg(not(target_os = "android"))]
+    Ok(MobileNotificationStatus {
+        supported: false,
+        permission_granted: false,
+        system_enabled: false,
+        channel_enabled: false,
+        monitoring_healthy: false,
+        issue: Some("모바일 알림은 Android 앱에서만 지원합니다.".into()),
+        last_success_at: None,
+    })
+}
+
+#[tauri::command]
+pub fn open_mobile_notification_settings(_app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile_notifications::open_settings(&_app);
+
+    #[cfg(not(target_os = "android"))]
+    Err("모바일 알림은 Android 앱에서만 지원합니다.".into())
+}
+
+#[tauri::command]
+pub fn retry_mobile_notification_monitor(_app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    return crate::mobile_notifications::retry(&_app);
+
+    #[cfg(not(target_os = "android"))]
+    Err("모바일 알림은 Android 앱에서만 지원합니다.".into())
+}
 
 fn public_error(error: AppError) -> String {
     error.public_message()
