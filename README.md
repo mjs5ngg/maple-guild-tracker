@@ -28,7 +28,7 @@ npm run package:windows
 
 ## Android 설치 방법
 
-`release/guildmate-follow-android-arm64-v0.2.7.apk`를 Android 기기로 옮겨 실행합니다. 브라우저나 파일 관리자가 요청하면 해당 앱에만 `알 수 없는 앱 설치` 권한을 허용합니다. Android 7.0 이상 ARM64 기기를 지원합니다.
+`release/guildmate-follow-android-arm64-v0.2.8.apk`를 Android 기기로 옮겨 실행합니다. 브라우저나 파일 관리자가 요청하면 해당 앱에만 `알 수 없는 앱 설치` 권한을 허용합니다. Android 7.0 이상 ARM64 기기를 지원합니다.
 
 Android판은 메인 대시보드, 설정, 동기화, 길드 순위, 즐겨찾기와 성장 그래프를 제공합니다. Windows 전용 트레이, 로그인 자동 시작과 다른 앱 위에 떠 있는 미니 위젯은 포함하지 않습니다. Android가 백그라운드 앱을 정지할 수 있으므로 앱을 다시 열 때 누락 기록을 보충하고, 화면을 보고 있을 때 주기 동기화를 수행합니다.
 
