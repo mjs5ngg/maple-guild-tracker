@@ -293,7 +293,7 @@ body:has(.widget-shell) { background: transparent; overflow: hidden; }
   .api-copy-row code { overflow-wrap: anywhere; }
   .mobile-nav { position: fixed; z-index: 17; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(4, 1fr); min-height: 64px; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid #292f39; background: rgba(17,21,27,.96); backdrop-filter: blur(16px); }
   .mobile-nav button { display: grid; place-items: center; gap: 2px; border: 0; border-radius: 9px; color: #8b95a4; background: transparent; font-size: 10px; font-weight: 700; }
-  .mobile-nav button:active { color: #ffad70; background: rgba(255,155,82,.09); }
+  .mobile-nav button:active, .mobile-nav button.active { color: #ffad70; background: rgba(255,155,82,.09); }
   .mobile-nav svg { width: 18px; height: 18px; }
   .scroll-to-top { right: 15px; bottom: calc(80px + env(safe-area-inset-bottom)); width: 43px; height: 43px; }
 }
