@@ -104,3 +104,9 @@
 - `v0.1.15`에서는 즐겨찾기 제목 옆의 정렬 버튼으로 저장된 사용자 순서를 제거한다. 기존 사용자가 이미 드래그 순서를 저장한 경우에는 그 순서를 보존하면서 버튼을 활성화해 직접 기본 레벨순으로 돌아갈 수 있게 한다.
 - 연속 드래그가 막힌 원인은 재배치로 대상 캐릭터가 다른 위치로 밀려난 뒤에도 `favoriteDropTargetRef`가 그 캐릭터 ID를 기억해 재진입을 무시했기 때문이다. 드래그 중인 카드 위를 다시 지날 때 잠금을 초기화해야 같은 대상을 새 위치에서 다시 사용할 수 있다.
 - `v0.1.16`에서는 드래그 중인 카드가 포인터 아래에 들어오면 강조 대상과 마지막 대상 ID를 초기화한다. 따라서 같은 캐릭터가 재배치로 다른 칸에 밀려나도 다시 정상적인 이동 대상으로 인식된다.
+- Android판은 기존 로컬 데이터 모델과 NEXON API 계산을 공유한다. 데스크톱 전용 트레이·항상 위 위젯·로그인 자동 시작은 Android 기본 앱에서 제외하며 모바일 메인 대시보드에 집중한다.
+- 공식 Tauri Android 빌드는 Android Studio의 SDK Platform, Platform-Tools, NDK, Build-Tools와 Command-line Tools 및 Rust Android 대상을 요구한다. 확인 결과 PC에 Android Studio, SDK 36, NDK 27과 Platform-Tools가 설치되어 있었고 환경 변수만 비어 있어 빌드 스크립트에서 설치 경로를 자동 연결한다.
+- Android 최소 지원 버전은 Tauri 공식 최소값인 Android 7.0 SDK 24로 정한다. Android 식별자는 하이픈이 없는 `com.mjs5ngg.guildmatefollow`를 사용한다.
+- Windows 개발자 모드가 꺼진 환경에서는 Tauri CLI가 Rust `.so` 심볼릭 링크 생성 단계에서 실패한다. `package-android.ps1`은 이 오류만 식별해 파일 복사와 Gradle 패키징으로 이어가며, 다른 빌드 오류는 숨기지 않고 중단한다.
+- Android 직접 설치본은 ARM64 릴리스 APK로 만들고 로컬 개발 서명으로 v2·v3 서명을 적용한다. Play Store 배포 시에는 개발 서명을 사용하지 않고 정식 업로드 키와 AAB로 교체해야 한다.
+- `v0.2.0`은 프런트엔드 테스트 19건, Rust 테스트 22건, Clippy 경고 0건, Windows NSIS 빌드와 Android ARM64 APK 빌드를 통과했다. APK 메타데이터는 앱 ID `com.mjs5ngg.guildmatefollow`, 최소 SDK 24, 대상 SDK 36이며 v2·v3 서명을 검증했다.

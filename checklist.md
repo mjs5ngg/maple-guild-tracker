@@ -84,3 +84,10 @@
 - [x] 드래그 중인 카드 재진입 시 이전 대상 잠금을 해제한다.
 - [x] 앞뒤 연속 재배치 회귀 테스트를 추가한다.
 - [x] 연속 드래그 수정본을 전체 테스트하고 Windows 패키징한다.
+- [x] Windows 전용 Rust 기능과 의존성을 데스크톱 조건으로 분리한다.
+- [x] Android Keystore 기반 API 키 저장소를 연결한다.
+- [x] Tauri 플랫폼별 설정과 Android capability를 구성한다.
+- [x] 대시보드를 휴대폰 탐색과 반응형 레이아웃에 맞춘다.
+- [x] Android 빌드 환경과 Rust 대상을 준비하고 모바일 프로젝트를 초기화한다.
+- [x] 자동 테스트, Windows 회귀 빌드와 Android APK 빌드를 완료한다.
+- [x] Android 이식본의 사용·설치 안내를 기록하고 GitHub에 반영한다.

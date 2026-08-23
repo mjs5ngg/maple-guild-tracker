@@ -5,9 +5,9 @@ import { useState } from "react";
 const nexonOpenApiUrl = "https://openapi.nexon.com/ko/";
 const fields = [
   { id: "name", label: "서비스명", value: "길드원 따라가기" },
-  { id: "environment", label: "개발 환경", value: "Windows 10·11 x64 PC 애플리케이션 (Tauri 2)" },
+  { id: "environment", label: "개발 환경", value: "Windows 10·11 x64 및 Android 7.0 이상 애플리케이션 (Tauri 2)" },
   { id: "url", label: "서비스 URL", value: "https://github.com/mjs5ngg/maple-guild-tracker" },
-  { id: "introduction", label: "서비스 소개", value: "길드원 따라가기는 NEXON Open API를 이용해 메이플스토리 길드원과 즐겨찾기 캐릭터의 레벨 및 경험치 변화를 로컬 PC에서 기록·비교하는 Windows 앱입니다." },
+  { id: "introduction", label: "서비스 소개", value: "길드원 따라가기는 NEXON Open API를 이용해 메이플스토리 길드원과 즐겨찾기 캐릭터의 레벨 및 경험치 변화를 기기에서 기록·비교하는 Windows 및 Android 앱입니다." },
   { id: "purpose", label: "API 활용 목적", value: "메이플스토리 캐릭터 기본 정보와 길드원 목록을 조회하여 일간 경험치 변화, 기간별 순위, 성장 그래프 및 미니 위젯을 제공하는 데 사용합니다." },
 ] as const;
 

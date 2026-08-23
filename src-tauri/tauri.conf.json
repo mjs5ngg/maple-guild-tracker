@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "길드원 따라가기",
   "mainBinaryName": "guildmate-follow",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "identifier": "com.local.maple-guild-tracker",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -29,7 +29,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -38,13 +37,6 @@
       "icons/icon.icns"
     ],
     "shortDescription": "길드원 따라가기 — 메이플스토리 길드 경험치 기록 및 비교",
-    "longDescription": "길드원 따라가기는 NEXON Open API 기반의 개인용 길드 경험치 기록 및 비교 앱입니다.",
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser",
-        "languages": ["Korean"],
-        "installerHooks": "windows/installer-hooks.nsh"
-      }
-    }
+    "longDescription": "길드원 따라가기는 NEXON Open API 기반의 개인용 길드 경험치 기록 및 비교 앱입니다."
   }
 }

@@ -8,10 +8,12 @@ mod sync;
 
 use std::path::PathBuf;
 
+use tauri::Manager;
+#[cfg(target_os = "windows")]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    WebviewUrl, WebviewWindowBuilder,
 };
 use thiserror::Error;
 
@@ -53,7 +55,7 @@ impl AppError {
         match self {
             Self::Api { code, message, .. } => format!("NEXON API 오류 {code}. {message}"),
             Self::Credential(_) => {
-                "Windows 자격 증명 관리자에서 API 키를 읽거나 저장하지 못했습니다.".into()
+                "운영체제 보안 저장소에서 API 키를 읽거나 저장하지 못했습니다.".into()
             }
             Self::Validation(message) => message.clone(),
             Self::Network(_) => "네트워크 연결을 확인한 뒤 다시 시도해 주세요.".into(),
@@ -62,8 +64,27 @@ impl AppError {
     }
 }
 
+#[cfg(target_os = "windows")]
 fn credential_entry() -> Result<keyring::Entry, AppError> {
     keyring::Entry::new(CREDENTIAL_SERVICE, CREDENTIAL_ACCOUNT)
+        .map_err(|error| AppError::Credential(error.to_string()))
+}
+
+#[cfg(target_os = "android")]
+fn credential_entry() -> Result<keyring_core::Entry, AppError> {
+    use std::sync::OnceLock;
+
+    static STORE: OnceLock<Result<(), String>> = OnceLock::new();
+    let initialized = STORE.get_or_init(|| {
+        let store =
+            android_native_keyring_store::Store::new().map_err(|error| error.to_string())?;
+        keyring_core::set_default_store(store);
+        Ok(())
+    });
+    initialized
+        .as_ref()
+        .map_err(|error| AppError::Credential(error.clone()))?;
+    keyring_core::Entry::new(CREDENTIAL_SERVICE, CREDENTIAL_ACCOUNT)
         .map_err(|error| AppError::Credential(error.to_string()))
 }
 
@@ -79,6 +100,7 @@ pub fn credential_get() -> Result<String, AppError> {
         .map_err(|error| AppError::Credential(error.to_string()))
 }
 
+#[cfg(target_os = "windows")]
 fn create_tray(app: &tauri::App) -> tauri::Result<()> {
     let dashboard = MenuItem::with_id(app, "dashboard", "대시보드 열기", true, None::<&str>)?;
     let widget = MenuItem::with_id(app, "widget", "미니 위젯 열기", true, None::<&str>)?;
@@ -116,11 +138,13 @@ fn create_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--hidden"]),
-        ))
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "windows")]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        Some(vec!["--hidden"]),
+    ));
+    builder
         .setup(|app| -> Result<(), Box<dyn std::error::Error>> {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -134,43 +158,49 @@ pub fn run() {
                 sync_lock: tokio::sync::Mutex::new(()),
             });
 
-            WebviewWindowBuilder::new(
-                app,
-                "widget",
-                WebviewUrl::App("index.html?view=widget".into()),
-            )
-            .title("길드원 따라가기 위젯")
-            .inner_size(390.0, 480.0)
-            .min_inner_size(320.0, 260.0)
-            .always_on_top(true)
-            .decorations(false)
-            .skip_taskbar(true)
-            .resizable(true)
-            .visible(false)
-            .build()?;
-            create_tray(app)?;
+            #[cfg(target_os = "windows")]
+            {
+                WebviewWindowBuilder::new(
+                    app,
+                    "widget",
+                    WebviewUrl::App("index.html?view=widget".into()),
+                )
+                .title("길드원 따라가기 위젯")
+                .inner_size(390.0, 480.0)
+                .min_inner_size(320.0, 260.0)
+                .always_on_top(true)
+                .decorations(false)
+                .skip_taskbar(true)
+                .resizable(true)
+                .visible(false)
+                .build()?;
+                create_tray(app)?;
 
-            let arguments: Vec<String> = std::env::args().collect();
-            if arguments.iter().any(|argument| argument == "--widget") {
-                if let Some(window) = app.get_webview_window("dashboard") {
-                    let _ = window.hide();
-                }
-                if let Some(window) = app.get_webview_window("widget") {
-                    let _ = window.show();
-                }
-            } else if arguments.iter().any(|argument| argument == "--hidden") {
-                if let Some(window) = app.get_webview_window("dashboard") {
-                    let _ = window.hide();
+                let arguments: Vec<String> = std::env::args().collect();
+                if arguments.iter().any(|argument| argument == "--widget") {
+                    if let Some(window) = app.get_webview_window("dashboard") {
+                        let _ = window.hide();
+                    }
+                    if let Some(window) = app.get_webview_window("widget") {
+                        let _ = window.show();
+                    }
+                } else if arguments.iter().any(|argument| argument == "--hidden") {
+                    if let Some(window) = app.get_webview_window("dashboard") {
+                        let _ = window.hide();
+                    }
                 }
             }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(sync::background_loop(handle));
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+        .on_window_event(|_window, _event| {
+            #[cfg(target_os = "windows")]
+            {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                    api.prevent_close();
+                    let _ = _window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![

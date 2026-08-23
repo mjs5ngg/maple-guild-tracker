@@ -1,5 +1,6 @@
 // 프런트엔드에서 호출하는 설정·동기화·조회 명령을 제공합니다.
 use tauri::{AppHandle, Manager};
+#[cfg(target_os = "windows")]
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::{
@@ -20,7 +21,7 @@ pub fn get_app_status(state: tauri::State<'_, AppState>) -> Result<AppStatus, St
 
 #[tauri::command]
 pub async fn save_setup(
-    app: AppHandle,
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
     api_key: String,
     primary_name: String,
@@ -48,7 +49,8 @@ pub async fn save_setup(
     credential_set(key).map_err(public_error)?;
     let connection = db::open(&state.db_path).map_err(public_error)?;
     db::save_setup(&connection, &basic, &ocid, &guild_name, &oguild_id).map_err(public_error)?;
-    let _ = app.autolaunch().enable();
+    #[cfg(target_os = "windows")]
+    let _ = _app.autolaunch().enable();
     Ok(SetupResult {
         character_name: basic.character_name,
         world_name: basic.world_name,
@@ -174,6 +176,7 @@ pub fn show_dashboard(app: AppHandle) -> Result<(), String> {
         .get_webview_window("dashboard")
         .ok_or_else(|| "대시보드 창을 찾을 수 없습니다.".to_string())?;
     window.show().map_err(|error| error.to_string())?;
+    #[cfg(target_os = "windows")]
     window.unminimize().map_err(|error| error.to_string())?;
     window.set_focus().map_err(|error| error.to_string())
 }
@@ -212,5 +215,7 @@ pub fn set_widget_opacity(window: tauri::WebviewWindow, opacity: f64) -> Result<
                 .map_err(|error| error.to_string())?;
         }
     }
+    #[cfg(not(target_os = "windows"))]
+    let _ = (window, opacity);
     Ok(())
 }

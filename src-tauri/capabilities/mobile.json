@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Android 대시보드의 기본 권한",
+  "windows": ["dashboard"],
+  "platforms": ["android"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-theme"
+  ]
+}

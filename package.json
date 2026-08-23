@@ -1,12 +1,15 @@
 {
   "name": "maple-guild-tracker",
   "private": true,
-  "version": "0.1.16",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "package:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-android.ps1",
     "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
     "tauri": "tauri"
   },

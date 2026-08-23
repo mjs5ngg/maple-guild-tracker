@@ -48,7 +48,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
         </p>
         <div className="trust-row">
           <ShieldCheck size={18} />
-          <span>API 키는 Windows 자격 증명 관리자에만 저장됩니다.</span>
+          <span>API 키는 운영체제 보안 저장소에만 저장됩니다.</span>
         </div>
       </section>
 

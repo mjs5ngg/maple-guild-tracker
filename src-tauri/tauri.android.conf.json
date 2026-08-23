@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.mjs5ngg.guildmatefollow",
+  "app": {
+    "windows": [
+      {
+        "label": "dashboard",
+        "title": "길드원 따라가기"
+      }
+    ]
+  },
+  "bundle": {
+    "android": {
+      "minSdkVersion": 24
+    }
+  }
+}

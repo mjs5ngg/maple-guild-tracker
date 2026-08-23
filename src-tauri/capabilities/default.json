@@ -3,6 +3,7 @@
   "identifier": "default",
   "description": "대시보드와 위젯의 기본 권한",
   "windows": ["dashboard", "widget"],
+  "platforms": ["windows"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
