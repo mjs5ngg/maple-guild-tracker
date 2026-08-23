@@ -20,15 +20,7 @@ class MainActivity : TauriActivity() {
   private val issueHandler = Handler(Looper.getMainLooper())
   private var issueDialogVisible = false
   private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    if (granted) FavoriteNotificationMonitor.runNow(applicationContext)
-  }
-  private val foregroundNotificationCheck = object : Runnable {
-    override fun run() {
-      if (FavoriteNotificationMonitor.notificationsAllowed(this@MainActivity)) {
-        FavoriteNotificationMonitor.runNow(applicationContext)
-      }
-      issueHandler.postDelayed(this, 5 * 60 * 1000L)
-    }
+    if (granted) FavoriteNotificationMonitor.startForegroundMonitoring(applicationContext)
   }
   private val issueCheck = object : Runnable {
     override fun run() {
@@ -47,15 +39,13 @@ class MainActivity : TauriActivity() {
 
   override fun onResume() {
     super.onResume()
+    FavoriteNotificationMonitor.startForegroundMonitoring(applicationContext)
     issueHandler.removeCallbacks(issueCheck)
-    issueHandler.removeCallbacks(foregroundNotificationCheck)
     issueHandler.postDelayed(issueCheck, 2_000L)
-    issueHandler.post(foregroundNotificationCheck)
   }
 
   override fun onPause() {
     issueHandler.removeCallbacks(issueCheck)
-    issueHandler.removeCallbacks(foregroundNotificationCheck)
     super.onPause()
   }
 

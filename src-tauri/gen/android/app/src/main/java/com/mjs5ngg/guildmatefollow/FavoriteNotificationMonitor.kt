@@ -5,6 +5,7 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
@@ -52,6 +53,14 @@ object FavoriteNotificationMonitor {
     val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     val request = OneTimeWorkRequestBuilder<FavoriteExpWorker>().setConstraints(constraints).build()
     WorkManager.getInstance(context).enqueueUniqueWork(IMMEDIATE_WORK, ExistingWorkPolicy.REPLACE, request)
+  }
+
+  fun startForegroundMonitoring(context: Context) {
+    if (!notificationsAllowed(context)) return
+    ContextCompat.startForegroundService(
+      context,
+      Intent(context, FavoriteMonitoringService::class.java),
+    )
   }
 
   fun notificationsAllowed(context: Context): Boolean {
