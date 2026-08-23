@@ -75,8 +75,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [activeView, setActiveView] = useState<DashboardView>("main");
   const favoriteDropTargetRef = useRef<number | null>(null);
   const activityFollowupTimerRef = useRef<number | null>(null);
-  const startupActivitySyncStartedRef = useRef(false);
-  const mountedRef = useRef(false);
   const closeCustomPeriod = useBackDismiss(customOpen, () => setCustomOpen(false));
   const closeSettings = useBackDismiss(settingsOpen, () => setSettingsOpen(false));
 
@@ -85,18 +83,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
     catch (reason) { setError(String(reason)); }
   }
   useEffect(() => { void load(); }, [period]);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-  useEffect(() => {
-    if (startupActivitySyncStartedRef.current) return;
-    startupActivitySyncStartedRef.current = true;
-    void native.liveSync()
-      .then(() => mountedRef.current ? load() : undefined)
-      .then(() => { if (mountedRef.current) scheduleActivityFollowup(); })
-      .catch(() => undefined);
-  }, []);
   useEffect(() => saveDashboardPeriod(period), [period]);
   useEffect(() => saveDashboardRankingMode(rankingMode), [rankingMode]);
   useEffect(() => setChartKind(storedChartKind(period)), [period]);

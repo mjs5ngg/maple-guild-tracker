@@ -12,6 +12,11 @@ use crate::{
     AppError, AppState,
 };
 
+const STARTUP_ACTIVITY_PROBE_DELAYS: [std::time::Duration; 2] = [
+    std::time::Duration::from_secs(90),
+    std::time::Duration::from_secs(210),
+];
+
 pub fn latest_completed_date(now: DateTime<Utc>) -> NaiveDate {
     let local = now.with_timezone(&Seoul);
     let days_back = if local.hour() < 2 || (local.hour() == 2 && local.minute() < 15) {
@@ -457,16 +462,35 @@ pub async fn sync_live(app: AppHandle) -> Result<SyncReport, AppError> {
     })
 }
 
+fn is_configured(app: &AppHandle) -> bool {
+    let state = app.state::<AppState>();
+    state.db_path.exists()
+        && db::open(&state.db_path)
+            .and_then(|connection| db::get_setting(&connection, "primary_name"))
+            .ok()
+            .flatten()
+            .is_some()
+}
+
+async fn run_startup_activity_probes(app: AppHandle) {
+    for delay in STARTUP_ACTIVITY_PROBE_DELAYS {
+        tokio::time::sleep(delay).await;
+        if !is_configured(&app) {
+            return;
+        }
+        let _ = sync_live(app.clone()).await;
+    }
+}
+
 pub async fn background_loop(app: AppHandle) {
-    tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    while !is_configured(&app) {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+    let _ = sync_live(app.clone()).await;
+    tauri::async_runtime::spawn(run_startup_activity_probes(app.clone()));
     loop {
-        let configured = app.state::<AppState>().db_path.exists()
-            && db::open(&app.state::<AppState>().db_path)
-                .and_then(|connection| db::get_setting(&connection, "primary_name"))
-                .ok()
-                .flatten()
-                .is_some();
-        if configured && sync_all(app.clone(), None).await.is_ok() {
+        if is_configured(&app) && sync_all(app.clone(), None).await.is_ok() {
             let _ = sync_live(app.clone()).await;
         }
         tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
