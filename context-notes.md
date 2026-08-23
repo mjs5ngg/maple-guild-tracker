@@ -122,3 +122,8 @@
 - Android WebView가 백그라운드로 이동하면 걷기 프레임 타이머와 원격 이미지 디코딩이 함께 중단될 수 있다. 화면 복귀 시 이미지 요소를 강제로 다시 만들고 걷기 프레임을 초기화한다.
 - `v0.2.4`는 모바일 하단 즐겨찾기 탭과 즐겨찾기 전용 순위표를 추가했다. 백그라운드에서는 아바타 프레임 전환을 중지하고 `visibilitychange`, `pageshow`, `focus` 복귀 시 이미지 요소를 다시 생성한다.
 - `v0.2.4`는 프런트엔드 21건, Rust 22건, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android Kotlin·APK 빌드 및 APK v2·v3 서명 검증을 통과했다. ADB에서 연결된 기기는 발견되지 않아 자동 복사는 수행하지 않았다.
+- 기간과 랭킹 기준은 SQLite나 API 키 저장소가 아니라 Tauri WebView의 앱별 `localStorage`에 저장한다. 같은 React 대시보드를 쓰는 Windows와 Android에서 모두 영구 보존되며 앱 종료 시 별도 종료 이벤트에 의존하지 않는다.
+- 아이콘은 생성형 재편집으로 단풍잎 모양을 바꾸지 않고 기존 `maple-leaf-v2.png`의 투명 영역만 흰색으로 합성한다. 합성 원본에서 Tauri 아이콘 도구로 Windows·Android 전체 크기를 다시 만든다.
+- `v0.2.5`에서는 `dashboard-period-v1`과 `dashboard-ranking-mode-v1` 키에 선택을 즉시 저장한다. 일간·7일·30일·유효한 직접 지정 기간과 전체·기간별 경험치 모드를 Windows 및 Android 재실행 후 복원한다.
+- `v0.2.5` 아이콘은 `maple-leaf-white.png`를 원본으로 하며 Windows 아이콘은 흰 정사각형, Android 런처 아이콘은 흰색 둥근 배경을 사용한다.
+- `v0.2.5`는 프런트엔드 24건, Rust 22건, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android Kotlin·APK 빌드 및 APK v2·v3 서명 검증을 통과했다.

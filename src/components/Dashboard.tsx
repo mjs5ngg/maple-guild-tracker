@@ -12,6 +12,7 @@ import { avatarPhysicalBase, defaultDisplaySettings, getDisplaySettings, saveDis
 import { currentGuildRows, favoriteRankingRows, moveFavorite, orderFavorites, sameCharacterOrder, sortByOverallProgress, sortFavoritesByLevel } from "../rankings";
 import { ApiKeyHelpModal } from "./ApiKeyHelpModal";
 import { useBackDismiss } from "../useBackDismiss";
+import { saveDashboardPeriod, saveDashboardRankingMode, storedDashboardPeriod, storedDashboardRankingMode, type DashboardPeriod } from "../dashboardPreferences";
 
 interface Props {
   status: AppStatus;
@@ -19,8 +20,7 @@ interface Props {
   onRefreshStatus: () => Promise<void>;
 }
 
-const periods = [{ key: "daily", label: "일간" }, { key: "7d", label: "최근 7일" }, { key: "30d", label: "최근 30일" }];
-type RankingMode = "overall" | "period";
+const periods = [{ key: "daily", label: "일간" }, { key: "7d", label: "최근 7일" }, { key: "30d", label: "최근 30일" }] as const;
 
 function storedChartKind(period: string): ChartKind {
   const value = localStorage.getItem(`chart-kind:${period}`);
@@ -47,13 +47,13 @@ function storedFavoriteOrder(): number[] {
 }
 
 export function Dashboard({ status, progress, onRefreshStatus }: Props) {
-  const [period, setPeriod] = useState("7d");
+  const [period, setPeriod] = useState<DashboardPeriod>(storedDashboardPeriod);
   const [data, setData] = useState<DashboardData | null>(null);
   const [search, setSearch] = useState("");
   const [externalName, setExternalName] = useState("");
   const [customOpen, setCustomOpen] = useState(false);
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [customStart, setCustomStart] = useState(() => storedDashboardPeriod().startsWith("custom:") ? storedDashboardPeriod().split(":")[1] : "");
+  const [customEnd, setCustomEnd] = useState(() => storedDashboardPeriod().startsWith("custom:") ? storedDashboardPeriod().split(":")[2] : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -66,8 +66,8 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
   const [uiScale, setUiScale] = useState(() => getDisplaySettings().uiScale);
   const [avatarScale, setAvatarScale] = useState(() => getDisplaySettings().avatarScale);
-  const [rankingMode, setRankingMode] = useState<RankingMode>("overall");
-  const [chartKind, setChartKind] = useState<ChartKind>(() => storedChartKind("7d"));
+  const [rankingMode, setRankingMode] = useState(storedDashboardRankingMode);
+  const [chartKind, setChartKind] = useState<ChartKind>(() => storedChartKind(storedDashboardPeriod()));
   const [favoriteOrder, setFavoriteOrder] = useState(storedFavoriteOrder);
   const [draggedFavoriteId, setDraggedFavoriteId] = useState<number | null>(null);
   const [favoriteDropTarget, setFavoriteDropTarget] = useState<number | null>(null);
@@ -80,6 +80,8 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
     catch (reason) { setError(String(reason)); }
   }
   useEffect(() => { void load(); }, [period]);
+  useEffect(() => saveDashboardPeriod(period), [period]);
+  useEffect(() => saveDashboardRankingMode(rankingMode), [rankingMode]);
   useEffect(() => setChartKind(storedChartKind(period)), [period]);
   useEffect(() => applyTheme(theme), [theme]);
   useEffect(() => {
