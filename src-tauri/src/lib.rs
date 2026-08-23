@@ -4,6 +4,8 @@ mod db;
 mod exp;
 mod models;
 mod nexon;
+#[cfg(any(target_os = "android", test))]
+mod notifications;
 mod sync;
 
 use std::path::PathBuf;

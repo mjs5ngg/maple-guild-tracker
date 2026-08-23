@@ -134,3 +134,9 @@
 - `v0.2.6` 아이콘의 단풍잎은 흰 캔버스 중앙 76% 크기로 배치했다. Windows 아이콘과 Android 일반·적응형 런처 미리보기에서 잎 끝이 잘리지 않음을 확인했다.
 - `v0.2.6`은 프런트엔드 24건, Rust 22건, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android Kotlin·APK 빌드 및 APK v2·v3 서명 검증을 통과했다.
 - `v0.2.6` 배포 시 ADB에서 연결된 Android 기기는 발견되지 않아 APK 자동 복사는 수행하지 않았다.
+- Android 알림 감시는 `PeriodicWorkRequest`의 공식 최소 주기인 15분을 사용한다. Doze와 제조사 절전 정책으로 실제 실행은 늦어질 수 있으며 사용자가 앱을 강제 종료하면 다시 열기 전까지 보장할 수 없다.
+- Android 13 이상에서는 `POST_NOTIFICATIONS` 권한을 런타임에 요청한다. 권한 거부 상태에서는 시스템 알림을 보낼 수 없으므로 앱이 전면에 있을 때 네이티브 안내창으로 설정 변경을 유도한다.
+- WorkManager는 기존 Rust 네이티브 라이브러리의 JNI 함수를 호출한다. API 키는 Android Keystore에서 Rust가 직접 읽으므로 Kotlin과 일반 SharedPreferences에는 비밀값을 저장하지 않는다.
+- 대표캐릭터가 아닌 즐겨찾기만 감시한다. 첫 조회는 기준점만 저장하고, 비활동 상태에서 경험치 증가가 처음 확인될 때 한 번 알린 뒤 증가가 멈출 때까지 중복 알림을 보내지 않는다.
+- 알림 권한 거부, 최근 작업 오류, 30분 이상 성공 기록 없음, 60분 이상 작업 정체를 앱 내 안내 대상으로 삼는다. 앱이 전면에 있을 때 5분마다 상태를 확인하되 안내창은 최대 30분에 한 번만 표시한다.
+- `v0.2.7`은 프런트엔드 24건, Rust 26건, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android Kotlin·APK 빌드 및 APK v2·v3 서명 검증을 통과했다. APK에는 알림·네트워크·부팅 복원 권한과 WorkManager 구성이 포함되며 ADB에서 연결된 기기는 발견되지 않았다.

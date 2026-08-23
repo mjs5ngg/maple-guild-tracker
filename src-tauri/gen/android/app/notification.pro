@@ -1,0 +1,1 @@
+-keep class com.mjs5ngg.guildmatefollow.FavoriteExpWorker { *; }

@@ -1,6 +1,6 @@
 [package]
 name = "maple-guild-tracker"
-version = "0.2.6"
+version = "0.2.7"
 description = "메이플스토리 길드 경험치 기록 및 비교 앱"
 authors = ["local"]
 edition = "2021"
@@ -36,4 +36,5 @@ windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsA
 
 [target.'cfg(target_os = "android")'.dependencies]
 android-native-keyring-store = "1"
+jni = "0.21"
 keyring-core = "1"
