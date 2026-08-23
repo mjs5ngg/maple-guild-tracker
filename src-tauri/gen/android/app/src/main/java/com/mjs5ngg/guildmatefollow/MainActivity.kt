@@ -6,6 +6,8 @@ import androidx.activity.enableEdgeToEdge
 import io.crates.keyring.Keyring
 
 class MainActivity : TauriActivity() {
+  override val handleBackNavigation: Boolean = true
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     Keyring.initializeNdkContext(applicationContext)

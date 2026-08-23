@@ -26,7 +26,9 @@ export function SetupScreen({ progress, onComplete }: Props) {
       const result = await native.setup(apiKey, name);
       setApiKey("");
       setConfirmed(`${result.world_name} · ${result.guild_name} · ${result.character_name}`);
-      await native.sync(30);
+      const report = await native.sync(30);
+      if (report.failure_count > 0) await native.sync(30);
+      await native.liveSync();
       await onComplete();
     } catch (reason) {
       setError(String(reason));

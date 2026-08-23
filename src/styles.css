@@ -1,7 +1,7 @@
 /* 대시보드와 미니 위젯의 공통 시각 체계와 반응형 레이아웃을 정의합니다. */
 :root { font-family: "Segoe UI", "Noto Sans KR", sans-serif; color: #f2f4f8; color-scheme: dark; background: #0e1117; font-synthesis: none; --scroll-thumb: #3b4553; --scroll-track: #11151b; }
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: #0e1117; }
 * { scrollbar-width: auto; scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
 *::-webkit-scrollbar { width: 20px !important; height: 20px !important; }
@@ -12,6 +12,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 20px !important; heigh
 button, input { font: inherit; }
 button { color: inherit; }
 button:disabled { opacity: .5; cursor: not-allowed !important; }
+.recharts-wrapper, .recharts-surface, .recharts-layer { outline: none !important; }
 
 .eyebrow { margin: 0 0 7px; color: #ff9b52 !important; font-size: 12px !important; font-weight: 800; letter-spacing: .16em; }
 .brand-mark { display: grid; place-items: center; width: 49px; height: 49px; border: 1px solid rgba(255,155,82,.35); border-radius: 15px; color: #ff9b52; background: linear-gradient(145deg, rgba(255,155,82,.2), rgba(255,155,82,.04)); box-shadow: 0 16px 50px rgba(255,125,54,.12); }

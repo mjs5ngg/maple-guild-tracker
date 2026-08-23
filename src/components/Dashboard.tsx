@@ -11,6 +11,7 @@ import { applyTheme, getStoredTheme, type AppTheme } from "../theme";
 import { avatarPhysicalBase, defaultDisplaySettings, getDisplaySettings, saveDisplaySettings } from "../displaySettings";
 import { currentGuildRows, moveFavorite, orderFavorites, sameCharacterOrder, sortByOverallProgress, sortFavoritesByLevel } from "../rankings";
 import { ApiKeyHelpModal } from "./ApiKeyHelpModal";
+import { useBackDismiss } from "../useBackDismiss";
 
 interface Props {
   status: AppStatus;
@@ -71,6 +72,8 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [draggedFavoriteId, setDraggedFavoriteId] = useState<number | null>(null);
   const [favoriteDropTarget, setFavoriteDropTarget] = useState<number | null>(null);
   const favoriteDropTargetRef = useRef<number | null>(null);
+  const closeCustomPeriod = useBackDismiss(customOpen, () => setCustomOpen(false));
+  const closeSettings = useBackDismiss(settingsOpen, () => setSettingsOpen(false));
 
   async function load() {
     try { setData(await native.dashboard(period)); setError(""); }
@@ -266,7 +269,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         <header className="topbar">
           <div><p className="eyebrow">GUILD OVERVIEW</p><h1>길드 성장 대시보드</h1><p>최근 완료일 {summary?.latest_date ?? status.latest_date ?? "동기화 전"} 기준이며, 활동 표시는 공식 API 특성상 평균 15분가량 늦을 수 있습니다.</p></div>
           <div className="top-actions">
-            <div className="period-tabs">{periods.map((item) => <button key={item.key} className={period === item.key ? "active" : ""} onClick={() => { setPeriod(item.key); setCustomOpen(false); }}>{item.label}</button>)}<button className={period.startsWith("custom:") ? "active" : ""} onClick={() => setCustomOpen((value) => !value)}>직접 지정</button></div>
+            <div className="period-tabs">{periods.map((item) => <button key={item.key} className={period === item.key ? "active" : ""} onClick={() => { setPeriod(item.key); if (customOpen) closeCustomPeriod(); }}>{item.label}</button>)}<button className={period.startsWith("custom:") ? "active" : ""} onClick={() => customOpen ? closeCustomPeriod() : setCustomOpen(true)}>직접 지정</button></div>
             <button className="icon-action" title="API 키 설정" onClick={() => setSettingsOpen(true)}><Settings /></button>
             <button className="icon-action" title={theme === "dark" ? "라이트 테마" : "다크 테마"} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun /> : <Moon />}</button>
             {!isAndroidRuntime && <div className="display-control-wrap"><button ref={displayButtonRef} className="icon-action" title="화면 크기 조절" onClick={toggleDisplayControls}><SlidersHorizontal /></button></div>}
@@ -274,7 +277,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
           </div>
         </header>
 
-        {customOpen && <div className="custom-period"><label>시작일<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><span>—</span><label>종료일<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label><button disabled={!customStart || !customEnd || customStart > customEnd} onClick={() => { setPeriod(`custom:${customStart}:${customEnd}`); setCustomOpen(false); }}>적용</button></div>}
+        {customOpen && <div className="custom-period"><label>시작일<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><span>—</span><label>종료일<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label><button disabled={!customStart || !customEnd || customStart > customEnd} onClick={() => { setPeriod(`custom:${customStart}:${customEnd}`); closeCustomPeriod(); }}>적용</button></div>}
 
         {syncVisible && <div className="sync-strip"><div><RefreshCw className={syncWaiting ? "" : "spin"} size={15} /><span>{progress?.message ?? "공식 데이터를 동기화하고 있습니다."}</span></div><b>{progressPercent}%</b><i style={{ width: `${progressPercent}%` }} /></div>}
         {error && <div className="error-banner dashboard-error">{error}</div>}
@@ -310,7 +313,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         </section>
       </main>
       <nav className="mobile-nav"><button onClick={() => globalThis.scrollTo({ top: 0, behavior: "smooth" })}><BarChart3 />대시보드</button><button onClick={() => document.getElementById("history")?.scrollIntoView({ behavior: "smooth" })}><CalendarDays />성장 기록</button><button onClick={() => document.getElementById("ranking")?.scrollIntoView({ behavior: "smooth" })}><Users />길드 순위</button></nav>
-      {settingsOpen && <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="settings-help-trigger" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button><button className="modal-close" onClick={() => setSettingsOpen(false)} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 운영체제 보안 저장소에 저장됩니다.</small></section></div>}
+      {settingsOpen && <div className="modal-backdrop" onMouseDown={closeSettings}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}><button className="settings-help-trigger" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button><button className="modal-close" onClick={closeSettings} aria-label="닫기"><X /></button><div className="settings-icon"><KeyRound /></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p><form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>{keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 운영체제 보안 저장소에 저장됩니다.</small></section></div>}
       {apiHelpOpen && <ApiKeyHelpModal onClose={() => setApiHelpOpen(false)} />}
     </div>
     <button className="scroll-to-top" title="화면 최상단으로 이동" aria-label="화면 최상단으로 이동" onClick={() => globalThis.scrollTo({ top: 0, behavior: "smooth" })}><ArrowUp /></button>

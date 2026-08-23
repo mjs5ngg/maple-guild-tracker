@@ -115,3 +115,6 @@
 - `v0.2.1`은 최초 설정 진행 상태 개선 후 프런트엔드 19건, Rust 22건, Clippy 경고 0건과 Windows·Android 통합 배포를 통과했다. 새 ARM64 APK는 v2·v3 서명 검증을 완료했다.
 - `v0.2.1` 실기기 오류의 실제 원인은 `android-native-keyring-store`가 참조하는 `ndk-context`를 현재 Tauri 런타임이 초기화하지 않는 점이다. `Keyring.kt`가 메인 Rust 라이브러리를 먼저 불러오고 JNI 초기화 함수로 `applicationContext`를 전달한 다음 기존 Tauri `onCreate`를 실행한다.
 - `v0.2.2`는 내보낸 JNI 초기화 심볼, Kotlin 컴파일, 프런트엔드 19건, Rust 22건, Clippy 경고 0건, Windows·Android 통합 배포와 APK v2·v3 서명 검증을 통과했다.
+- 최초 설정은 과거 30일 수집만 직접 기다리고 오늘 실시간 수집은 8초 뒤 백그라운드 루프에 의존했다. 앞으로 과거 수집 실패 시 누락 작업을 한 번 즉시 재시도하고 `sync_live_now`까지 마친 뒤 대시보드로 전환한다.
+- Android 뒤로가기는 WebView 기록을 사용한다. 각 열린 창은 고유 ID를 누적하고 `popstate`에서 자신의 ID가 사라진 창만 닫아 도움말 위에 설정창이 있을 때 도움말만 먼저 닫히게 한다.
+- `v0.2.3`은 프런트엔드 19건, Rust 22건, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android Kotlin·APK 빌드 및 v2·v3 서명 검증을 통과했다.

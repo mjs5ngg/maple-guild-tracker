@@ -1,6 +1,7 @@
 // NEXON 서비스 단계 API 키 발급 절차와 복사용 등록 문구를 안내합니다.
 import { CheckCircle2, Copy, HelpCircle, ShieldAlert, X } from "lucide-react";
 import { useState } from "react";
+import { useBackDismiss } from "../useBackDismiss";
 
 const nexonOpenApiUrl = "https://openapi.nexon.com/ko/";
 const fields = [
@@ -14,6 +15,7 @@ const fields = [
 export function ApiKeyHelpModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState("");
   const [error, setError] = useState("");
+  const dismiss = useBackDismiss(true, onClose);
 
   async function copyText(id: string, value: string) {
     try {
@@ -27,9 +29,9 @@ export function ApiKeyHelpModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="modal-backdrop api-help-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop api-help-backdrop" onMouseDown={dismiss}>
       <section className="api-help-modal" onMouseDown={(event) => event.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} aria-label="닫기"><X /></button>
+        <button className="modal-close" onClick={dismiss} aria-label="닫기"><X /></button>
         <div className="api-help-heading"><span><HelpCircle /></span><div><p className="eyebrow">SERVICE API KEY</p><h2>서비스용 API 키 발급 요령</h2></div></div>
         <ol className="api-help-steps">
           <li>NEXON Open API에 넥슨 ID로 로그인합니다.</li>
