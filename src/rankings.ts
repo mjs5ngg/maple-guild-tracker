@@ -22,6 +22,11 @@ export function sortFavoritesByLevel(rows: RankingRow[]): RankingRow[] {
   return sortByOverallProgress(rows);
 }
 
+export function favoriteRankingRows(rows: RankingRow[], overall: boolean): RankingRow[] {
+  const favorites = rows.filter((row) => row.is_favorite);
+  return overall ? sortByOverallProgress(favorites) : favorites;
+}
+
 export function orderFavorites(rows: RankingRow[], savedOrder: number[]): RankingRow[] {
   const defaults = sortFavoritesByLevel(rows);
   const positions = new Map(savedOrder.map((id, index) => [id, index]));
