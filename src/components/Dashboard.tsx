@@ -1,10 +1,10 @@
 // 길드 경험치 요약, 순위, 그래프와 즐겨찾기 관리를 제공합니다.
 import { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ArrowUp, BarChart3, Bell, CalendarDays, CheckCircle2, ChevronRight, Crown, ExternalLink, GripVertical, HelpCircle, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
+import { ArrowUp, BarChart3, CalendarDays, ChevronRight, Crown, ExternalLink, GripVertical, HelpCircle, Image, KeyRound, Moon, RefreshCw, Search, Settings, SlidersHorizontal, Star, Sun, Trophy, Type, Users, X } from "lucide-react";
 import { native } from "../native";
 import { formatCurrentProgress, formatExp, shortDate, syncTime } from "../format";
-import type { AppStatus, DashboardData, MobileNotificationStatus, SyncProgress } from "../types";
+import type { AppStatus, DashboardData, SyncProgress } from "../types";
 import { ExperienceChart, seriesForPeriod, type ChartKind } from "./ExperienceChart";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { applyTheme, getStoredTheme, type AppTheme } from "../theme";
@@ -14,8 +14,6 @@ import { ApiKeyHelpModal } from "./ApiKeyHelpModal";
 import { useBackDismiss } from "../useBackDismiss";
 import { saveDashboardPeriod, saveDashboardRankingMode, storedDashboardPeriod, storedDashboardRankingMode, type DashboardPeriod } from "../dashboardPreferences";
 import { desktopRankingTabOrder, type DesktopRankingView } from "../desktopRanking";
-import { notificationPresentation } from "../notificationStatus";
-import { NotificationHelpModal } from "./NotificationHelpModal";
 
 interface Props {
   status: AppStatus;
@@ -77,10 +75,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const [favoriteDropTarget, setFavoriteDropTarget] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<DashboardView>("main");
   const [desktopRankingView, setDesktopRankingView] = useState<DesktopRankingView>("guild");
-  const [notificationStatus, setNotificationStatus] = useState<MobileNotificationStatus | null>(null);
-  const [notificationStatusError, setNotificationStatusError] = useState("");
-  const [notificationStatusLoading, setNotificationStatusLoading] = useState(false);
-  const [notificationHelpOpen, setNotificationHelpOpen] = useState(false);
   const favoriteDropTargetRef = useRef<number | null>(null);
   const activityFollowupTimerRef = useRef<number | null>(null);
   const closeCustomPeriod = useBackDismiss(customOpen, () => setCustomOpen(false));
@@ -95,12 +89,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   useEffect(() => saveDashboardRankingMode(rankingMode), [rankingMode]);
   useEffect(() => setChartKind(storedChartKind(period)), [period]);
   useEffect(() => applyTheme(theme), [theme]);
-  useEffect(() => {
-    if (!isAndroidRuntime || !settingsOpen) return;
-    void loadNotificationStatus();
-    const timer = globalThis.setInterval(() => void loadNotificationStatus(), 10_000);
-    return () => globalThis.clearInterval(timer);
-  }, [settingsOpen]);
   useEffect(() => {
     const timer = globalThis.setInterval(() => void load(), 30_000);
     return () => globalThis.clearInterval(timer);
@@ -209,40 +197,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       document.getElementById("ranking")?.scrollIntoView({ behavior: "smooth" });
     }));
-  }
-
-  async function loadNotificationStatus() {
-    if (!isAndroidRuntime) return;
-    setNotificationStatusLoading(true);
-    try {
-      setNotificationStatus(await native.notificationStatus());
-      setNotificationStatusError("");
-    } catch (reason) {
-      setNotificationStatusError(String(reason));
-    } finally {
-      setNotificationStatusLoading(false);
-    }
-  }
-
-  async function openNotificationSettings() {
-    try { await native.openNotificationSettings(); }
-    catch (reason) { setNotificationStatusError(String(reason)); }
-  }
-
-  async function openBackgroundSettings() {
-    try { await native.openBackgroundSettings(); }
-    catch (reason) { setNotificationStatusError(String(reason)); }
-  }
-
-  async function retryNotificationMonitor() {
-    setNotificationStatusLoading(true);
-    try {
-      await native.retryNotificationMonitor();
-      globalThis.setTimeout(() => void loadNotificationStatus(), 1_000);
-    } catch (reason) {
-      setNotificationStatusError(String(reason));
-      setNotificationStatusLoading(false);
-    }
   }
 
   async function addExternal(event: FormEvent) {
@@ -358,10 +312,6 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
   const progressPercent = progress?.total ? Math.round((progress.completed / progress.total) * 100) : 0;
   const syncVisible = busy || ["guild", "identity", "character", "calculate", "live", "waiting"].includes(progress?.phase ?? "");
   const syncWaiting = progress?.phase === "waiting";
-  const notificationView = notificationPresentation(notificationStatus, notificationStatusError, notificationStatusLoading);
-  const notificationLastSuccess = notificationStatus?.last_success_at
-    ? new Date(notificationStatus.last_success_at).toLocaleString("ko-KR")
-    : "아직 성공 기록 없음";
   const desktopRankingTabs = desktopRankingTabOrder(desktopRankingView);
 
   return (
@@ -430,23 +380,11 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
       <nav className="mobile-nav"><button className={activeView === "main" ? "active" : ""} onClick={() => showMainSection()}><BarChart3 />대시보드</button><button onClick={() => showMainSection("history")}><CalendarDays />성장 기록</button><button className={activeView === "favorites" ? "active" : ""} onClick={showFavorites}><Star />즐겨찾기</button><button onClick={() => showMainSection("ranking")}><Users />길드 순위</button></nav>
       {settingsOpen && <div className="modal-backdrop" onMouseDown={closeSettings}><section className="settings-modal" onMouseDown={(event) => event.stopPropagation()}>
         <div className="settings-modal-toolbar"><button className="modal-close" onClick={closeSettings} aria-label="닫기"><X /></button></div>
-        {isAndroidRuntime && <div className={`notification-status-card ${notificationView.state}`}>
-          <div className="notification-status-heading"><div className="notification-status-icon"><Bell /></div><div><span>모바일 알림 환경</span><strong>{notificationView.title}</strong></div><div className="notification-heading-actions"><button className="section-help-button" title="즐겨찾기 알림 기능 도움말" aria-label="즐겨찾기 알림 기능 도움말" onClick={() => setNotificationHelpOpen(true)}><HelpCircle /></button>{notificationView.state === "available" ? <CheckCircle2 /> : <AlertTriangle />}</div></div>
-          <div className="notification-status-details">
-            <span>알림 권한 <b>{notificationStatus?.permission_granted ? "허용" : "차단"}</b></span>
-            <span>시스템 알림 <b>{notificationStatus?.system_enabled && notificationStatus?.channel_enabled ? "켜짐" : "꺼짐"}</b></span>
-            <span>백그라운드 감시 <b>{notificationView.monitoringLabel}</b></span>
-            <span>마지막 정상 확인 <b>{notificationLastSuccess}</b></span>
-          </div>
-          <p>{notificationView.message}</p>
-          <div className="notification-status-actions"><button type="button" onClick={() => void openNotificationSettings()}>알림 설정 열기</button>{notificationView.showBackgroundSettings && <button type="button" onClick={() => void openBackgroundSettings()}>앱 정보 열기</button>}<button type="button" onClick={() => void retryNotificationMonitor()} disabled={notificationStatusLoading}>{notificationStatusLoading ? "확인 중" : "지금 다시 확인"}</button></div>
-        </div>}
         <div className="settings-api-heading"><div className="settings-icon"><KeyRound /></div><button className="section-help-button" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p>
         <form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>
         {keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 운영체제 보안 저장소에 저장됩니다.</small>
       </section></div>}
       {apiHelpOpen && <ApiKeyHelpModal onClose={() => setApiHelpOpen(false)} />}
-      {notificationHelpOpen && <NotificationHelpModal onClose={() => setNotificationHelpOpen(false)} />}
     </div>
     <button className="scroll-to-top" title="화면 최상단으로 이동" aria-label="화면 최상단으로 이동" onClick={() => globalThis.scrollTo({ top: 0, behavior: "smooth" })}><ArrowUp /></button>
     {displayOpen && createPortal(<div className="display-controls display-controls-fixed" style={displayPosition}><label><Type />전체 크기 <b>{Math.round(uiScale * 100)}%</b><input type="range" min="1" max="1.4" step="0.02" value={uiScale} onChange={(event) => changeUiScale(Number(event.target.value))} /></label><label><Image />캐릭터 이미지 <b>{Math.round(avatarScale * 100)}%</b><input type="range" min="0.65" max="1.5" step="0.05" value={avatarScale} onChange={(event) => changeAvatarScale(Number(event.target.value))} /></label><button onClick={resetDisplaySettings}>기본값</button></div>, document.body)}

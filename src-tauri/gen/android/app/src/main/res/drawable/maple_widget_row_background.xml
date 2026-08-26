@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 즐겨찾기 순위 한 행의 반투명 배경을 정의합니다. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#C91B222D" />
+    <corners android:radius="12dp" />
+</shape>

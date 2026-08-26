@@ -2,12 +2,10 @@
 mod commands;
 mod db;
 mod exp;
-mod models;
 #[cfg(target_os = "android")]
-mod mobile_notifications;
+mod mobile_widgets;
+mod models;
 mod nexon;
-#[cfg(any(target_os = "android", test))]
-mod notifications;
 mod sync;
 
 use std::path::PathBuf;
@@ -144,7 +142,7 @@ fn create_tray(app: &tauri::App) -> tauri::Result<()> {
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(target_os = "android")]
-    let builder = builder.plugin(mobile_notifications::init());
+    let builder = builder.plugin(mobile_widgets::init());
     #[cfg(target_os = "windows")]
     let builder = builder.plugin(tauri_plugin_autostart::init(
         tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -215,10 +213,6 @@ pub fn run() {
             commands::replace_api_key,
             commands::sync_now,
             commands::sync_live_now,
-            commands::get_mobile_notification_status,
-            commands::open_mobile_notification_settings,
-            commands::open_mobile_background_settings,
-            commands::retry_mobile_notification_monitor,
             commands::change_primary,
             commands::get_dashboard,
             commands::set_favorite,

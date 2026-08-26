@@ -184,23 +184,6 @@ td { height: 78px; padding: 6px 16px; border-top: 1px solid #222730; color: #aeb
 .settings-modal-toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-height: 29px; margin: -10px -10px 12px 0; }
 .section-help-button { display: grid; place-items: center; width: 29px; height: 29px; padding: 0; flex: 0 0 auto; border: 1px solid #303744; border-radius: 7px; color: #ffad70; background: #20252d; cursor: pointer; }.section-help-button:hover { color: #fff; border-color: #b96735; background: #6d3d25; }.section-help-button svg { width: 15px; }
 .settings-api-heading { display: flex; align-items: center; justify-content: space-between; }
-.notification-status-card { display: grid; gap: 12px; margin: 0 0 22px; padding: 16px; border: 1px solid #3a3030; border-radius: 13px; background: rgba(199,82,82,.08); }
-.notification-status-card.available { border-color: rgba(85,210,169,.32); background: rgba(85,210,169,.07); }
-.notification-status-card.checking { border-color: rgba(230,185,104,.34); background: rgba(230,185,104,.07); }
-.notification-status-heading { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
-.notification-heading-actions { display: flex; align-items: center; gap: 7px; }.notification-heading-actions > svg { width: 20px; color: #ef8d83; }
-.notification-status-card.available .notification-heading-actions > svg { color: #55d2a9; }.notification-status-card.checking .notification-heading-actions > svg { color: #e6b968; }
-.notification-status-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #ffad70; background: rgba(255,155,82,.11); }
-.notification-status-icon svg { width: 17px; }
-.notification-status-heading span { display: block; margin-bottom: 2px; color: #858e9c; font-size: 10px; font-weight: 700; }
-.notification-status-heading strong { display: block; color: #fff; font-size: 16px; }
-.notification-status-details { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.06); }
-.notification-status-details span { color: #7f8997; font-size: 10px; }
-.notification-status-details b { display: block; margin-top: 2px; color: #cdd3dc; font-size: 11px; }
-.notification-status-card > p { margin: 0; color: #e49a92; font-size: 10px; line-height: 1.5; }
-.notification-status-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 8px; }
-.notification-status-actions button { min-height: 34px; border: 1px solid #3b424d; border-radius: 8px; color: #c7ced8; background: #222831; font-size: 11px; font-weight: 700; cursor: pointer; }
-.notification-status-actions button:disabled { opacity: .5; cursor: default; }
 .modal-close { position: absolute; top: 15px; right: 15px; display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 7px; color: #6e7785; background: transparent; cursor: pointer; }.modal-close:hover { color: #fff; background: #262c35; }.modal-close svg { width: 15px; }
 .settings-modal-toolbar .modal-close { position: static; }
 .api-help-backdrop { z-index: 30; }
@@ -217,8 +200,6 @@ td { height: 78px; padding: 6px 16px; border-top: 1px solid #222730; color: #aeb
 .api-help-error { margin: 10px 0 0; }
 .api-key-warning { display: flex; gap: 9px; margin-top: 14px; padding: 11px 12px; border: 1px solid rgba(255,183,84,.22); border-radius: 10px; color: #eab45f; background: rgba(234,180,95,.06); }.api-key-warning > svg { width: 17px; flex: 0 0 auto; }.api-key-warning p { margin: 0; }.api-key-warning b, .api-key-warning span { display: block; }.api-key-warning b { font-size: 11px; }.api-key-warning span { margin-top: 3px; color: #9e8765; font-size: 10px; line-height: 1.5; }
 .api-help-source { display: block; margin-top: 13px; color: #596270; font-size: 9px; line-height: 1.55; }
-.notification-help-grid { display: grid; gap: 9px; margin: 20px 0; }.notification-help-grid article { display: flex; gap: 11px; padding: 13px 14px; border: 1px solid #2b323d; border-radius: 11px; background: #11151b; }.notification-help-grid article > svg { width: 19px; flex: 0 0 auto; color: #ff9b52; }.notification-help-grid b, .notification-help-grid p { display: block; }.notification-help-grid b { margin-bottom: 4px; color: #e7ebf0; font-size: 12px; }.notification-help-grid p { margin: 0; color: #8993a1; font-size: 11px; line-height: 1.6; }
-.notification-help-note { padding: 12px 14px; border: 1px solid rgba(85,210,169,.22); border-radius: 10px; background: rgba(85,210,169,.055); }.notification-help-note b, .notification-help-note span { display: block; }.notification-help-note b { color: #69d7b4; font-size: 11px; }.notification-help-note span { margin-top: 4px; color: #85958f; font-size: 10px; line-height: 1.55; }
 
 /* Widget */
 body:has(.widget-shell) { background: transparent; overflow: hidden; }
@@ -258,14 +239,8 @@ body:has(.widget-shell) { background: transparent; overflow: hidden; }
 :root[data-theme="light"] .panel, :root[data-theme="light"] .summary-grid article, :root[data-theme="light"] .guild-card, :root[data-theme="light"] .icon-action, :root[data-theme="light"] .display-controls, :root[data-theme="light"] .settings-modal, :root[data-theme="light"] .widget-shell, :root[data-theme="light"] .widget-open { border-color: #d9dfe8; background: #ffffff; box-shadow: none; }
 :root[data-theme="light"] .api-help-modal { color: #18202b; border-color: #d9dfe8; background: #fff; box-shadow: 0 25px 70px rgba(50,65,85,.18); }
 :root[data-theme="light"] .section-help-button, :root[data-theme="light"] .api-copy-row button { color: #8c4b24; border-color: #d4dae3; background: #f0f3f7; }
-:root[data-theme="light"] .notification-status-card { border-color: #e7c6c2; background: #fff6f5; }
-:root[data-theme="light"] .notification-status-card.available { border-color: #b8dfd1; background: #f0fbf7; }
-:root[data-theme="light"] .notification-status-heading strong, :root[data-theme="light"] .notification-status-details b { color: #24303d; }
-:root[data-theme="light"] .notification-status-details { border-color: #e3e7ed; }
-:root[data-theme="light"] .notification-status-actions button { color: #344253; border-color: #d3dae4; background: #f1f4f8; }
 :root[data-theme="light"] .api-help-steps, :root[data-theme="light"] .api-copy-row { color: #4e5968; border-color: #dce2ea; background: #f7f9fb; }
 :root[data-theme="light"] .api-help-steps b, :root[data-theme="light"] .api-copy-row code { color: #18202b; }
-:root[data-theme="light"] .notification-help-grid article { border-color: #dce2ea; background: #f7f9fb; }:root[data-theme="light"] .notification-help-grid b { color: #18202b; }:root[data-theme="light"] .notification-help-grid p { color: #596576; }
 :root[data-theme="light"] .period-tabs button.active, :root[data-theme="light"] .sidebar nav button:hover, :root[data-theme="light"] .sidebar nav button.active, :root[data-theme="light"] .display-controls > button, :root[data-theme="light"] .widget-tabs button.active { color: #18202b; background: #e6eaf0; }
 :root[data-theme="light"] .chart-kind-tabs { border-color: #d3dae4; background: #f4f6f9; }
 :root[data-theme="light"] .chart-kind-tabs button.active { color: #17202b; background: #dfe5ed; box-shadow: none; }

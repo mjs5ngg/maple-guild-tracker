@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 크기 조절 가능한 대형 즐겨찾기 순위 위젯을 등록합니다. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_favorite_ranking_description"
+    android:initialLayout="@layout/widget_favorite_ranking"
+    android:minWidth="250dp"
+    android:minHeight="250dp"
+    android:previewLayout="@layout/widget_favorite_ranking"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

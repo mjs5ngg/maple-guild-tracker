@@ -98,14 +98,6 @@ pub fn migrate(connection: &Connection) -> Result<(), AppError> {
             raw_json TEXT NOT NULL,
             PRIMARY KEY (character_id, fetched_at)
         );
-        CREATE TABLE IF NOT EXISTS favorite_notification_baselines (
-            character_id INTEGER PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
-            level INTEGER NOT NULL,
-            exp INTEGER NOT NULL,
-            exp_rate TEXT NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 0,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
         CREATE INDEX IF NOT EXISTS idx_snapshots_date ON daily_snapshots(date);
         CREATE INDEX IF NOT EXISTS idx_deltas_date ON xp_deltas(date);
         CREATE INDEX IF NOT EXISTS idx_memberships_date ON guild_memberships(date);
@@ -497,68 +489,6 @@ pub fn live_character_records(connection: &Connection) -> Result<Vec<CharacterRe
         })
     })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
-}
-
-#[cfg(any(target_os = "android", test))]
-pub fn notification_character_records(
-    connection: &Connection,
-) -> Result<Vec<CharacterRecord>, AppError> {
-    let mut statement = connection.prepare(
-        r#"SELECT c.id, ci.ocid
-           FROM characters c
-           JOIN character_identities ci ON ci.character_id=c.id AND ci.valid_to IS NULL
-           WHERE c.is_favorite=1 AND c.is_primary=0"#,
-    )?;
-    let rows = statement.query_map([], |row| {
-        Ok(CharacterRecord {
-            id: row.get(0)?,
-            ocid: row.get(1)?,
-        })
-    })?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
-}
-
-#[cfg(any(target_os = "android", test))]
-pub fn notification_baseline(
-    connection: &Connection,
-    character_id: i64,
-) -> Result<Option<(i64, i64, bool)>, AppError> {
-    Ok(connection
-        .query_row(
-            "SELECT level, exp, is_active FROM favorite_notification_baselines WHERE character_id=?1",
-            params![character_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .optional()?)
-}
-
-#[cfg(any(target_os = "android", test))]
-pub fn save_notification_baseline(
-    connection: &Connection,
-    character_id: i64,
-    level: i64,
-    exp: i64,
-    exp_rate: &str,
-    is_active: bool,
-) -> Result<(), AppError> {
-    connection.execute(
-        r#"INSERT INTO favorite_notification_baselines(character_id,level,exp,exp_rate,is_active)
-           VALUES (?1,?2,?3,?4,?5)
-           ON CONFLICT(character_id) DO UPDATE SET
-             level=excluded.level, exp=excluded.exp, exp_rate=excluded.exp_rate,
-             is_active=excluded.is_active, updated_at=CURRENT_TIMESTAMP"#,
-        params![character_id, level, exp, exp_rate, is_active],
-    )?;
-    Ok(())
-}
-
-#[cfg(any(target_os = "android", test))]
-pub fn cleanup_notification_baselines(connection: &Connection) -> Result<(), AppError> {
-    connection.execute(
-        "DELETE FROM favorite_notification_baselines WHERE character_id NOT IN (SELECT id FROM characters WHERE is_favorite=1 AND is_primary=0)",
-        [],
-    )?;
-    Ok(())
 }
 
 pub fn set_primary(connection: &mut Connection, character_id: i64) -> Result<(), AppError> {
@@ -1217,29 +1147,6 @@ mod tests {
         ).unwrap();
 
         assert!(live_activity(&connection, 1).unwrap().0);
-    }
-
-    #[test]
-    fn notification_targets_only_non_primary_favorites() {
-        let file = NamedTempFile::new().unwrap();
-        let connection = open(file.path()).unwrap();
-        migrate(&connection).unwrap();
-        connection.execute_batch(
-            r#"INSERT INTO characters(id,current_name,world_name,is_primary,is_favorite) VALUES
-                 (1,'대표','스카니아',1,1),(2,'즐겨찾기','스카니아',0,1),(3,'일반','스카니아',0,0);
-               INSERT INTO character_identities(character_id,ocid) VALUES
-                 (1,'primary-ocid'),(2,'favorite-ocid'),(3,'normal-ocid');"#,
-        ).unwrap();
-
-        let targets = notification_character_records(&connection).unwrap();
-        assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0].id, 2);
-        assert_eq!(targets[0].ocid, "favorite-ocid");
-        save_notification_baseline(&connection, 2, 281, 100, "10.000", false).unwrap();
-        assert_eq!(notification_baseline(&connection, 2).unwrap(), Some((281, 100, false)));
-        connection.execute("UPDATE characters SET is_favorite=0 WHERE id=2", []).unwrap();
-        cleanup_notification_baselines(&connection).unwrap();
-        assert_eq!(notification_baseline(&connection, 2).unwrap(), None);
     }
 
     #[test]

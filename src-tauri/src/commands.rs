@@ -5,55 +5,9 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::{
     credential_set, db,
-    models::{AppStatus, DashboardData, MobileNotificationStatus, SetupResult, SyncReport},
+    models::{AppStatus, DashboardData, SetupResult, SyncReport},
     sync, AppError, AppState,
 };
-
-#[tauri::command]
-pub fn get_mobile_notification_status(
-    _app: AppHandle,
-) -> Result<MobileNotificationStatus, String> {
-    #[cfg(target_os = "android")]
-    return crate::mobile_notifications::get_status(&_app);
-
-    #[cfg(not(target_os = "android"))]
-    Ok(MobileNotificationStatus {
-        supported: false,
-        permission_granted: false,
-        system_enabled: false,
-        channel_enabled: false,
-        monitoring_healthy: false,
-        issue: Some("모바일 알림은 Android 앱에서만 지원합니다.".into()),
-        last_success_at: None,
-    })
-}
-
-#[tauri::command]
-pub fn open_mobile_notification_settings(_app: AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return crate::mobile_notifications::open_settings(&_app);
-
-    #[cfg(not(target_os = "android"))]
-    Err("모바일 알림은 Android 앱에서만 지원합니다.".into())
-}
-
-#[tauri::command]
-pub fn open_mobile_background_settings(_app: AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return crate::mobile_notifications::open_background_settings(&_app);
-
-    #[cfg(not(target_os = "android"))]
-    Err("모바일 알림은 Android 앱에서만 지원합니다.".into())
-}
-
-#[tauri::command]
-pub fn retry_mobile_notification_monitor(_app: AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    return crate::mobile_notifications::retry(&_app);
-
-    #[cfg(not(target_os = "android"))]
-    Err("모바일 알림은 Android 앱에서만 지원합니다.".into())
-}
 
 fn public_error(error: AppError) -> String {
     error.public_message()
@@ -190,11 +144,15 @@ pub async fn replace_api_key(
 
 #[tauri::command]
 pub fn get_dashboard(
+    _app: AppHandle,
     state: tauri::State<'_, AppState>,
     period: String,
 ) -> Result<DashboardData, String> {
     let connection = db::open(&state.db_path).map_err(public_error)?;
-    db::dashboard(&connection, &period).map_err(public_error)
+    let data = db::dashboard(&connection, &period).map_err(public_error)?;
+    #[cfg(target_os = "android")]
+    let _ = crate::mobile_widgets::update(&_app, data.mobile_widget_snapshot());
+    Ok(data)
 }
 
 #[tauri::command]
