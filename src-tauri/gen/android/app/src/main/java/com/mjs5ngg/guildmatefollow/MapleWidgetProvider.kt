@@ -7,11 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +16,8 @@ import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -41,11 +39,23 @@ internal fun formatWidgetGain(value: Long?): String = value?.let { "+${formatWid
 internal fun JSONObject.optionalLong(key: String): Long? = if (isNull(key) || !has(key)) null else optLong(key)
 internal fun JSONObject.optionalDouble(key: String): Double? = if (isNull(key) || !has(key)) null else optDouble(key)
 
-internal fun weeklyBarHeights(values: List<Long?>, maxHeight: Int): List<Int> {
-  val ceiling = values.filterNotNull().maxOrNull()?.coerceAtLeast(1L) ?: 1L
-  return values.map { value ->
-    if (value == null) 2 else (4 + value.coerceAtLeast(0L).toDouble() / ceiling * (maxHeight - 4)).roundToInt()
+internal fun avatarTargetSize(width: Int, height: Int, maximum: Int = 96): Pair<Int, Int> {
+  if (width <= 0 || height <= 0) return maximum to maximum
+  val scale = minOf(1.0, maximum.toDouble() / maxOf(width, height))
+  return (width * scale).roundToInt().coerceAtLeast(1) to (height * scale).roundToInt().coerceAtLeast(1)
+}
+
+internal fun formatWidgetDay(date: String): String = date.takeIf { it.length >= 10 }
+  ?.let { "${it.substring(5, 7)}월 ${it.substring(8, 10)}일" }
+  ?: "날짜 없음"
+
+internal fun estimatedLevelUpText(days: Long?): String {
+  if (days == null || days < 0) return "예상 레벨업 · 계산 불가"
+  val calendar = Calendar.getInstance().apply {
+    add(Calendar.DAY_OF_YEAR, days.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
   }
+  val date = SimpleDateFormat("MM월 dd일", Locale.KOREA).format(calendar.time)
+  return "예상 레벨업 · $date (${days}일 후)"
 }
 
 internal fun buildFavoriteRow(context: Context, character: JSONObject, position: Int): RemoteViews =
@@ -63,14 +73,14 @@ enum class WidgetKind { LARGE, WEEKLY, SQUARE }
 
 abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-    ids.forEach { id -> manager.updateAppWidget(id, MapleWidgetRenderer.build(context, kind, id, manager.getAppWidgetOptions(id))) }
+    ids.forEach { id -> manager.updateAppWidget(id, MapleWidgetRenderer.build(context, kind, id)) }
     if (kind == WidgetKind.LARGE && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
       manager.notifyAppWidgetViewDataChanged(ids, R.id.favorite_list)
     }
   }
 
-  override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
-    manager.updateAppWidget(id, MapleWidgetRenderer.build(context, kind, id, options))
+  override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, _options: Bundle) {
+    manager.updateAppWidget(id, MapleWidgetRenderer.build(context, kind, id))
   }
 }
 
@@ -92,19 +102,19 @@ object MapleWidgetRenderer {
     )
     providers.forEach { (provider, kind) ->
       val ids = manager.getAppWidgetIds(ComponentName(context, provider))
-      ids.forEach { id -> manager.updateAppWidget(id, build(context, kind, id, manager.getAppWidgetOptions(id))) }
+      ids.forEach { id -> manager.updateAppWidget(id, build(context, kind, id)) }
       if (kind == WidgetKind.LARGE && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
         manager.notifyAppWidgetViewDataChanged(ids, R.id.favorite_list)
       }
     }
   }
 
-  fun build(context: Context, kind: WidgetKind, widgetId: Int, options: Bundle): RemoteViews {
+  fun build(context: Context, kind: WidgetKind, widgetId: Int): RemoteViews {
     val snapshot = readSnapshot(context)
     val characters = snapshot?.optJSONArray("characters") ?: JSONArray()
     return when (kind) {
       WidgetKind.LARGE -> buildLarge(context, widgetId, snapshot)
-      WidgetKind.WEEKLY -> buildWeekly(context, options, snapshot, characters)
+      WidgetKind.WEEKLY -> buildWeekly(context, snapshot, characters)
       WidgetKind.SQUARE -> buildSquare(context, characters)
     }
   }
@@ -116,7 +126,12 @@ object MapleWidgetRenderer {
 
   fun setAvatar(context: Context, views: RemoteViews, viewId: Int, characterId: Long) {
     val file = File(File(context.filesDir, AVATAR_DIRECTORY), "$characterId.png")
-    val bitmap = if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
+    val original = if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
+    val bitmap = original?.let {
+      val (width, height) = avatarTargetSize(it.width, it.height)
+      if (width == it.width && height == it.height) it
+      else android.graphics.Bitmap.createScaledBitmap(it, width, height, true).also { _ -> it.recycle() }
+    }
     if (bitmap != null) views.setImageViewBitmap(viewId, bitmap)
     else views.setImageViewResource(viewId, R.mipmap.ic_launcher)
   }
@@ -152,27 +167,48 @@ object MapleWidgetRenderer {
     return views
   }
 
-  private fun buildWeekly(context: Context, options: Bundle, snapshot: JSONObject?, characters: JSONArray): RemoteViews {
+  private fun buildWeekly(context: Context, snapshot: JSONObject?, characters: JSONArray): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_primary_weekly)
     val primary = primaryCharacter(characters)
-    val weeklyExp = snapshot?.optionalLong("primary_weekly_exp")
-    val points = snapshot?.optJSONArray("primary_weekly_points")?.let { array ->
-      (0 until array.length()).map { index -> if (array.isNull(index)) null else array.optLong(index) }
-    } ?: List(7) { null }
+    val points = snapshot?.optJSONArray("primary_weekly_points") ?: JSONArray()
+    val rowIds = intArrayOf(
+      R.id.weekly_day_1,
+      R.id.weekly_day_2,
+      R.id.weekly_day_3,
+      R.id.weekly_day_4,
+      R.id.weekly_day_5,
+      R.id.weekly_day_6,
+      R.id.weekly_day_7,
+    )
     if (primary == null) {
-      views.setTextViewText(R.id.primary_name, "앱에서 동기화")
-      views.setTextViewText(R.id.primary_rate, "—%")
-      views.setTextViewText(R.id.primary_gain, "7일 자료 없음")
+      views.setTextViewText(R.id.primary_name, "앱에서 동기화해 주세요")
     } else {
-      views.setTextViewText(R.id.primary_name, primary.optString("character_name"))
-      views.setTextViewText(R.id.primary_rate, formatWidgetRate(primary.optionalDouble("current_exp_rate")))
-      views.setTextViewText(R.id.primary_gain, "7일 ${formatWidgetGain(weeklyExp)}")
-      setAvatar(context, views, R.id.primary_avatar, primary.optLong("character_id"))
+      views.setTextViewText(
+        R.id.primary_name,
+        "[${primary.optString("character_name")}] · ${primary.optString("character_class")}",
+      )
     }
-    val widthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 180)
-    val density = context.resources.displayMetrics.density
-    val chartWidth = ((widthDp - 102).coerceAtLeast(68) * density).roundToInt()
-    views.setImageViewBitmap(R.id.primary_weekly_chart, weeklyChart(points, chartWidth, (43 * density).roundToInt()))
+    rowIds.forEachIndexed { index, rowId ->
+      val point = points.optJSONObject(index)
+      views.setViewVisibility(rowId, if (point == null) View.GONE else View.VISIBLE)
+      if (point != null) {
+        val level = if (point.isNull("level")) "Lv.—" else "Lv.${point.optLong("level")}"
+        val rate = formatWidgetRate(point.optionalDouble("exp_rate"))
+        val gain = formatWidgetGain(point.optionalLong("gained_exp"))
+        views.setTextViewText(
+          rowId,
+          "${formatWidgetDay(point.optString("date"))} · $level  $rate  ($gain)",
+        )
+      }
+    }
+    views.setTextViewText(
+      R.id.weekly_average,
+      "일평균 ${formatWidgetExp(snapshot?.optionalLong("primary_daily_average_exp"))}  ·  남은 경험치 ${formatWidgetExp(snapshot?.optionalLong("primary_remaining_exp"))}",
+    )
+    views.setTextViewText(
+      R.id.weekly_estimate,
+      estimatedLevelUpText(snapshot?.optionalLong("primary_estimated_days")),
+    )
     views.setOnClickPendingIntent(R.id.primary_widget_root, openApp(context, 6300))
     return views
   }
@@ -198,19 +234,4 @@ object MapleWidgetRenderer {
     .map { characters.getJSONObject(it) }
     .firstOrNull { it.optBoolean("is_primary") }
 
-  private fun weeklyChart(values: List<Long?>, width: Int, height: Int): Bitmap {
-    val bitmap = Bitmap.createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val heights = weeklyBarHeights(values, height - 5)
-    val slot = width / 7f
-    val barWidth = (slot * 0.52f).coerceAtLeast(3f)
-    val active = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 132, 73) }
-    val muted = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(54, 63, 76) }
-    heights.forEachIndexed { index, barHeight ->
-      val left = index * slot + (slot - barWidth) / 2f
-      val top = height - barHeight.toFloat()
-      canvas.drawRoundRect(left, top, left + barWidth, height.toFloat(), barWidth / 2f, barWidth / 2f, if (values[index] == null) muted else active)
-    }
-    return bitmap
-  }
 }

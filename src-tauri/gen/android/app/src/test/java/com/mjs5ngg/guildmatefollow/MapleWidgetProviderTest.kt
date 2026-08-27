@@ -1,4 +1,4 @@
-// Android 홈 위젯의 행 수와 경험치 표기 규칙을 검증합니다.
+// Android 홈 위젯의 이미지 크기와 경험치 표기 규칙을 검증합니다.
 package com.mjs5ngg.guildmatefollow
 
 import org.junit.Assert.assertEquals
@@ -6,8 +6,14 @@ import org.junit.Test
 
 class MapleWidgetProviderTest {
   @Test
-  fun weeklyBarsUseAStableSevenDayScale() {
-    assertEquals(listOf(2, 4, 10, 16, 22, 28, 34), weeklyBarHeights(listOf(null, 0, 2, 4, 6, 8, 10), 34))
+  fun avatarBitmapIsDownscaledWithoutChangingItsRatio() {
+    assertEquals(48 to 96, avatarTargetSize(400, 800))
+    assertEquals(64 to 64, avatarTargetSize(64, 64))
+  }
+
+  @Test
+  fun widgetDayUsesKoreanMonthAndDay() {
+    assertEquals("08월 27일", formatWidgetDay("2026-08-27"))
   }
 
   @Test

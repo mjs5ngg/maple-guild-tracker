@@ -882,33 +882,50 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             .map(|row| row.character_name.clone())
             .unwrap_or_default();
         let mut series_statement = connection.prepare(
-            "SELECT date, gained_exp FROM xp_deltas WHERE character_id=?1 AND date BETWEEN ?2 AND ?3 ORDER BY date",
+            "SELECT xd.date, xd.gained_exp, ds.level, ds.exp_rate
+             FROM xp_deltas xd
+             LEFT JOIN daily_snapshots ds ON ds.character_id=xd.character_id AND ds.date=xd.date
+             WHERE xd.character_id=?1 AND xd.date BETWEEN ?2 AND ?3
+             ORDER BY xd.date",
         )?;
         for point in series_statement.query_map(params![id, start, end], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, Option<String>>(3)?,
+            ))
         })? {
-            let (date, gained_exp) = point?;
+            let (date, gained_exp, level, exp_rate) = point?;
             series.push(SeriesPoint {
                 date,
                 character_id: id,
                 character_name: name.clone(),
                 gained_exp,
+                level,
+                exp_rate: exp_rate.and_then(|value| value.parse::<f64>().ok()),
             });
         }
         if !series
             .iter()
             .any(|point| point.character_id == id && point.date == today_date)
         {
-            if let Some(today_exp) = rankings
-                .iter()
-                .find(|row| row.character_id == id)
-                .and_then(|row| row.today_exp)
+            if let Some(today) =
+                rankings
+                    .iter()
+                    .find(|row| row.character_id == id)
+                    .and_then(|row| {
+                        row.today_exp
+                            .map(|today_exp| (today_exp, row.level, row.current_exp_rate))
+                    })
             {
                 series.push(SeriesPoint {
                     date: today_date.clone(),
                     character_id: id,
                     character_name: name,
-                    gained_exp: Some(today_exp),
+                    gained_exp: Some(today.0),
+                    level: Some(today.1),
+                    exp_rate: today.2,
                 });
             }
         }

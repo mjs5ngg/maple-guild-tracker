@@ -39,6 +39,8 @@ export interface SeriesPoint {
   character_id: number;
   character_name: string;
   gained_exp: number | null;
+  level?: number | null;
+  exp_rate?: number | null;
 }
 
 export interface DashboardData {

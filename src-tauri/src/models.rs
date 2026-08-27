@@ -60,6 +60,8 @@ pub struct SeriesPoint {
     pub character_id: i64,
     pub character_name: String,
     pub gained_exp: Option<i64>,
+    pub level: Option<i64>,
+    pub exp_rate: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +105,19 @@ pub struct MobileWidgetSnapshot {
     pub updated_at: Option<String>,
     pub characters: Vec<MobileWidgetCharacter>,
     pub primary_weekly_exp: Option<i64>,
-    pub primary_weekly_points: Vec<Option<i64>>,
+    pub primary_weekly_points: Vec<MobileWidgetDailyPoint>,
+    pub primary_daily_average_exp: Option<i64>,
+    pub primary_remaining_exp: Option<i64>,
+    pub primary_estimated_days: Option<i64>,
+}
+
+#[cfg(any(target_os = "android", test))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MobileWidgetDailyPoint {
+    pub date: String,
+    pub level: Option<i64>,
+    pub exp_rate: Option<f64>,
+    pub gained_exp: Option<i64>,
 }
 
 #[cfg(any(target_os = "android", test))]
@@ -144,18 +158,35 @@ impl DashboardData {
             .filter(|point| Some(point.character_id) == primary_id)
             .collect();
         weekly_points.sort_by(|left, right| left.date.cmp(&right.date));
-        let mut primary_weekly_points: Vec<Option<i64>> = weekly_points
+        let primary_weekly_points: Vec<MobileWidgetDailyPoint> = weekly_points
             .into_iter()
             .rev()
             .take(7)
-            .map(|point| point.gained_exp)
+            .map(|point| MobileWidgetDailyPoint {
+                date: point.date.clone(),
+                level: point.level,
+                exp_rate: point.exp_rate,
+                gained_exp: point.gained_exp,
+            })
             .collect();
+        let mut primary_weekly_points = primary_weekly_points;
         primary_weekly_points.reverse();
-        while primary_weekly_points.len() < 7 {
-            primary_weekly_points.insert(0, None);
-        }
-        let available: Vec<i64> = primary_weekly_points.iter().flatten().copied().collect();
-        let primary_weekly_exp = (!available.is_empty()).then(|| available.into_iter().sum());
+        let available: Vec<i64> = primary_weekly_points
+            .iter()
+            .filter_map(|point| point.gained_exp)
+            .collect();
+        let primary_weekly_exp = (!available.is_empty()).then(|| available.iter().sum());
+        let primary_daily_average_exp =
+            (!available.is_empty()).then(|| available.iter().sum::<i64>() / available.len() as i64);
+        let primary_remaining_exp = rows.iter().find(|row| row.is_primary).and_then(|row| {
+            crate::exp::required_exp(row.level)
+                .zip(row.current_exp)
+                .map(|(required, current)| required.saturating_sub(current))
+        });
+        let primary_estimated_days = primary_remaining_exp
+            .zip(primary_daily_average_exp)
+            .filter(|(_, average)| *average > 0)
+            .map(|(remaining, average)| (remaining as f64 / average as f64).ceil() as i64);
         MobileWidgetSnapshot {
             updated_at,
             characters: rows
@@ -175,6 +206,9 @@ impl DashboardData {
                 .collect(),
             primary_weekly_exp,
             primary_weekly_points,
+            primary_daily_average_exp,
+            primary_remaining_exp,
+            primary_estimated_days,
         }
     }
 }
@@ -265,6 +299,8 @@ mod tests {
                     character_id: "대표".len() as i64,
                     character_name: "대표".into(),
                     gained_exp: Some(day * 10),
+                    level: Some(281),
+                    exp_rate: Some(day as f64),
                 })
                 .collect(),
         };
@@ -276,8 +312,19 @@ mod tests {
         assert_eq!(snapshot.characters[1].character_name, "대표");
         assert!(snapshot.characters[1].is_primary);
         assert_eq!(snapshot.primary_weekly_points.len(), 7);
-        assert_eq!(snapshot.primary_weekly_points[0], Some(20));
-        assert_eq!(snapshot.primary_weekly_points[6], Some(80));
+        assert_eq!(snapshot.primary_weekly_points[0].gained_exp, Some(20));
+        assert_eq!(snapshot.primary_weekly_points[6].gained_exp, Some(80));
         assert_eq!(snapshot.primary_weekly_exp, Some(350));
+        assert_eq!(snapshot.primary_daily_average_exp, Some(50));
+        assert_eq!(
+            snapshot.primary_remaining_exp,
+            crate::exp::required_exp(281).map(|required| required - 1)
+        );
+        assert_eq!(
+            snapshot.primary_estimated_days,
+            snapshot
+                .primary_remaining_exp
+                .map(|remaining| (remaining as f64 / 50.0).ceil() as i64)
+        );
     }
 }
