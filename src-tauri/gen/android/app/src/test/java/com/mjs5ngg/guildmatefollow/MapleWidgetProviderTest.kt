@@ -6,10 +6,8 @@ import org.junit.Test
 
 class MapleWidgetProviderTest {
   @Test
-  fun largeWidgetRowsFollowAvailableHeight() {
-    assertEquals(3, largeWidgetRowCount(250))
-    assertEquals(4, largeWidgetRowCount(290))
-    assertEquals(5, largeWidgetRowCount(360))
+  fun weeklyBarsUseAStableSevenDayScale() {
+    assertEquals(listOf(2, 4, 10, 16, 22, 28, 34), weeklyBarHeights(listOf(null, 0, 2, 4, 6, 8, 10), 34))
   }
 
   @Test

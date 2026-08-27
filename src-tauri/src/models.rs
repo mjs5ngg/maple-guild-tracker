@@ -102,6 +102,8 @@ pub struct MobileWidgetCharacter {
 pub struct MobileWidgetSnapshot {
     pub updated_at: Option<String>,
     pub characters: Vec<MobileWidgetCharacter>,
+    pub primary_weekly_exp: Option<i64>,
+    pub primary_weekly_points: Vec<Option<i64>>,
 }
 
 #[cfg(any(target_os = "android", test))]
@@ -132,6 +134,28 @@ impl DashboardData {
                 })
                 .then_with(|| left.character_name.cmp(&right.character_name))
         });
+        let primary_id = rows
+            .iter()
+            .find(|row| row.is_primary)
+            .map(|row| row.character_id);
+        let mut weekly_points: Vec<&SeriesPoint> = self
+            .series
+            .iter()
+            .filter(|point| Some(point.character_id) == primary_id)
+            .collect();
+        weekly_points.sort_by(|left, right| left.date.cmp(&right.date));
+        let mut primary_weekly_points: Vec<Option<i64>> = weekly_points
+            .into_iter()
+            .rev()
+            .take(7)
+            .map(|point| point.gained_exp)
+            .collect();
+        primary_weekly_points.reverse();
+        while primary_weekly_points.len() < 7 {
+            primary_weekly_points.insert(0, None);
+        }
+        let available: Vec<i64> = primary_weekly_points.iter().flatten().copied().collect();
+        let primary_weekly_exp = (!available.is_empty()).then(|| available.into_iter().sum());
         MobileWidgetSnapshot {
             updated_at,
             characters: rows
@@ -149,6 +173,8 @@ impl DashboardData {
                     is_primary: row.is_primary,
                 })
                 .collect(),
+            primary_weekly_exp,
+            primary_weekly_points,
         }
     }
 }
@@ -233,7 +259,14 @@ mod tests {
                 ranking("즐겨찾기", Some(30), false, true),
                 ranking("일반", Some(100), false, false),
             ],
-            series: vec![],
+            series: (1..=8)
+                .map(|day| SeriesPoint {
+                    date: format!("2026-08-{day:02}"),
+                    character_id: "대표".len() as i64,
+                    character_name: "대표".into(),
+                    gained_exp: Some(day * 10),
+                })
+                .collect(),
         };
 
         let snapshot = data.mobile_widget_snapshot();
@@ -242,5 +275,9 @@ mod tests {
         assert_eq!(snapshot.characters[0].rank, 1);
         assert_eq!(snapshot.characters[1].character_name, "대표");
         assert!(snapshot.characters[1].is_primary);
+        assert_eq!(snapshot.primary_weekly_points.len(), 7);
+        assert_eq!(snapshot.primary_weekly_points[0], Some(20));
+        assert_eq!(snapshot.primary_weekly_points[6], Some(80));
+        assert_eq!(snapshot.primary_weekly_exp, Some(350));
     }
 }

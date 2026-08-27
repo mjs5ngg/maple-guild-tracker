@@ -151,7 +151,11 @@ pub fn get_dashboard(
     let connection = db::open(&state.db_path).map_err(public_error)?;
     let data = db::dashboard(&connection, &period).map_err(public_error)?;
     #[cfg(target_os = "android")]
-    let _ = crate::mobile_widgets::update(&_app, data.mobile_widget_snapshot());
+    {
+        if let Ok(widget_data) = db::dashboard(&connection, "7d") {
+            let _ = crate::mobile_widgets::update(&_app, widget_data.mobile_widget_snapshot());
+        }
+    }
     Ok(data)
 }
 

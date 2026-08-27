@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 대표 캐릭터를 포함한 즐겨찾기 오늘 경험치 순위를 표시합니다. -->
+<!-- 대표 캐릭터를 포함한 즐겨찾기 오늘 경험치 순위를 고정 행 목록으로 표시합니다. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/favorite_widget_root"
     android:layout_width="match_parent"
@@ -7,46 +7,36 @@
     android:background="@drawable/maple_widget_background"
     android:orientation="vertical">
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+    <LinearLayout
+        android:id="@+id/favorite_header"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="즐겨찾기 순위" android:textColor="#FFF4ED" android:textSize="17sp" android:textStyle="bold" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="오늘 획득 경험치" android:textColor="#FF914D" android:textSize="11sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="즐겨찾기 랭킹" android:textColor="#F7F8FA" android:textSize="17sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:text="TODAY · 획득 경험치" android:textColor="#FF8A4C" android:textSize="9sp" android:textStyle="bold" />
         </LinearLayout>
-        <ImageView android:layout_width="30dp" android:layout_height="30dp" android:contentDescription="길드원 따라가기" android:src="@mipmap/ic_launcher" />
+        <TextView android:id="@+id/favorite_count" android:layout_width="wrap_content" android:layout_height="28dp" android:background="@drawable/maple_widget_label_background" android:gravity="center" android:minWidth="44dp" android:paddingLeft="10dp" android:paddingRight="10dp" android:textColor="#FFAA79" android:textSize="10sp" android:textStyle="bold" />
     </LinearLayout>
 
-    <TextView android:id="@+id/favorite_empty" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:text="앱을 열어 즐겨찾기를 동기화해 주세요" android:textColor="#96A0AE" android:textSize="12sp" />
+    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#29313C" />
 
-    <LinearLayout android:id="@+id/favorite_row_1" style="@style/MapleWidgetRankRow">
-        <TextView android:id="@+id/favorite_rank_1" style="@style/MapleWidgetRankNumber" />
-        <ImageView android:id="@+id/favorite_avatar_1" style="@style/MapleWidgetAvatar" />
-        <LinearLayout style="@style/MapleWidgetCharacterText"><TextView android:id="@+id/favorite_name_1" style="@style/MapleWidgetName" /><TextView android:id="@+id/favorite_detail_1" style="@style/MapleWidgetDetail" /></LinearLayout>
-        <TextView android:id="@+id/favorite_gain_1" style="@style/MapleWidgetGain" />
-    </LinearLayout>
-    <LinearLayout android:id="@+id/favorite_row_2" style="@style/MapleWidgetRankRow">
-        <TextView android:id="@+id/favorite_rank_2" style="@style/MapleWidgetRankNumber" />
-        <ImageView android:id="@+id/favorite_avatar_2" style="@style/MapleWidgetAvatar" />
-        <LinearLayout style="@style/MapleWidgetCharacterText"><TextView android:id="@+id/favorite_name_2" style="@style/MapleWidgetName" /><TextView android:id="@+id/favorite_detail_2" style="@style/MapleWidgetDetail" /></LinearLayout>
-        <TextView android:id="@+id/favorite_gain_2" style="@style/MapleWidgetGain" />
-    </LinearLayout>
-    <LinearLayout android:id="@+id/favorite_row_3" style="@style/MapleWidgetRankRow">
-        <TextView android:id="@+id/favorite_rank_3" style="@style/MapleWidgetRankNumber" />
-        <ImageView android:id="@+id/favorite_avatar_3" style="@style/MapleWidgetAvatar" />
-        <LinearLayout style="@style/MapleWidgetCharacterText"><TextView android:id="@+id/favorite_name_3" style="@style/MapleWidgetName" /><TextView android:id="@+id/favorite_detail_3" style="@style/MapleWidgetDetail" /></LinearLayout>
-        <TextView android:id="@+id/favorite_gain_3" style="@style/MapleWidgetGain" />
-    </LinearLayout>
-    <LinearLayout android:id="@+id/favorite_row_4" style="@style/MapleWidgetRankRow">
-        <TextView android:id="@+id/favorite_rank_4" style="@style/MapleWidgetRankNumber" />
-        <ImageView android:id="@+id/favorite_avatar_4" style="@style/MapleWidgetAvatar" />
-        <LinearLayout style="@style/MapleWidgetCharacterText"><TextView android:id="@+id/favorite_name_4" style="@style/MapleWidgetName" /><TextView android:id="@+id/favorite_detail_4" style="@style/MapleWidgetDetail" /></LinearLayout>
-        <TextView android:id="@+id/favorite_gain_4" style="@style/MapleWidgetGain" />
-    </LinearLayout>
-    <LinearLayout android:id="@+id/favorite_row_5" style="@style/MapleWidgetRankRow">
-        <TextView android:id="@+id/favorite_rank_5" style="@style/MapleWidgetRankNumber" />
-        <ImageView android:id="@+id/favorite_avatar_5" style="@style/MapleWidgetAvatar" />
-        <LinearLayout style="@style/MapleWidgetCharacterText"><TextView android:id="@+id/favorite_name_5" style="@style/MapleWidgetName" /><TextView android:id="@+id/favorite_detail_5" style="@style/MapleWidgetDetail" /></LinearLayout>
-        <TextView android:id="@+id/favorite_gain_5" style="@style/MapleWidgetGain" />
-    </LinearLayout>
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginTop="8dp" android:layout_weight="1">
+        <ListView
+            android:id="@+id/favorite_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="6dp"
+            android:overScrollMode="never"
+            android:scrollbars="vertical" />
+        <LinearLayout android:id="@+id/favorite_empty" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☆" android:textColor="#596575" android:textSize="28sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="즐겨찾기를 동기화해 주세요" android:textColor="#8C96A5" android:textSize="11sp" />
+        </LinearLayout>
+    </FrameLayout>
 
-    <TextView android:id="@+id/favorite_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="end" android:maxLines="1" android:textColor="#7F8997" android:textSize="9sp" />
+    <TextView android:id="@+id/favorite_updated" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="end|bottom" android:maxLines="1" android:textColor="#657080" android:textSize="8sp" />
 </LinearLayout>

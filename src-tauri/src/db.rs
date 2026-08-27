@@ -855,12 +855,21 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         })
     };
 
-    let selected_ids: Vec<i64> = rankings
+    let mut selected_ids: Vec<i64> = rankings
         .iter()
-        .filter(|row| row.is_primary || row.is_favorite)
-        .take(8)
+        .filter(|row| row.is_primary)
         .map(|row| row.character_id)
         .collect();
+    for character_id in rankings
+        .iter()
+        .filter(|row| row.is_favorite && !row.is_primary)
+        .map(|row| row.character_id)
+    {
+        if selected_ids.len() >= 8 {
+            break;
+        }
+        selected_ids.push(character_id);
+    }
     let today_date = Utc::now()
         .with_timezone(&Seoul)
         .format("%Y-%m-%d")
