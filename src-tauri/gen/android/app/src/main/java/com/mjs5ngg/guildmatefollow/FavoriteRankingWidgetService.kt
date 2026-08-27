@@ -3,7 +3,6 @@ package com.mjs5ngg.guildmatefollow
 
 import android.content.Context
 import android.content.Intent
-import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import org.json.JSONArray
@@ -26,16 +25,7 @@ private class FavoriteRankingFactory(private val context: Context) : RemoteViews
 
   override fun getViewAt(position: Int): RemoteViews? {
     val character = characters.optJSONObject(position) ?: return null
-    return RemoteViews(context.packageName, R.layout.widget_favorite_ranking_row).apply {
-      setTextViewText(R.id.favorite_rank, character.optInt("rank", position + 1).toString())
-      setTextViewText(R.id.favorite_name, character.optString("character_name"))
-      setTextViewText(R.id.favorite_primary, if (character.optBoolean("is_primary")) "대표" else "")
-      setViewVisibility(R.id.favorite_primary, if (character.optBoolean("is_primary")) View.VISIBLE else View.GONE)
-      setTextViewText(R.id.favorite_detail, "Lv.${character.optLong("level")}  ·  ${formatWidgetRate(character.optionalDouble("current_exp_rate"))}")
-      setTextViewText(R.id.favorite_gain, formatWidgetGain(character.optionalLong("today_exp")))
-      MapleWidgetRenderer.setAvatar(context, this, R.id.favorite_avatar, character.optLong("character_id"))
-      setOnClickFillInIntent(R.id.favorite_row, Intent().putExtra("character_id", character.optLong("character_id")))
-    }
+    return buildFavoriteRow(context, character, position)
   }
 
   private fun reload() {

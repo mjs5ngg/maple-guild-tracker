@@ -13,7 +13,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -46,12 +48,25 @@ internal fun weeklyBarHeights(values: List<Long?>, maxHeight: Int): List<Int> {
   }
 }
 
+internal fun buildFavoriteRow(context: Context, character: JSONObject, position: Int): RemoteViews =
+  RemoteViews(context.packageName, R.layout.widget_favorite_ranking_row).apply {
+    setTextViewText(R.id.favorite_rank, character.optInt("rank", position + 1).toString())
+    setTextViewText(R.id.favorite_name, character.optString("character_name"))
+    setTextViewText(R.id.favorite_primary, if (character.optBoolean("is_primary")) "대표" else "")
+    setViewVisibility(R.id.favorite_primary, if (character.optBoolean("is_primary")) View.VISIBLE else View.GONE)
+    setTextViewText(R.id.favorite_detail, "Lv.${character.optLong("level")}  ·  ${formatWidgetRate(character.optionalDouble("current_exp_rate"))}")
+    setTextViewText(R.id.favorite_gain, formatWidgetGain(character.optionalLong("today_exp")))
+    MapleWidgetRenderer.setAvatar(context, this, R.id.favorite_avatar, character.optLong("character_id"))
+  }
+
 enum class WidgetKind { LARGE, WEEKLY, SQUARE }
 
 abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     ids.forEach { id -> manager.updateAppWidget(id, MapleWidgetRenderer.build(context, kind, id, manager.getAppWidgetOptions(id))) }
-    if (kind == WidgetKind.LARGE) manager.notifyAppWidgetViewDataChanged(ids, R.id.favorite_list)
+    if (kind == WidgetKind.LARGE && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+      manager.notifyAppWidgetViewDataChanged(ids, R.id.favorite_list)
+    }
   }
 
   override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
@@ -78,7 +93,9 @@ object MapleWidgetRenderer {
     providers.forEach { (provider, kind) ->
       val ids = manager.getAppWidgetIds(ComponentName(context, provider))
       ids.forEach { id -> manager.updateAppWidget(id, build(context, kind, id, manager.getAppWidgetOptions(id))) }
-      if (kind == WidgetKind.LARGE) manager.notifyAppWidgetViewDataChanged(ids, R.id.favorite_list)
+      if (kind == WidgetKind.LARGE && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        manager.notifyAppWidgetViewDataChanged(ids, R.id.favorite_list)
+      }
     }
   }
 
@@ -111,15 +128,25 @@ object MapleWidgetRenderer {
 
   private fun buildLarge(context: Context, widgetId: Int, snapshot: JSONObject?): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_favorite_ranking)
-    val serviceIntent = Intent(context, FavoriteRankingWidgetService::class.java)
-      .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-    serviceIntent.data = Uri.parse(serviceIntent.toUri(Intent.URI_INTENT_SCHEME))
-    views.setRemoteAdapter(R.id.favorite_list, serviceIntent)
+    val characters = snapshot?.optJSONArray("characters") ?: JSONArray()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val items = RemoteViews.RemoteCollectionItems.Builder()
+        .setHasStableIds(true)
+        .setViewTypeCount(1)
+      for (position in 0 until characters.length()) {
+        val character = characters.getJSONObject(position)
+        items.addItem(character.optLong("character_id", position.toLong()), buildFavoriteRow(context, character, position))
+      }
+      views.setRemoteAdapter(R.id.favorite_list, items.build())
+    } else {
+      val serviceIntent = Intent(context, FavoriteRankingWidgetService::class.java)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+      serviceIntent.data = Uri.parse(serviceIntent.toUri(Intent.URI_INTENT_SCHEME))
+      views.setRemoteAdapter(R.id.favorite_list, serviceIntent)
+    }
     views.setEmptyView(R.id.favorite_list, R.id.favorite_empty)
-    views.setPendingIntentTemplate(R.id.favorite_list, openApp(context, 6100 + widgetId))
     views.setOnClickPendingIntent(R.id.favorite_header, openApp(context, 6200 + widgetId))
-    val count = snapshot?.optJSONArray("characters")?.length() ?: 0
-    views.setTextViewText(R.id.favorite_count, "${count}명")
+    views.setTextViewText(R.id.favorite_count, "${characters.length()}명")
     val updated = snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at").orEmpty().replace('T', ' ').take(16)
     views.setTextViewText(R.id.favorite_updated, if (updated.isBlank()) "앱에서 동기화해 주세요" else "$updated 갱신")
     return views

@@ -183,3 +183,7 @@
 - `v0.3.1` 대형 위젯은 `RemoteViewsService` 기반 `ListView`로 전환해 즐겨찾기 수와 무관하게 각 행을 64dp로 고정했다. 적은 목록은 상단부터만 차지하고, 목록이 위젯 높이를 넘으면 위젯 안에서 스크롤된다.
 - 기존 2×1 공급자는 제거했다. 새 주간 위젯은 `targetCellWidth=3`, `targetCellHeight=2`, 가로 전용 리사이즈와 180~320dp 범위를 사용해 런처 기준 3~5칸을 요청하며 세로 크기는 110dp로 고정한다.
 - `v0.3.1`은 Rust 23건, 프런트엔드 26건, Android Kotlin 단위 테스트, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android R8·APK 빌드 및 APK v2·v3 서명 검증을 통과했다. APK에는 새 공급자 세 개와 목록 서비스가 등록됐고 알림 권한은 없으며, ADB 연결 기기는 발견되지 않았다.
+- `v0.3.1` 실제 기기에서는 주간·2×2 위젯은 추가되지만 대형 위젯만 `위젯을 추가할 수 없습니다`로 실패했다. 컬렉션 위젯 전환으로 새로 생긴 `RemoteViewsService` 연결과 대형 레이아웃을 우선 조사한다.
+- ADB 연결 기기가 없어 삼성 런처의 예외 로그를 직접 회수하지는 못했다. APK에는 공급자와 서비스가 정상 등록돼 있었고 다른 두 위젯이 작동하므로, 대형 위젯에만 있는 원격 서비스 어댑터 경로가 기기별 실패 지점으로 좁혀진다.
+- `v0.3.2`는 Android 12 이상에서 공식 권장 인라인 `RemoteCollectionItems`를 사용해 서비스 바인딩 없이 고정 행 목록을 전달한다. Android 7~11만 기존 `RemoteViewsService`를 호환 경로로 사용하며, 불필요한 행 클릭용 PendingIntent 템플릿도 제거했다.
+- `v0.3.2`는 Rust 23건, 프런트엔드 26건, Android Kotlin 단위 테스트, Clippy 경고 0건, TypeScript·Vite 빌드, Windows NSIS와 Android R8·APK 빌드 및 APK v2·v3 서명 검증을 통과했다. 현재 ADB 연결 기기는 없었다.
