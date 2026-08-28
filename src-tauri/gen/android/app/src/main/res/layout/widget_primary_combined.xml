@@ -13,8 +13,8 @@
         android:orientation="vertical"
         android:paddingRight="10dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="20dp" android:gravity="center_vertical" android:orientation="horizontal">
-            <TextView android:layout_width="wrap_content" android:layout_height="18dp" android:background="@drawable/maple_widget_label_background" android:gravity="center" android:paddingLeft="4dp" android:paddingRight="4dp" android:text="대표캐릭터" android:textColor="#FFAA79" android:textSize="12sp" android:textStyle="bold" />
-            <TextView android:id="@+id/primary_name" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:layout_weight="1" android:ellipsize="end" android:gravity="end" android:maxLines="1" android:textColor="#D8DEE8" android:textSize="12sp" android:textStyle="bold" />
+            <ImageView android:layout_width="22dp" android:layout_height="18dp" android:contentDescription="대표 캐릭터" android:scaleType="centerInside" android:src="@drawable/maple_widget_crown" />
+            <TextView android:id="@+id/primary_name" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="3dp" android:layout_weight="1" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="10sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:gravity="end" android:maxLines="1" android:textColor="#D8DEE8" android:textSize="12sp" android:textStyle="bold" />
         </LinearLayout>
         <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginTop="2dp" android:layout_weight="1">
             <ViewFlipper

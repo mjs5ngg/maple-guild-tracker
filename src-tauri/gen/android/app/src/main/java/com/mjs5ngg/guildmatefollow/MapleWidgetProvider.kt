@@ -105,7 +105,6 @@ internal fun buildFavoriteRow(context: Context, character: JSONObject, position:
   RemoteViews(context.packageName, R.layout.widget_favorite_ranking_row).apply {
     setTextViewText(R.id.favorite_rank, character.optInt("rank", position + 1).toString())
     setTextViewText(R.id.favorite_name, character.optString("character_name"))
-    setTextViewText(R.id.favorite_primary, if (character.optBoolean("is_primary")) "대표" else "")
     setViewVisibility(R.id.favorite_primary, if (character.optBoolean("is_primary")) View.VISIBLE else View.GONE)
     setTextViewText(R.id.favorite_detail, "Lv.${character.optLong("level")}  ·  ${formatWidgetRate(character.optionalDouble("current_exp_rate"))}")
     setTextViewText(R.id.favorite_gain, formatWidgetGain(character.optionalLong("today_exp")))
@@ -185,20 +184,28 @@ object MapleWidgetRenderer {
       R.id.primary_avatar_frame_3,
     )
     frameIds.forEachIndexed { index, viewId ->
-      val frame = File(directory, "${characterId}_stand_$index.png").takeIf { it.isFile } ?: fallback
-      setAvatarFile(views, viewId, frame, 160)
+      val frame = File(directory, "${characterId}_stand_$index.png")
+      if (frame.isFile) setAvatarFile(views, viewId, frame, 160, cropTransparentPadding = false)
+      else setAvatarFile(views, viewId, fallback, 160)
     }
   }
 
-  private fun setAvatarFile(views: RemoteViews, viewId: Int, file: File, maximum: Int) {
+  private fun setAvatarFile(
+    views: RemoteViews,
+    viewId: Int,
+    file: File,
+    maximum: Int,
+    cropTransparentPadding: Boolean = true,
+  ) {
     val original = if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
     val bitmap = original?.let { source ->
-      val pixels = IntArray(source.width * source.height)
-      source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
-      val bounds = avatarContentBounds(source.width, source.height, pixels)
-      val cropped = bounds?.let {
-        Bitmap.createBitmap(source, it.left, it.top, it.right - it.left + 1, it.bottom - it.top + 1)
-      } ?: source
+      val cropped = if (cropTransparentPadding) {
+        val pixels = IntArray(source.width * source.height)
+        source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
+        avatarContentBounds(source.width, source.height, pixels)?.let {
+          Bitmap.createBitmap(source, it.left, it.top, it.right - it.left + 1, it.bottom - it.top + 1)
+        } ?: source
+      } else source
       if (cropped !== source) source.recycle()
       val (width, height) = avatarTargetSize(cropped.width, cropped.height, maximum)
       if (width == cropped.width && height == cropped.height) cropped

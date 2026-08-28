@@ -101,6 +101,43 @@ class MapleWidgetProviderTest {
   }
 
   @Test
+  fun widgetNicknamesUseSingleLineAutoSizing() {
+    listOf(
+      "widget_favorite_ranking_row.xml",
+      "widget_primary_square.xml",
+      "widget_primary_combined.xml",
+      "widget_primary_weekly.xml",
+    ).forEach { name ->
+      val layout = File("src/main/res/layout/$name").readText()
+      val nicknameId = if (name == "widget_favorite_ranking_row.xml") "favorite_name" else "primary_name"
+      val nickname = Regex("<TextView[^>]*android:id=\"@\\+id/$nicknameId\"[^>]*/>").find(layout)?.value.orEmpty()
+      assertTrue("$name must auto-size its nickname", nickname.contains("android:autoSizeTextType=\"uniform\""))
+      assertFalse("$name must not ellipsize its nickname", nickname.contains("android:ellipsize=\"end\""))
+    }
+  }
+
+  @Test
+  fun widgetActionsAndPrimaryMarkersUseVectorIcons() {
+    val ranking = File("src/main/res/layout/widget_favorite_ranking.xml").readText()
+    val row = File("src/main/res/layout/widget_favorite_ranking_row.xml").readText()
+    val square = File("src/main/res/layout/widget_primary_square.xml").readText()
+    val combined = File("src/main/res/layout/widget_primary_combined.xml").readText()
+    assertTrue(ranking.contains("android:src=\"@drawable/maple_widget_refresh\""))
+    assertFalse(ranking.contains("android:text=\"↻\""))
+    listOf(row, square, combined).forEach { layout ->
+      assertTrue(layout.contains("android:src=\"@drawable/maple_widget_crown\""))
+      assertFalse(layout.contains("android:text=\"대표캐릭터\""))
+    }
+  }
+
+  @Test
+  fun textOnlyWeeklyWidgetHasComfortableVerticalPadding() {
+    val weekly = File("src/main/res/layout/widget_primary_weekly.xml").readText()
+    assertTrue(weekly.contains("android:paddingTop=\"7dp\""))
+    assertTrue(weekly.contains("android:paddingBottom=\"7dp\""))
+  }
+
+  @Test
   fun smallWidgetTextIsAtLeastTwelveExceptUpdatedTime() {
     val layouts = File("src/main/res/layout").listFiles().orEmpty().filter { it.name.startsWith("widget_") }
     layouts.forEach { file ->

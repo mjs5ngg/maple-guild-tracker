@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 대표 캐릭터를 짧고 일관되게 표시하는 왕관 벡터 아이콘입니다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#33FF874A"
+        android:pathData="M3,5L7,9L12,3L17,9L21,5L19,17L5,17Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M3,5L7,9L12,3L17,9L21,5L19,17L5,17ZM5,21L19,21"
+        android:strokeColor="#FFAA79"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.8" />
+</vector>
