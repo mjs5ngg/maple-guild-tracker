@@ -4,4 +4,5 @@
     <string name="widget_favorite_ranking_description">즐겨찾기 오늘 경험치 순위</string>
     <string name="widget_primary_weekly_description">대표 캐릭터 주간 성장 3×2</string>
     <string name="widget_primary_square_description">대표 캐릭터 성장 2×2</string>
+    <string name="widget_primary_combined_description">대표 캐릭터 통합 성장 5×2</string>
 </resources>

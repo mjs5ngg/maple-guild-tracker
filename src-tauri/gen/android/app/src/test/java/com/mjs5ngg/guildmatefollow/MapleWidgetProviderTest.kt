@@ -4,13 +4,23 @@ package com.mjs5ngg.guildmatefollow
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapleWidgetProviderTest {
   @Test
-  fun avatarBitmapIsDownscaledWithoutChangingItsRatio() {
-    assertEquals(48 to 96, avatarTargetSize(400, 800))
-    assertEquals(64 to 64, avatarTargetSize(64, 64))
+  fun avatarBitmapIsScaledToItsTargetWithoutChangingItsRatio() {
+    assertEquals(56 to 112, avatarTargetSize(400, 800))
+    assertEquals(112 to 112, avatarTargetSize(64, 64))
+    assertEquals(128 to 256, avatarTargetSize(40, 80, 256))
+  }
+
+  @Test
+  fun avatarTransparentPaddingIsExcludedFromItsContentBounds() {
+    val pixels = IntArray(25)
+    pixels[2 * 5 + 2] = -1
+    assertEquals(AvatarBounds(1, 1, 3, 3), avatarContentBounds(5, 5, pixels, padding = 1))
+    assertEquals(null, avatarContentBounds(5, 5, IntArray(25), padding = 1))
   }
 
   @Test
@@ -34,9 +44,18 @@ class MapleWidgetProviderTest {
 
   @Test
   fun remoteWidgetLayoutsDoNotUseUnsupportedPlainViews() {
-    listOf("widget_favorite_ranking.xml", "widget_primary_weekly.xml").forEach { name ->
+    listOf("widget_favorite_ranking.xml", "widget_primary_weekly.xml", "widget_primary_combined.xml").forEach { name ->
       val layout = File("src/main/res/layout/$name").readText()
       assertFalse("$name must only use RemoteViews-supported classes", Regex("<View(?:\\s|>)").containsMatchIn(layout))
     }
+  }
+
+  @Test
+  fun combinedWidgetIsRegisteredAsFiveByTwo() {
+    val manifest = File("src/main/AndroidManifest.xml").readText()
+    val provider = File("src/main/res/xml/widget_primary_combined_info.xml").readText()
+    assertTrue(manifest.contains(".PrimaryCombinedWidgetProvider"))
+    assertTrue(provider.contains("android:targetCellWidth=\"5\""))
+    assertTrue(provider.contains("android:targetCellHeight=\"2\""))
   }
 }

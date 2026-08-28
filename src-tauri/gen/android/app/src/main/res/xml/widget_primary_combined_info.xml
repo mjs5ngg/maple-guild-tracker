@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 가로 5칸 세로 2칸의 대표 캐릭터 통합 성장 위젯을 등록합니다. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_primary_combined_description"
+    android:initialLayout="@layout/widget_primary_combined"
+    android:minWidth="320dp"
+    android:minHeight="110dp"
+    android:previewLayout="@layout/widget_primary_combined"
+    android:resizeMode="none"
+    android:targetCellWidth="5"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

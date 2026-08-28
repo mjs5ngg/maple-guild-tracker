@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -39,10 +40,37 @@ internal fun formatWidgetGain(value: Long?): String = value?.let { "+${formatWid
 internal fun JSONObject.optionalLong(key: String): Long? = if (isNull(key) || !has(key)) null else optLong(key)
 internal fun JSONObject.optionalDouble(key: String): Double? = if (isNull(key) || !has(key)) null else optDouble(key)
 
-internal fun avatarTargetSize(width: Int, height: Int, maximum: Int = 96): Pair<Int, Int> {
+internal fun avatarTargetSize(width: Int, height: Int, maximum: Int = 112): Pair<Int, Int> {
   if (width <= 0 || height <= 0) return maximum to maximum
-  val scale = minOf(1.0, maximum.toDouble() / maxOf(width, height))
+  val scale = maximum.toDouble() / maxOf(width, height)
   return (width * scale).roundToInt().coerceAtLeast(1) to (height * scale).roundToInt().coerceAtLeast(1)
+}
+
+internal data class AvatarBounds(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+internal fun avatarContentBounds(width: Int, height: Int, pixels: IntArray, padding: Int = 2): AvatarBounds? {
+  if (width <= 0 || height <= 0 || pixels.size < width * height) return null
+  var left = width
+  var top = height
+  var right = -1
+  var bottom = -1
+  pixels.forEachIndexed { index, pixel ->
+    if ((pixel ushr 24) != 0) {
+      val x = index % width
+      val y = index / width
+      left = minOf(left, x)
+      top = minOf(top, y)
+      right = maxOf(right, x)
+      bottom = maxOf(bottom, y)
+    }
+  }
+  if (right < left || bottom < top) return null
+  return AvatarBounds(
+    (left - padding).coerceAtLeast(0),
+    (top - padding).coerceAtLeast(0),
+    (right + padding).coerceAtMost(width - 1),
+    (bottom + padding).coerceAtMost(height - 1),
+  )
 }
 
 internal fun formatWidgetDay(date: String): String = date.takeIf { it.length >= 10 }
@@ -69,7 +97,7 @@ internal fun buildFavoriteRow(context: Context, character: JSONObject, position:
     MapleWidgetRenderer.setAvatar(context, this, R.id.favorite_avatar, character.optLong("character_id"))
   }
 
-enum class WidgetKind { LARGE, WEEKLY, SQUARE }
+enum class WidgetKind { LARGE, WEEKLY, SQUARE, COMBINED }
 
 abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -87,6 +115,7 @@ abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProv
 class FavoriteRankingWidgetProvider : MapleWidgetProvider(WidgetKind.LARGE)
 class PrimaryWeeklyWidgetProvider : MapleWidgetProvider(WidgetKind.WEEKLY)
 class PrimarySquareWidgetProvider : MapleWidgetProvider(WidgetKind.SQUARE)
+class PrimaryCombinedWidgetProvider : MapleWidgetProvider(WidgetKind.COMBINED)
 
 object MapleWidgetRenderer {
   const val PREFERENCES = "maple_home_widgets"
@@ -99,6 +128,7 @@ object MapleWidgetRenderer {
       FavoriteRankingWidgetProvider::class.java to WidgetKind.LARGE,
       PrimaryWeeklyWidgetProvider::class.java to WidgetKind.WEEKLY,
       PrimarySquareWidgetProvider::class.java to WidgetKind.SQUARE,
+      PrimaryCombinedWidgetProvider::class.java to WidgetKind.COMBINED,
     )
     providers.forEach { (provider, kind) ->
       val ids = manager.getAppWidgetIds(ComponentName(context, provider))
@@ -116,6 +146,7 @@ object MapleWidgetRenderer {
       WidgetKind.LARGE -> buildLarge(context, widgetId, snapshot)
       WidgetKind.WEEKLY -> buildWeekly(context, snapshot, characters)
       WidgetKind.SQUARE -> buildSquare(context, characters)
+      WidgetKind.COMBINED -> buildCombined(context, snapshot, characters)
     }
   }
 
@@ -124,13 +155,20 @@ object MapleWidgetRenderer {
     return raw?.let { runCatching { JSONObject(it) }.getOrNull() }
   }
 
-  fun setAvatar(context: Context, views: RemoteViews, viewId: Int, characterId: Long) {
+  fun setAvatar(context: Context, views: RemoteViews, viewId: Int, characterId: Long, maximum: Int = 112) {
     val file = File(File(context.filesDir, AVATAR_DIRECTORY), "$characterId.png")
     val original = if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
-    val bitmap = original?.let {
-      val (width, height) = avatarTargetSize(it.width, it.height)
-      if (width == it.width && height == it.height) it
-      else android.graphics.Bitmap.createScaledBitmap(it, width, height, true).also { _ -> it.recycle() }
+    val bitmap = original?.let { source ->
+      val pixels = IntArray(source.width * source.height)
+      source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
+      val bounds = avatarContentBounds(source.width, source.height, pixels)
+      val cropped = bounds?.let {
+        Bitmap.createBitmap(source, it.left, it.top, it.right - it.left + 1, it.bottom - it.top + 1)
+      } ?: source
+      if (cropped !== source) source.recycle()
+      val (width, height) = avatarTargetSize(cropped.width, cropped.height, maximum)
+      if (width == cropped.width && height == cropped.height) cropped
+      else Bitmap.createScaledBitmap(cropped, width, height, false).also { cropped.recycle() }
     }
     if (bitmap != null) views.setImageViewBitmap(viewId, bitmap)
     else views.setImageViewResource(viewId, R.mipmap.ic_launcher)
@@ -224,9 +262,52 @@ object MapleWidgetRenderer {
       views.setTextViewText(R.id.primary_name, primary.optString("character_name"))
       views.setTextViewText(R.id.primary_rate, formatWidgetRate(primary.optionalDouble("current_exp_rate")))
       views.setTextViewText(R.id.primary_gain, "오늘 ${formatWidgetGain(primary.optionalLong("today_exp"))}")
-      setAvatar(context, views, R.id.primary_avatar, primary.optLong("character_id"))
+      setAvatar(context, views, R.id.primary_avatar, primary.optLong("character_id"), 256)
     }
     views.setOnClickPendingIntent(R.id.primary_widget_root, openApp(context, 6400))
+    return views
+  }
+
+  private fun buildCombined(context: Context, snapshot: JSONObject?, characters: JSONArray): RemoteViews {
+    val views = RemoteViews(context.packageName, R.layout.widget_primary_combined)
+    val primary = primaryCharacter(characters)
+    val points = snapshot?.optJSONArray("primary_weekly_points") ?: JSONArray()
+    val rowIds = intArrayOf(
+      R.id.weekly_day_1,
+      R.id.weekly_day_2,
+      R.id.weekly_day_3,
+      R.id.weekly_day_4,
+      R.id.weekly_day_5,
+      R.id.weekly_day_6,
+      R.id.weekly_day_7,
+    )
+    if (primary == null) {
+      views.setTextViewText(R.id.primary_name, "앱에서 동기화")
+      views.setTextViewText(R.id.primary_rate, "—%")
+      views.setTextViewText(R.id.primary_gain, "오늘 자료 없음")
+    } else {
+      views.setTextViewText(R.id.primary_name, primary.optString("character_name"))
+      views.setTextViewText(R.id.primary_rate, formatWidgetRate(primary.optionalDouble("current_exp_rate")))
+      views.setTextViewText(R.id.primary_gain, "오늘 ${formatWidgetGain(primary.optionalLong("today_exp"))}")
+      setAvatar(context, views, R.id.primary_avatar, primary.optLong("character_id"), 256)
+    }
+    rowIds.forEachIndexed { index, rowId ->
+      val point = points.optJSONObject(index)
+      views.setViewVisibility(rowId, if (point == null) View.GONE else View.VISIBLE)
+      if (point != null) {
+        val level = if (point.isNull("level")) "Lv.—" else "Lv.${point.optLong("level")}"
+        views.setTextViewText(
+          rowId,
+          "${formatWidgetDay(point.optString("date"))} · $level  ${formatWidgetRate(point.optionalDouble("exp_rate"))}  (${formatWidgetGain(point.optionalLong("gained_exp"))})",
+        )
+      }
+    }
+    views.setTextViewText(
+      R.id.weekly_average,
+      "일평균 ${formatWidgetExp(snapshot?.optionalLong("primary_daily_average_exp"))}  ·  남은 경험치 ${formatWidgetExp(snapshot?.optionalLong("primary_remaining_exp"))}",
+    )
+    views.setTextViewText(R.id.weekly_estimate, estimatedLevelUpText(snapshot?.optionalLong("primary_estimated_days")))
+    views.setOnClickPendingIntent(R.id.primary_widget_root, openApp(context, 6500))
     return views
   }
 
