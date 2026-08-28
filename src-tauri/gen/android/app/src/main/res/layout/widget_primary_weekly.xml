@@ -17,7 +17,7 @@
     <TextView android:id="@+id/weekly_day_5" style="@style/MapleWidgetWeeklyDay" />
     <TextView android:id="@+id/weekly_day_6" style="@style/MapleWidgetWeeklyDay" />
     <TextView android:id="@+id/weekly_day_7" style="@style/MapleWidgetWeeklyDay" />
-    <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="2dp" android:layout_marginBottom="1dp" android:background="#313A46" />
+    <TextView android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="2dp" android:layout_marginBottom="1dp" android:background="#313A46" />
     <TextView android:id="@+id/weekly_average" android:layout_width="match_parent" android:layout_height="10dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#D6DAE1" android:textSize="7sp" android:textStyle="bold" />
     <TextView android:id="@+id/weekly_estimate" android:layout_width="match_parent" android:layout_height="10dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#FFAA79" android:textSize="7sp" android:textStyle="bold" />
 </LinearLayout>
