@@ -171,6 +171,9 @@ impl DashboardData {
             .collect();
         let mut primary_weekly_points = primary_weekly_points;
         primary_weekly_points.reverse();
+        if let Some(baseline) = primary_weekly_points.first_mut() {
+            baseline.gained_exp = None;
+        }
         let available: Vec<i64> = primary_weekly_points
             .iter()
             .filter_map(|point| point.gained_exp)
@@ -312,10 +315,10 @@ mod tests {
         assert_eq!(snapshot.characters[1].character_name, "대표");
         assert!(snapshot.characters[1].is_primary);
         assert_eq!(snapshot.primary_weekly_points.len(), 7);
-        assert_eq!(snapshot.primary_weekly_points[0].gained_exp, Some(20));
+        assert_eq!(snapshot.primary_weekly_points[0].gained_exp, None);
         assert_eq!(snapshot.primary_weekly_points[6].gained_exp, Some(80));
-        assert_eq!(snapshot.primary_weekly_exp, Some(350));
-        assert_eq!(snapshot.primary_daily_average_exp, Some(50));
+        assert_eq!(snapshot.primary_weekly_exp, Some(330));
+        assert_eq!(snapshot.primary_daily_average_exp, Some(55));
         assert_eq!(
             snapshot.primary_remaining_exp,
             crate::exp::required_exp(281).map(|required| required - 1)
@@ -324,7 +327,7 @@ mod tests {
             snapshot.primary_estimated_days,
             snapshot
                 .primary_remaining_exp
-                .map(|remaining| (remaining as f64 / 50.0).ceil() as i64)
+                .map(|remaining| (remaining as f64 / 55.0).ceil() as i64)
         );
     }
 }

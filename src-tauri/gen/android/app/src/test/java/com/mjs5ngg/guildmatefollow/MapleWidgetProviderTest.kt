@@ -24,8 +24,14 @@ class MapleWidgetProviderTest {
   }
 
   @Test
-  fun widgetDayUsesKoreanMonthAndDay() {
-    assertEquals("08월 27일", formatWidgetDay("2026-08-27"))
+  fun widgetDayUsesCompactMonthAndDay() {
+    assertEquals("08.27", formatWidgetDay("2026-08-27"))
+  }
+
+  @Test
+  fun firstWeeklyPointIsRenderedAsBaseline() {
+    assertEquals("기준", formatWeeklyGain(100L, baseline = true))
+    assertEquals("+100", formatWeeklyGain(100L, baseline = false))
   }
 
   @Test
@@ -57,5 +63,17 @@ class MapleWidgetProviderTest {
     assertTrue(manifest.contains(".PrimaryCombinedWidgetProvider"))
     assertTrue(provider.contains("android:targetCellWidth=\"5\""))
     assertTrue(provider.contains("android:targetCellHeight=\"2\""))
+  }
+
+  @Test
+  fun widgetLabelsAndAvatarPanelsUseTheSimplifiedDesign() {
+    val ranking = File("src/main/res/layout/widget_favorite_ranking.xml").readText()
+    val square = File("src/main/res/layout/widget_primary_square.xml").readText()
+    val combined = File("src/main/res/layout/widget_primary_combined.xml").readText()
+    assertFalse(ranking.contains("favorite_count"))
+    assertFalse(square.contains("PRIMARY"))
+    assertFalse(combined.contains("PRIMARY"))
+    assertFalse(square.contains("maple_widget_avatar_panel"))
+    assertFalse(combined.contains("maple_widget_avatar_panel"))
   }
 }

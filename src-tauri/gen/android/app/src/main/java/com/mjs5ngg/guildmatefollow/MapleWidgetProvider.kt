@@ -74,8 +74,11 @@ internal fun avatarContentBounds(width: Int, height: Int, pixels: IntArray, padd
 }
 
 internal fun formatWidgetDay(date: String): String = date.takeIf { it.length >= 10 }
-  ?.let { "${it.substring(5, 7)}월 ${it.substring(8, 10)}일" }
+  ?.let { "${it.substring(5, 7)}.${it.substring(8, 10)}" }
   ?: "날짜 없음"
+
+internal fun formatWeeklyGain(value: Long?, baseline: Boolean): String =
+  if (baseline) "기준" else formatWidgetGain(value)
 
 internal fun estimatedLevelUpText(days: Long?): String {
   if (days == null || days < 0) return "예상 레벨업 · 계산 불가"
@@ -199,7 +202,6 @@ object MapleWidgetRenderer {
     }
     views.setEmptyView(R.id.favorite_list, R.id.favorite_empty)
     views.setOnClickPendingIntent(R.id.favorite_header, openApp(context, 6200 + widgetId))
-    views.setTextViewText(R.id.favorite_count, "${characters.length()}명")
     val updated = snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at").orEmpty().replace('T', ' ').take(16)
     views.setTextViewText(R.id.favorite_updated, if (updated.isBlank()) "앱에서 동기화해 주세요" else "$updated 갱신")
     return views
@@ -232,7 +234,7 @@ object MapleWidgetRenderer {
       if (point != null) {
         val level = if (point.isNull("level")) "Lv.—" else "Lv.${point.optLong("level")}"
         val rate = formatWidgetRate(point.optionalDouble("exp_rate"))
-        val gain = formatWidgetGain(point.optionalLong("gained_exp"))
+        val gain = formatWeeklyGain(point.optionalLong("gained_exp"), index == 0)
         views.setTextViewText(
           rowId,
           "${formatWidgetDay(point.optString("date"))} · $level  $rate  ($gain)",
@@ -298,7 +300,7 @@ object MapleWidgetRenderer {
         val level = if (point.isNull("level")) "Lv.—" else "Lv.${point.optLong("level")}"
         views.setTextViewText(
           rowId,
-          "${formatWidgetDay(point.optString("date"))} · $level  ${formatWidgetRate(point.optionalDouble("exp_rate"))}  (${formatWidgetGain(point.optionalLong("gained_exp"))})",
+          "${formatWidgetDay(point.optString("date"))} · $level  ${formatWidgetRate(point.optionalDouble("exp_rate"))}  (${formatWeeklyGain(point.optionalLong("gained_exp"), index == 0)})",
         )
       }
     }
