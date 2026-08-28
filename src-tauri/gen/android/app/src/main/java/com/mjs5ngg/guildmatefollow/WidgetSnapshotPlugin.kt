@@ -11,6 +11,9 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+internal fun standingAvatarUrl(imageUrl: String, frame: Int): String =
+  "${imageUrl.substringBefore('?')}?action=A00.${frame.coerceIn(0, 3)}&width=128&height=128&x=64&y=90"
+
 @TauriPlugin
 class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
@@ -34,7 +37,6 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun cacheAvatars(filesDir: File, snapshot: JSONObject) {
-    val preferences = activity.applicationContext.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
     val directory = File(filesDir, MapleWidgetRenderer.AVATAR_DIRECTORY).apply { mkdirs() }
     val activeFiles = mutableSetOf<String>()
     val characters = snapshot.optJSONArray("characters") ?: return
@@ -47,19 +49,35 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
       activeFiles += fileName
       val destination = File(directory, fileName)
       val urlKey = "avatar_url_$id"
-      if (destination.isFile && preferences.getString(urlKey, null) == imageUrl) continue
-      try {
-        val connection = URL(imageUrl).openConnection() as HttpURLConnection
-        connection.connectTimeout = 8_000
-        connection.readTimeout = 8_000
-        connection.instanceFollowRedirects = true
-        connection.inputStream.use { input -> destination.outputStream().use(input::copyTo) }
-        connection.disconnect()
-        preferences.edit().putString(urlKey, imageUrl).apply()
-      } catch (_: Exception) {
-        // 기존 캐시가 있으면 유지하고 다음 동기화에서 다시 시도합니다.
+      cacheAvatarFile(destination, urlKey, imageUrl)
+      if (character.optBoolean("is_primary")) {
+        repeat(4) { frame ->
+          val standingFileName = "${id}_stand_$frame.png"
+          activeFiles += standingFileName
+          cacheAvatarFile(
+            File(directory, standingFileName),
+            "avatar_stand_url_${id}_$frame",
+            standingAvatarUrl(imageUrl, frame),
+          )
+        }
       }
     }
     directory.listFiles()?.filter { it.name !in activeFiles }?.forEach { it.delete() }
+  }
+
+  private fun cacheAvatarFile(destination: File, urlKey: String, imageUrl: String) {
+    val preferences = activity.applicationContext.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
+    if (destination.isFile && preferences.getString(urlKey, null) == imageUrl) return
+    try {
+      val connection = URL(imageUrl).openConnection() as HttpURLConnection
+      connection.connectTimeout = 8_000
+      connection.readTimeout = 8_000
+      connection.instanceFollowRedirects = true
+      connection.inputStream.use { input -> destination.outputStream().use(input::copyTo) }
+      connection.disconnect()
+      preferences.edit().putString(urlKey, imageUrl).apply()
+    } catch (_: Exception) {
+      // 기존 캐시가 있으면 유지하고 다음 동기화에서 다시 시도합니다.
+    }
   }
 }

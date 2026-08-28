@@ -28,7 +28,7 @@ npm run package:windows
 
 ## Android 설치 방법
 
-`release/guildmate-follow-android-arm64-v0.3.8.apk`를 Android 기기로 옮겨 실행합니다. 브라우저나 파일 관리자가 요청하면 해당 앱에만 `알 수 없는 앱 설치` 권한을 허용합니다. Android 7.0 이상 ARM64 기기를 지원합니다.
+`release/guildmate-follow-android-arm64-v0.3.9.apk`를 Android 기기로 옮겨 실행합니다. 브라우저나 파일 관리자가 요청하면 해당 앱에만 `알 수 없는 앱 설치` 권한을 허용합니다. Android 7.0 이상 ARM64 기기를 지원합니다.
 
 Android 홈 화면의 빈 곳을 길게 누르고 `위젯`에서 `길드원 따라가기`를 선택하면 다음 세 종류를 추가할 수 있습니다.
 

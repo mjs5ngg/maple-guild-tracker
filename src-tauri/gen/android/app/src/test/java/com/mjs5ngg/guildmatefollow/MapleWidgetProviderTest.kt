@@ -43,6 +43,16 @@ class MapleWidgetProviderTest {
   }
 
   @Test
+  fun standingAvatarUrlUsesFourOfficialIdleFrames() {
+    val image = "https://open.api.nexon.com/static/maplestory/character/look/abc.png?width=96"
+    assertEquals(
+      "https://open.api.nexon.com/static/maplestory/character/look/abc.png?action=A00.0&width=128&height=128&x=64&y=90",
+      standingAvatarUrl(image, 0),
+    )
+    assertTrue((0..3).all { standingAvatarUrl(image, it).contains("action=A00.$it") })
+  }
+
+  @Test
   fun experienceUsesKoreanUnitsAndMissingState() {
     assertEquals("2.2조", formatWidgetExp(2_200_000_000_000L))
     assertEquals("3.5억", formatWidgetExp(350_000_000L))
@@ -71,6 +81,45 @@ class MapleWidgetProviderTest {
     assertTrue(manifest.contains(".PrimaryCombinedWidgetProvider"))
     assertTrue(provider.contains("android:targetCellWidth=\"5\""))
     assertTrue(provider.contains("android:targetCellHeight=\"2\""))
+  }
+
+  @Test
+  fun largeWidgetCanShrinkToThreeByThree() {
+    val provider = File("src/main/res/xml/widget_favorite_ranking_info.xml").readText()
+    assertTrue(provider.contains("android:minResizeWidth=\"180dp\""))
+    assertTrue(provider.contains("android:minResizeHeight=\"180dp\""))
+  }
+
+  @Test
+  fun representativeWidgetsUseFourFrameIdleAnimation() {
+    listOf("widget_primary_square.xml", "widget_primary_combined.xml").forEach { name ->
+      val layout = File("src/main/res/layout/$name").readText()
+      assertTrue(layout.contains("<ViewFlipper"))
+      assertTrue(layout.contains("android:autoStart=\"true\""))
+      assertTrue((0..3).all { layout.contains("primary_avatar_frame_$it") })
+    }
+  }
+
+  @Test
+  fun smallWidgetTextIsAtLeastTwelveExceptUpdatedTime() {
+    val layouts = File("src/main/res/layout").listFiles().orEmpty().filter { it.name.startsWith("widget_") }
+    layouts.forEach { file ->
+      Regex("android:textSize=\"(\\d+)sp\"").findAll(file.readText()).forEach { match ->
+        val size = match.groupValues[1].toInt()
+        val isUpdatedTime = file.name == "widget_favorite_ranking.xml" && size == 8
+        assertTrue("${file.name} contains an unexpected ${size}sp font", isUpdatedTime || size >= 12)
+      }
+    }
+  }
+
+  @Test
+  fun largeWidgetHasCompactRankBadgesAndManualRefresh() {
+    val styles = File("src/main/res/values/widget_styles.xml").readText()
+    val layout = File("src/main/res/layout/widget_favorite_ranking.xml").readText()
+    assertTrue(styles.contains("name=\"MapleWidgetRankNumber\""))
+    assertTrue(styles.contains("android:layout_width\">22dp"))
+    assertTrue(styles.contains("android:layout_height\">22dp"))
+    assertTrue(layout.contains("android:id=\"@+id/favorite_refresh\""))
   }
 
   @Test

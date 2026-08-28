@@ -172,6 +172,25 @@ object MapleWidgetRenderer {
 
   fun setAvatar(context: Context, views: RemoteViews, viewId: Int, characterId: Long, maximum: Int = 112) {
     val file = File(File(context.filesDir, AVATAR_DIRECTORY), "$characterId.png")
+    setAvatarFile(views, viewId, file, maximum)
+  }
+
+  private fun setStandingAvatar(context: Context, views: RemoteViews, characterId: Long) {
+    val directory = File(context.filesDir, AVATAR_DIRECTORY)
+    val fallback = File(directory, "$characterId.png")
+    val frameIds = intArrayOf(
+      R.id.primary_avatar_frame_0,
+      R.id.primary_avatar_frame_1,
+      R.id.primary_avatar_frame_2,
+      R.id.primary_avatar_frame_3,
+    )
+    frameIds.forEachIndexed { index, viewId ->
+      val frame = File(directory, "${characterId}_stand_$index.png").takeIf { it.isFile } ?: fallback
+      setAvatarFile(views, viewId, frame, 160)
+    }
+  }
+
+  private fun setAvatarFile(views: RemoteViews, viewId: Int, file: File, maximum: Int) {
     val original = if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
     val bitmap = original?.let { source ->
       val pixels = IntArray(source.width * source.height)
@@ -214,6 +233,7 @@ object MapleWidgetRenderer {
     }
     views.setEmptyView(R.id.favorite_list, R.id.favorite_empty)
     views.setOnClickPendingIntent(R.id.favorite_header, openApp(context, 6200 + widgetId))
+    views.setOnClickPendingIntent(R.id.favorite_refresh, openApp(context, 7200 + widgetId))
     val updated = formatWidgetUpdatedAt(snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at"))
     views.setTextViewText(R.id.favorite_updated, updated?.let { "$it 갱신" } ?: "앱에서 동기화해 주세요")
     return views
@@ -276,7 +296,7 @@ object MapleWidgetRenderer {
       views.setTextViewText(R.id.primary_name, primary.optString("character_name"))
       views.setTextViewText(R.id.primary_rate, formatWidgetRate(primary.optionalDouble("current_exp_rate")))
       views.setTextViewText(R.id.primary_gain, "오늘 ${formatWidgetGain(primary.optionalLong("today_exp"))}")
-      setAvatar(context, views, R.id.primary_avatar, primary.optLong("character_id"), 256)
+      setStandingAvatar(context, views, primary.optLong("character_id"))
     }
     views.setOnClickPendingIntent(R.id.primary_widget_root, openApp(context, 6400))
     return views
@@ -303,7 +323,7 @@ object MapleWidgetRenderer {
       views.setTextViewText(R.id.primary_name, primary.optString("character_name"))
       views.setTextViewText(R.id.primary_rate, formatWidgetRate(primary.optionalDouble("current_exp_rate")))
       views.setTextViewText(R.id.primary_gain, "오늘 ${formatWidgetGain(primary.optionalLong("today_exp"))}")
-      setAvatar(context, views, R.id.primary_avatar, primary.optLong("character_id"), 256)
+      setStandingAvatar(context, views, primary.optLong("character_id"))
     }
     rowIds.forEachIndexed { index, rowId ->
       val point = points.optJSONObject(index)
