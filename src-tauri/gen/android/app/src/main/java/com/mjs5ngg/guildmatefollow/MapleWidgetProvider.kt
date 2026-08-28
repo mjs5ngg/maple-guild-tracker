@@ -77,8 +77,8 @@ internal fun formatWidgetDay(date: String): String = date.takeIf { it.length >= 
   ?.let { "${it.substring(5, 7)}.${it.substring(8, 10)}" }
   ?: "날짜 없음"
 
-internal fun formatWeeklyGain(value: Long?, baseline: Boolean): String =
-  if (baseline) "기준" else formatWidgetGain(value)
+internal fun formatWeeklyGainSuffix(value: Long?, baseline: Boolean): String =
+  if (baseline) "" else " (${formatWidgetGain(value)})"
 
 internal fun estimatedLevelUpText(days: Long?): String {
   if (days == null || days < 0) return "예상 레벨업 · 계산 불가"
@@ -234,10 +234,10 @@ object MapleWidgetRenderer {
       if (point != null) {
         val level = if (point.isNull("level")) "Lv.—" else "Lv.${point.optLong("level")}"
         val rate = formatWidgetRate(point.optionalDouble("exp_rate"))
-        val gain = formatWeeklyGain(point.optionalLong("gained_exp"), index == 0)
+        val gainSuffix = formatWeeklyGainSuffix(point.optionalLong("gained_exp"), index == 0)
         views.setTextViewText(
           rowId,
-          "${formatWidgetDay(point.optString("date"))} · $level  $rate  ($gain)",
+          "${formatWidgetDay(point.optString("date"))} · $level  $rate$gainSuffix",
         )
       }
     }
@@ -300,7 +300,7 @@ object MapleWidgetRenderer {
         val level = if (point.isNull("level")) "Lv.—" else "Lv.${point.optLong("level")}"
         views.setTextViewText(
           rowId,
-          "${formatWidgetDay(point.optString("date"))} · $level  ${formatWidgetRate(point.optionalDouble("exp_rate"))}  (${formatWeeklyGain(point.optionalLong("gained_exp"), index == 0)})",
+          "${formatWidgetDay(point.optString("date"))} · $level  ${formatWidgetRate(point.optionalDouble("exp_rate"))}${formatWeeklyGainSuffix(point.optionalLong("gained_exp"), index == 0)}",
         )
       }
     }

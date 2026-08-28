@@ -29,9 +29,9 @@ class MapleWidgetProviderTest {
   }
 
   @Test
-  fun firstWeeklyPointIsRenderedAsBaseline() {
-    assertEquals("기준", formatWeeklyGain(100L, baseline = true))
-    assertEquals("+100", formatWeeklyGain(100L, baseline = false))
+  fun firstWeeklyPointDoesNotRenderAGainSuffix() {
+    assertEquals("", formatWeeklyGainSuffix(100L, baseline = true))
+    assertEquals(" (+100)", formatWeeklyGainSuffix(100L, baseline = false))
   }
 
   @Test
@@ -75,5 +75,13 @@ class MapleWidgetProviderTest {
     assertFalse(combined.contains("PRIMARY"))
     assertFalse(square.contains("maple_widget_avatar_panel"))
     assertFalse(combined.contains("maple_widget_avatar_panel"))
+  }
+
+  @Test
+  fun requestedFontSizeExceptionsRemainUnchanged() {
+    val ranking = File("src/main/res/layout/widget_favorite_ranking.xml").readText()
+    val square = File("src/main/res/layout/widget_primary_square.xml").readText()
+    assertTrue(Regex("android:text=\"즐겨찾기 랭킹\"[^>]*android:textSize=\"17sp\"").containsMatchIn(ranking))
+    assertTrue(Regex("android:id=\"@\\+id/primary_rate\"[^>]*android:textSize=\"18sp\"").containsMatchIn(square))
   }
 }

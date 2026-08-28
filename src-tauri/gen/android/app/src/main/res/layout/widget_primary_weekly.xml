@@ -9,7 +9,7 @@
     android:paddingTop="2dp"
     android:paddingBottom="2dp">
 
-    <TextView android:id="@+id/primary_name" android:layout_width="match_parent" android:layout_height="18dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#F7F8FA" android:textSize="12sp" android:textStyle="bold" />
+    <TextView android:id="@+id/primary_name" android:layout_width="match_parent" android:layout_height="18dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#F7F8FA" android:textSize="13sp" android:textStyle="bold" />
     <TextView android:id="@+id/weekly_day_1" style="@style/MapleWidgetWeeklyDay" />
     <TextView android:id="@+id/weekly_day_2" style="@style/MapleWidgetWeeklyDay" />
     <TextView android:id="@+id/weekly_day_3" style="@style/MapleWidgetWeeklyDay" />
@@ -18,6 +18,6 @@
     <TextView android:id="@+id/weekly_day_6" style="@style/MapleWidgetWeeklyDay" />
     <TextView android:id="@+id/weekly_day_7" style="@style/MapleWidgetWeeklyDay" />
     <TextView android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:background="#313A46" />
-    <TextView android:id="@+id/weekly_average" android:layout_width="match_parent" android:layout_height="14dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#D6DAE1" android:textSize="9sp" android:textStyle="bold" />
-    <TextView android:id="@+id/weekly_estimate" android:layout_width="match_parent" android:layout_height="14dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#FFAA79" android:textSize="9sp" android:textStyle="bold" />
+    <TextView android:id="@+id/weekly_average" android:layout_width="match_parent" android:layout_height="14dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#D6DAE1" android:textSize="11sp" android:textStyle="bold" />
+    <TextView android:id="@+id/weekly_estimate" android:layout_width="match_parent" android:layout_height="14dp" android:ellipsize="end" android:gravity="center_vertical" android:maxLines="1" android:textColor="#FFAA79" android:textSize="10sp" android:textStyle="bold" />
 </LinearLayout>

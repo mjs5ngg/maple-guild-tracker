@@ -15,7 +15,7 @@
         android:orientation="horizontal">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="즐겨찾기 랭킹" android:textColor="#F7F8FA" android:textSize="17sp" android:textStyle="bold" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:text="TODAY · 획득 경험치" android:textColor="#FF8A4C" android:textSize="9sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:text="TODAY · 획득 경험치" android:textColor="#FF8A4C" android:textSize="11sp" android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 
@@ -32,10 +32,10 @@
             android:overScrollMode="never"
             android:scrollbars="vertical" />
         <LinearLayout android:id="@+id/favorite_empty" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:orientation="vertical">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☆" android:textColor="#596575" android:textSize="28sp" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="즐겨찾기를 동기화해 주세요" android:textColor="#8C96A5" android:textSize="11sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☆" android:textColor="#596575" android:textSize="29sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="즐겨찾기를 동기화해 주세요" android:textColor="#8C96A5" android:textSize="12sp" />
         </LinearLayout>
     </FrameLayout>
 
-    <TextView android:id="@+id/favorite_updated" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="end|bottom" android:maxLines="1" android:textColor="#657080" android:textSize="8sp" />
+    <TextView android:id="@+id/favorite_updated" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="end|bottom" android:maxLines="1" android:textColor="#657080" android:textSize="9sp" />
 </LinearLayout>

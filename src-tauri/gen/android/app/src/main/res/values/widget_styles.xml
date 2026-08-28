@@ -7,7 +7,7 @@
         <item name="android:background">@drawable/maple_widget_rank_background</item>
         <item name="android:gravity">center</item>
         <item name="android:textColor">#FFAA79</item>
-        <item name="android:textSize">10sp</item>
+        <item name="android:textSize">11sp</item>
         <item name="android:textStyle">bold</item>
     </style>
     <style name="MapleWidgetAvatar">
@@ -25,6 +25,6 @@
         <item name="android:gravity">center_vertical</item>
         <item name="android:maxLines">1</item>
         <item name="android:textColor">#B8C0CC</item>
-        <item name="android:textSize">9sp</item>
+        <item name="android:textSize">11sp</item>
     </style>
 </resources>
