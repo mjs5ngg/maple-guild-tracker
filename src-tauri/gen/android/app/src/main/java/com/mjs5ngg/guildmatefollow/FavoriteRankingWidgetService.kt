@@ -8,10 +8,14 @@ import android.widget.RemoteViewsService
 import org.json.JSONArray
 
 class FavoriteRankingWidgetService : RemoteViewsService() {
-  override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = FavoriteRankingFactory(applicationContext)
+  override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
+    FavoriteRankingFactory(applicationContext, intent.getBooleanExtra("compact", false))
 }
 
-private class FavoriteRankingFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
+private class FavoriteRankingFactory(
+  private val context: Context,
+  private val compact: Boolean,
+) : RemoteViewsService.RemoteViewsFactory {
   private var characters = JSONArray()
 
   override fun onCreate() = reload()
@@ -25,7 +29,7 @@ private class FavoriteRankingFactory(private val context: Context) : RemoteViews
 
   override fun getViewAt(position: Int): RemoteViews? {
     val character = characters.optJSONObject(position) ?: return null
-    return buildFavoriteRow(context, character, position)
+    return buildFavoriteRow(context, character, position, compact)
   }
 
   private fun reload() {

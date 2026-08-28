@@ -24,6 +24,16 @@ class MapleWidgetProviderTest {
   }
 
   @Test
+  fun standingFramesShareOneContentBounds() {
+    val first = IntArray(25).also { it[1 * 5 + 1] = -1 }
+    val last = IntArray(25).also { it[3 * 5 + 3] = -1 }
+    assertEquals(
+      AvatarBounds(0, 0, 4, 4),
+      combinedAvatarContentBounds(5, 5, listOf(first, last), padding = 1),
+    )
+  }
+
+  @Test
   fun widgetDayUsesCompactMonthAndDay() {
     assertEquals("08.27", formatWidgetDay("2026-08-27"))
   }
@@ -64,6 +74,13 @@ class MapleWidgetProviderTest {
   fun rateKeepsThreeDecimalPlaces() {
     assertEquals("30.123%", formatWidgetRate(30.1234))
     assertEquals("—%", formatWidgetRate(null))
+  }
+
+  @Test
+  fun compactRankingValuesDropDecimalPlaces() {
+    assertEquals("12%", formatCompactWidgetRate(12.345))
+    assertEquals("+12조", formatCompactWidgetGain(12_300_000_000_000L))
+    assertEquals("+0", formatCompactWidgetGain(0L))
   }
 
   @Test
@@ -128,6 +145,8 @@ class MapleWidgetProviderTest {
       assertTrue(layout.contains("android:src=\"@drawable/maple_widget_crown\""))
       assertFalse(layout.contains("android:text=\"대표캐릭터\""))
     }
+    assertTrue(row.indexOf("@+id/favorite_primary") < row.indexOf("@+id/favorite_name"))
+    assertTrue(Regex("android:id=\"@\\+id/primary_name\"[^>]*android:gravity=\"start\"").containsMatchIn(square))
   }
 
   @Test
@@ -150,12 +169,13 @@ class MapleWidgetProviderTest {
   }
 
   @Test
-  fun largeWidgetHasCompactRankBadgesAndManualRefresh() {
+  fun largeWidgetHasCompactRankNumbersAndManualRefresh() {
     val styles = File("src/main/res/values/widget_styles.xml").readText()
     val layout = File("src/main/res/layout/widget_favorite_ranking.xml").readText()
     assertTrue(styles.contains("name=\"MapleWidgetRankNumber\""))
-    assertTrue(styles.contains("android:layout_width\">22dp"))
+    assertTrue(styles.contains("android:layout_width\">14dp"))
     assertTrue(styles.contains("android:layout_height\">22dp"))
+    assertFalse(styles.contains("@drawable/maple_widget_rank_background"))
     assertTrue(layout.contains("android:id=\"@+id/favorite_refresh\""))
   }
 

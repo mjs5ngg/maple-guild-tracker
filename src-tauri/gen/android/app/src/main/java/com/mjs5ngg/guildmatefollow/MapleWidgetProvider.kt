@@ -37,6 +37,18 @@ internal fun formatWidgetRate(value: Double?): String = value?.let {
 
 internal fun formatWidgetGain(value: Long?): String = value?.let { "+${formatWidgetExp(it)}" } ?: "자료 없음"
 
+internal fun formatCompactWidgetRate(value: Double?): String = value?.let {
+  String.format(Locale.KOREA, "%.0f%%", it)
+} ?: "—%"
+
+internal fun formatCompactWidgetGain(value: Long?): String = when {
+  value == null -> "자료 없음"
+  abs(value) >= 1_000_000_000_000L -> String.format(Locale.KOREA, "+%.0f조", value / 1_000_000_000_000.0)
+  abs(value) >= 100_000_000L -> String.format(Locale.KOREA, "+%.0f억", value / 100_000_000.0)
+  abs(value) >= 10_000L -> String.format(Locale.KOREA, "+%.0f만", value / 10_000.0)
+  else -> String.format(Locale.KOREA, "+%,d", value)
+}
+
 internal fun JSONObject.optionalLong(key: String): Long? = if (isNull(key) || !has(key)) null else optLong(key)
 internal fun JSONObject.optionalDouble(key: String): Double? = if (isNull(key) || !has(key)) null else optDouble(key)
 
@@ -73,6 +85,22 @@ internal fun avatarContentBounds(width: Int, height: Int, pixels: IntArray, padd
   )
 }
 
+internal fun combinedAvatarContentBounds(
+  width: Int,
+  height: Int,
+  frames: List<IntArray>,
+  padding: Int = 4,
+): AvatarBounds? {
+  val bounds = frames.mapNotNull { avatarContentBounds(width, height, it, padding = 0) }
+  if (bounds.isEmpty()) return null
+  return AvatarBounds(
+    (bounds.minOf { it.left } - padding).coerceAtLeast(0),
+    (bounds.minOf { it.top } - padding).coerceAtLeast(0),
+    (bounds.maxOf { it.right } + padding).coerceAtMost(width - 1),
+    (bounds.maxOf { it.bottom } + padding).coerceAtMost(height - 1),
+  )
+}
+
 internal fun formatWidgetDay(date: String): String = date.takeIf { it.length >= 10 }
   ?.let { "${it.substring(5, 7)}.${it.substring(8, 10)}" }
   ?: "날짜 없음"
@@ -101,13 +129,15 @@ internal fun estimatedLevelUpText(days: Long?): String {
   return "예상 레벨업 · $date (${days}일 후)"
 }
 
-internal fun buildFavoriteRow(context: Context, character: JSONObject, position: Int): RemoteViews =
+internal fun buildFavoriteRow(context: Context, character: JSONObject, position: Int, compact: Boolean = false): RemoteViews =
   RemoteViews(context.packageName, R.layout.widget_favorite_ranking_row).apply {
     setTextViewText(R.id.favorite_rank, character.optInt("rank", position + 1).toString())
     setTextViewText(R.id.favorite_name, character.optString("character_name"))
     setViewVisibility(R.id.favorite_primary, if (character.optBoolean("is_primary")) View.VISIBLE else View.GONE)
-    setTextViewText(R.id.favorite_detail, "Lv.${character.optLong("level")}  ·  ${formatWidgetRate(character.optionalDouble("current_exp_rate"))}")
-    setTextViewText(R.id.favorite_gain, formatWidgetGain(character.optionalLong("today_exp")))
+    val rate = if (compact) formatCompactWidgetRate(character.optionalDouble("current_exp_rate")) else formatWidgetRate(character.optionalDouble("current_exp_rate"))
+    val gain = if (compact) formatCompactWidgetGain(character.optionalLong("today_exp")) else formatWidgetGain(character.optionalLong("today_exp"))
+    setTextViewText(R.id.favorite_detail, "Lv.${character.optLong("level")}  ·  $rate")
+    setTextViewText(R.id.favorite_gain, gain)
     MapleWidgetRenderer.setAvatar(context, this, R.id.favorite_avatar, character.optLong("character_id"))
   }
 
@@ -183,10 +213,27 @@ object MapleWidgetRenderer {
       R.id.primary_avatar_frame_2,
       R.id.primary_avatar_frame_3,
     )
-    frameIds.forEachIndexed { index, viewId ->
-      val frame = File(directory, "${characterId}_stand_$index.png")
-      if (frame.isFile) setAvatarFile(views, viewId, frame, 160, cropTransparentPadding = false)
-      else setAvatarFile(views, viewId, fallback, 160)
+    val frames = frameIds.indices.map { index ->
+      File(directory, "${characterId}_stand_$index.png").takeIf { it.isFile }
+        ?.let { BitmapFactory.decodeFile(it.absolutePath) }
+    }
+    val bitmaps = frames.filterNotNull()
+    val sameCanvas = bitmaps.size == frameIds.size && bitmaps.all {
+      it.width == bitmaps.first().width && it.height == bitmaps.first().height
+    }
+    if (sameCanvas) {
+      val pixels = bitmaps.map { bitmap ->
+        IntArray(bitmap.width * bitmap.height).also {
+          bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        }
+      }
+      val commonBounds = combinedAvatarContentBounds(bitmaps.first().width, bitmaps.first().height, pixels)
+      frameIds.forEachIndexed { index, viewId ->
+        setAvatarBitmap(views, viewId, bitmaps[index], 192, commonBounds)
+      }
+    } else {
+      bitmaps.forEach(Bitmap::recycle)
+      frameIds.forEach { viewId -> setAvatarFile(views, viewId, fallback, 192) }
     }
   }
 
@@ -195,24 +242,32 @@ object MapleWidgetRenderer {
     viewId: Int,
     file: File,
     maximum: Int,
-    cropTransparentPadding: Boolean = true,
   ) {
     val original = if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
-    val bitmap = original?.let { source ->
-      val cropped = if (cropTransparentPadding) {
-        val pixels = IntArray(source.width * source.height)
-        source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
-        avatarContentBounds(source.width, source.height, pixels)?.let {
-          Bitmap.createBitmap(source, it.left, it.top, it.right - it.left + 1, it.bottom - it.top + 1)
-        } ?: source
-      } else source
-      if (cropped !== source) source.recycle()
-      val (width, height) = avatarTargetSize(cropped.width, cropped.height, maximum)
-      if (width == cropped.width && height == cropped.height) cropped
-      else Bitmap.createScaledBitmap(cropped, width, height, false).also { cropped.recycle() }
+    val bounds = original?.let { source ->
+      val pixels = IntArray(source.width * source.height)
+      source.getPixels(pixels, 0, source.width, 0, 0, source.width, source.height)
+      avatarContentBounds(source.width, source.height, pixels)
     }
-    if (bitmap != null) views.setImageViewBitmap(viewId, bitmap)
+    if (original != null) setAvatarBitmap(views, viewId, original, maximum, bounds)
     else views.setImageViewResource(viewId, R.mipmap.ic_launcher)
+  }
+
+  private fun setAvatarBitmap(
+    views: RemoteViews,
+    viewId: Int,
+    source: Bitmap,
+    maximum: Int,
+    bounds: AvatarBounds?,
+  ) {
+    val cropped = bounds?.let {
+      Bitmap.createBitmap(source, it.left, it.top, it.right - it.left + 1, it.bottom - it.top + 1)
+    } ?: source
+    if (cropped !== source) source.recycle()
+    val (width, height) = avatarTargetSize(cropped.width, cropped.height, maximum)
+    val bitmap = if (width == cropped.width && height == cropped.height) cropped
+    else Bitmap.createScaledBitmap(cropped, width, height, false).also { cropped.recycle() }
+    views.setImageViewBitmap(viewId, bitmap)
   }
 
   fun openApp(context: Context, requestCode: Int): PendingIntent {
@@ -223,18 +278,22 @@ object MapleWidgetRenderer {
   private fun buildLarge(context: Context, widgetId: Int, snapshot: JSONObject?): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_favorite_ranking)
     val characters = snapshot?.optJSONArray("characters") ?: JSONArray()
+    val widgetWidth = AppWidgetManager.getInstance(context).getAppWidgetOptions(widgetId)
+      .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+    val compact = widgetWidth <= 230
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       val items = RemoteViews.RemoteCollectionItems.Builder()
         .setHasStableIds(true)
         .setViewTypeCount(1)
       for (position in 0 until characters.length()) {
         val character = characters.getJSONObject(position)
-        items.addItem(character.optLong("character_id", position.toLong()), buildFavoriteRow(context, character, position))
+        items.addItem(character.optLong("character_id", position.toLong()), buildFavoriteRow(context, character, position, compact))
       }
       views.setRemoteAdapter(R.id.favorite_list, items.build())
     } else {
       val serviceIntent = Intent(context, FavoriteRankingWidgetService::class.java)
         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+        .putExtra("compact", compact)
       serviceIntent.data = Uri.parse(serviceIntent.toUri(Intent.URI_INTENT_SCHEME))
       views.setRemoteAdapter(R.id.favorite_list, serviceIntent)
     }

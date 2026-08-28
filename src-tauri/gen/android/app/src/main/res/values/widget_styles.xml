@@ -2,9 +2,8 @@
 <!-- 대형 위젯 순위 행의 반복 스타일을 정의합니다. -->
 <resources>
     <style name="MapleWidgetRankNumber">
-        <item name="android:layout_width">22dp</item>
+        <item name="android:layout_width">14dp</item>
         <item name="android:layout_height">22dp</item>
-        <item name="android:background">@drawable/maple_widget_rank_background</item>
         <item name="android:gravity">center</item>
         <item name="android:textColor">#FFAA79</item>
         <item name="android:textSize">12sp</item>
@@ -13,7 +12,7 @@
     <style name="MapleWidgetAvatar">
         <item name="android:layout_width">52dp</item>
         <item name="android:layout_height">52dp</item>
-        <item name="android:layout_marginStart">3dp</item>
+        <item name="android:layout_marginStart">0dp</item>
         <item name="android:adjustViewBounds">true</item>
         <item name="android:scaleType">fitCenter</item>
     </style>
