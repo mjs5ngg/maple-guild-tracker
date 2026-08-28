@@ -37,5 +37,5 @@
         </LinearLayout>
     </FrameLayout>
 
-    <TextView android:id="@+id/favorite_updated" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="end|bottom" android:maxLines="1" android:textColor="#657080" android:textSize="9sp" />
+    <TextView android:id="@+id/favorite_updated" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="end|bottom" android:maxLines="1" android:textColor="#657080" android:textSize="8sp" />
 </LinearLayout>

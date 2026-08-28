@@ -35,6 +35,14 @@ class MapleWidgetProviderTest {
   }
 
   @Test
+  fun widgetUpdatedTimeAlwaysUsesTwentyFourHourFormat() {
+    assertEquals("2026-08-28 21:05", formatWidgetUpdatedAt("2026-08-28T21:05:11+09:00"))
+    assertEquals("2026-08-28 00:05", formatWidgetUpdatedAt("2026-08-28 오전 12:05"))
+    assertEquals("2026-08-28 13:05", formatWidgetUpdatedAt("2026-08-28 오후 1:05"))
+    assertEquals(null, formatWidgetUpdatedAt(null))
+  }
+
+  @Test
   fun experienceUsesKoreanUnitsAndMissingState() {
     assertEquals("2.2조", formatWidgetExp(2_200_000_000_000L))
     assertEquals("3.5억", formatWidgetExp(350_000_000L))

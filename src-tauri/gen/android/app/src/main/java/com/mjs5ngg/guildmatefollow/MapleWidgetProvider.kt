@@ -80,6 +80,18 @@ internal fun formatWidgetDay(date: String): String = date.takeIf { it.length >= 
 internal fun formatWeeklyGainSuffix(value: Long?, baseline: Boolean): String =
   if (baseline) "" else " (${formatWidgetGain(value)})"
 
+internal fun formatWidgetUpdatedAt(value: String?): String? {
+  if (value.isNullOrBlank()) return null
+  Regex("(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}):(\\d{2})").find(value)?.let { match ->
+    return "${match.groupValues[1]} ${match.groupValues[2]}:${match.groupValues[3]}"
+  }
+  Regex("(\\d{4}-\\d{2}-\\d{2})\\s+(오전|오후)\\s+(\\d{1,2}):(\\d{2})").find(value)?.let { match ->
+    val hour = match.groupValues[3].toInt() % 12 + if (match.groupValues[2] == "오후") 12 else 0
+    return "%s %02d:%s".format(Locale.KOREA, match.groupValues[1], hour, match.groupValues[4])
+  }
+  return null
+}
+
 internal fun estimatedLevelUpText(days: Long?): String {
   if (days == null || days < 0) return "예상 레벨업 · 계산 불가"
   val calendar = Calendar.getInstance().apply {
@@ -202,8 +214,8 @@ object MapleWidgetRenderer {
     }
     views.setEmptyView(R.id.favorite_list, R.id.favorite_empty)
     views.setOnClickPendingIntent(R.id.favorite_header, openApp(context, 6200 + widgetId))
-    val updated = snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at").orEmpty().replace('T', ' ').take(16)
-    views.setTextViewText(R.id.favorite_updated, if (updated.isBlank()) "앱에서 동기화해 주세요" else "$updated 갱신")
+    val updated = formatWidgetUpdatedAt(snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at"))
+    views.setTextViewText(R.id.favorite_updated, updated?.let { "$it 갱신" } ?: "앱에서 동기화해 주세요")
     return views
   }
 
