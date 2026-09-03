@@ -5,3 +5,4 @@
 -keep class com.mjs5ngg.guildmatefollow.PrimaryWeeklyWidgetProvider { *; }
 -keep class com.mjs5ngg.guildmatefollow.PrimarySquareWidgetProvider { *; }
 -keep class com.mjs5ngg.guildmatefollow.PrimaryCombinedWidgetProvider { *; }
+-keep class com.mjs5ngg.guildmatefollow.WidgetSyncWorker { *; }

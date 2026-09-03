@@ -28,7 +28,9 @@ npm run package:windows
 
 ## Android 설치 방법
 
-`release/guildmate-follow-android-arm64-v0.3.11.apk`를 Android 기기로 옮겨 실행합니다. 브라우저나 파일 관리자가 요청하면 해당 앱에만 `알 수 없는 앱 설치` 권한을 허용합니다. Android 7.0 이상 ARM64 기기를 지원합니다.
+`release/guildmate-follow-android-arm64-v0.3.12.apk`를 Android 기기로 옮겨 실행합니다. 브라우저나 파일 관리자가 요청하면 해당 앱에만 `알 수 없는 앱 설치` 권한을 허용합니다. Android 7.0 이상 ARM64 기기를 지원합니다.
+
+홈 위젯이 하나 이상 있으면 앱을 닫아도 Android WorkManager가 네트워크 연결 시 약 15분 주기로 대표·즐겨찾기 정보를 갱신합니다. 실행 시점은 절전 정책에 따라 늦어질 수 있으며 앱을 강제 중지한 경우에는 앱을 한 번 다시 열어야 예약이 재개됩니다.
 
 Android 홈 화면의 빈 곳을 길게 누르고 `위젯`에서 `길드원 따라가기`를 선택하면 다음 세 종류를 추가할 수 있습니다.
 

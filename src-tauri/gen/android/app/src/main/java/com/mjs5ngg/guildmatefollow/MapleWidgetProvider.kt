@@ -144,6 +144,10 @@ internal fun buildFavoriteRow(context: Context, character: JSONObject, position:
 enum class WidgetKind { LARGE, WEEKLY, SQUARE, COMBINED }
 
 abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProvider() {
+  override fun onEnabled(context: Context) {
+    WidgetSyncScheduler.ensureScheduled(context)
+  }
+
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     ids.forEach { id -> manager.updateAppWidget(id, MapleWidgetRenderer.build(context, kind, id)) }
     if (kind == WidgetKind.LARGE && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {

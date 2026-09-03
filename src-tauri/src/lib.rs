@@ -1,4 +1,6 @@
 // 길드원 따라가기의 Tauri 런타임과 네이티브 서비스를 구성합니다.
+#[cfg(target_os = "android")]
+mod android_widget_sync;
 mod commands;
 mod db;
 mod exp;

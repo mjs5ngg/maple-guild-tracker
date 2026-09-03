@@ -198,4 +198,17 @@ class MapleWidgetProviderTest {
     assertTrue(Regex("android:text=\"즐겨찾기 랭킹\"[^>]*android:textSize=\"17sp\"").containsMatchIn(ranking))
     assertTrue(Regex("android:id=\"@\\+id/primary_rate\"[^>]*android:textSize=\"18sp\"").containsMatchIn(square))
   }
+
+  @Test
+  fun widgetBackgroundSyncUsesPersistentFifteenMinuteWork() {
+    val worker = File("src/main/java/com/mjs5ngg/guildmatefollow/WidgetSyncWorker.kt").readText()
+    val gradle = File("build.gradle.kts").readText()
+    val proguard = File("widget.pro").readText()
+    assertTrue(worker.contains("PeriodicWorkRequestBuilder<WidgetSyncWorker>(15, TimeUnit.MINUTES)"))
+    assertTrue(worker.contains("NetworkType.CONNECTED"))
+    assertTrue(worker.contains("ExistingPeriodicWorkPolicy.KEEP"))
+    assertTrue(worker.contains("syncAndBuildSnapshot"))
+    assertTrue(gradle.contains("androidx.work:work-runtime-ktx"))
+    assertTrue(proguard.contains("WidgetSyncWorker"))
+  }
 }

@@ -5,6 +5,8 @@ use chrono::{Duration, NaiveDate, Utc};
 use chrono_tz::Asia::Seoul;
 use rusqlite::{params, Connection, OptionalExtension};
 
+#[cfg(any(target_os = "android", test))]
+use crate::models::{MobileWidgetCharacter, MobileWidgetDailyPoint, MobileWidgetSnapshot};
 use crate::{
     exp::{self, ExpCalculation},
     models::{
@@ -491,6 +493,23 @@ pub fn live_character_records(connection: &Connection) -> Result<Vec<CharacterRe
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+#[cfg(any(target_os = "android", test))]
+pub fn widget_character_records(connection: &Connection) -> Result<Vec<CharacterRecord>, AppError> {
+    let mut statement = connection.prepare(
+        r#"SELECT c.id, ci.ocid
+           FROM characters c
+           JOIN character_identities ci ON ci.character_id=c.id AND ci.valid_to IS NULL
+           WHERE c.is_primary=1 OR c.is_favorite=1"#,
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok(CharacterRecord {
+            id: row.get(0)?,
+            ocid: row.get(1)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
 pub fn set_primary(connection: &mut Connection, character_id: i64) -> Result<(), AppError> {
     let character = connection
         .query_row(
@@ -620,6 +639,133 @@ fn current_progress(
             .or_else(|| completed.as_ref().map(|sample| sample.1)),
         rate: current_rate,
         today_exp,
+    })
+}
+
+#[cfg(any(target_os = "android", test))]
+pub fn mobile_widget_snapshot_for_date(
+    connection: &Connection,
+    completed_date: &str,
+) -> Result<MobileWidgetSnapshot, AppError> {
+    let mut statement = connection.prepare(
+        r#"SELECT id, current_name, character_class, image_url, is_primary
+           FROM characters
+           WHERE is_primary=1 OR is_favorite=1"#,
+    )?;
+    let raw = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, bool>(4)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut characters = Vec::with_capacity(raw.len());
+    let mut primary_progress = None;
+    for row in raw {
+        let current = current_progress(connection, row.0, completed_date)?;
+        if row.4 {
+            primary_progress = Some((
+                row.0,
+                current.level,
+                current.exp,
+                current.rate,
+                current.today_exp,
+            ));
+        }
+        characters.push(MobileWidgetCharacter {
+            character_id: row.0,
+            rank: 0,
+            character_name: row.1,
+            character_class: row.2,
+            character_image: row.3,
+            level: current.level.unwrap_or(0),
+            current_exp_rate: current.rate,
+            today_exp: current.today_exp,
+            is_primary: row.4,
+        });
+    }
+    characters.sort_by(|left, right| {
+        right
+            .today_exp
+            .cmp(&left.today_exp)
+            .then_with(|| right.level.cmp(&left.level))
+            .then_with(|| left.character_name.cmp(&right.character_name))
+    });
+    for (index, character) in characters.iter_mut().enumerate() {
+        character.rank = index + 1;
+    }
+
+    let mut primary_weekly_points = Vec::new();
+    let mut primary_remaining_exp = None;
+    if let Some((primary_id, level, current_exp, rate, today_exp)) = primary_progress {
+        let mut weekly_statement = connection.prepare(
+            r#"SELECT ds.date, ds.level, ds.exp_rate, xd.gained_exp
+               FROM daily_snapshots ds
+               LEFT JOIN xp_deltas xd ON xd.character_id=ds.character_id AND xd.date=ds.date AND xd.status='ok'
+               WHERE ds.character_id=?1 AND ds.date<=?2
+               ORDER BY ds.date DESC LIMIT 6"#,
+        )?;
+        primary_weekly_points = weekly_statement
+            .query_map(params![primary_id, completed_date], |row| {
+                Ok(MobileWidgetDailyPoint {
+                    date: row.get(0)?,
+                    level: row.get(1)?,
+                    exp_rate: row.get::<_, String>(2)?.parse::<f64>().ok(),
+                    gained_exp: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        primary_weekly_points.reverse();
+        let today = Utc::now()
+            .with_timezone(&Seoul)
+            .format("%Y-%m-%d")
+            .to_string();
+        if primary_weekly_points
+            .last()
+            .map(|point| point.date.as_str())
+            != Some(today.as_str())
+        {
+            primary_weekly_points.push(MobileWidgetDailyPoint {
+                date: today,
+                level,
+                exp_rate: rate,
+                gained_exp: today_exp,
+            });
+        }
+        if let Some(first) = primary_weekly_points.first_mut() {
+            first.gained_exp = None;
+        }
+        primary_remaining_exp = level.zip(current_exp).and_then(|(level, current)| {
+            exp::required_exp(level).map(|required| required.saturating_sub(current))
+        });
+    }
+    let available: Vec<i64> = primary_weekly_points
+        .iter()
+        .filter_map(|point| point.gained_exp)
+        .collect();
+    let primary_weekly_exp = (!available.is_empty()).then(|| available.iter().sum());
+    let primary_daily_average_exp =
+        (!available.is_empty()).then(|| available.iter().sum::<i64>() / available.len() as i64);
+    let primary_estimated_days = primary_remaining_exp
+        .zip(primary_daily_average_exp)
+        .filter(|(_, average)| *average > 0)
+        .map(|(remaining, average)| (remaining as f64 / average as f64).ceil() as i64);
+    let updated_at =
+        connection.query_row("SELECT MAX(fetched_at) FROM live_snapshots", [], |row| {
+            row.get::<_, Option<String>>(0)
+        })?;
+    Ok(MobileWidgetSnapshot {
+        updated_at,
+        characters,
+        primary_weekly_exp,
+        primary_weekly_points,
+        primary_daily_average_exp,
+        primary_remaining_exp,
+        primary_estimated_days,
     })
 }
 
@@ -1011,6 +1157,61 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         assert!(columns.iter().any(|column| column == "image_url"));
+    }
+
+    #[test]
+    fn mobile_widget_snapshot_uses_only_primary_and_favorites() {
+        let file = NamedTempFile::new().unwrap();
+        let connection = open(file.path()).unwrap();
+        migrate(&connection).unwrap();
+        connection.execute_batch(
+            r#"INSERT INTO characters(id,current_name,world_name,character_class,is_primary,is_favorite)
+               VALUES (1,'대표','스카니아','은월',1,1),(2,'즐겨찾기','스카니아','비숍',0,1),(3,'일반','스카니아','히어로',0,0);
+               INSERT INTO character_identities(character_id,ocid) VALUES (1,'one'),(2,'two'),(3,'three');"#,
+        ).unwrap();
+        for character_id in 1..=2 {
+            save_snapshot(
+                &connection,
+                &Snapshot {
+                    character_id,
+                    date: "2026-09-02".into(),
+                    level: 281,
+                    exp: 100,
+                    exp_rate: "10.000".into(),
+                    access_flag: None,
+                    raw_json: "{}".into(),
+                },
+            )
+            .unwrap();
+            save_live_snapshot(
+                &connection,
+                &Snapshot {
+                    character_id,
+                    date: String::new(),
+                    level: 281,
+                    exp: 200 + character_id,
+                    exp_rate: "11.000".into(),
+                    access_flag: None,
+                    raw_json: "{}".into(),
+                },
+            )
+            .unwrap();
+        }
+
+        let records = widget_character_records(&connection).unwrap();
+        assert_eq!(records.len(), 2);
+        let snapshot = mobile_widget_snapshot_for_date(&connection, "2026-09-02").unwrap();
+        assert_eq!(snapshot.characters.len(), 2);
+        assert!(snapshot
+            .characters
+            .iter()
+            .any(|character| character.is_primary));
+        assert!(!snapshot
+            .characters
+            .iter()
+            .any(|character| character.character_name == "일반"));
+        assert_eq!(snapshot.primary_weekly_points.len(), 2);
+        assert_eq!(snapshot.primary_weekly_points[0].gained_exp, None);
     }
 
     #[test]

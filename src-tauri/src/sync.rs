@@ -1,4 +1,6 @@
 // 길드와 캐릭터의 과거·일일 데이터를 수집하고 누락 날짜를 보충합니다.
+#[cfg(target_os = "android")]
+use std::path::Path;
 use std::{collections::BTreeSet, sync::Arc};
 
 use chrono::{DateTime, Duration, NaiveDate, Timelike, Utc};
@@ -6,6 +8,8 @@ use chrono_tz::Asia::Seoul;
 use futures::{stream, StreamExt};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "android")]
+use crate::models::MobileWidgetSnapshot;
 use crate::{
     credential_get, db,
     models::{Snapshot, SyncProgress, SyncReport},
@@ -460,6 +464,109 @@ pub async fn sync_live(app: AppHandle) -> Result<SyncReport, AppError> {
         failure_count,
         unresolved_characters: vec![],
     })
+}
+
+#[cfg(target_os = "android")]
+pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, AppError> {
+    let api_key = Arc::new(credential_get()?);
+    let client = crate::nexon::NexonClient::new()?;
+    let connection = db::open(db_path)?;
+    db::migrate(&connection)?;
+    if db::get_setting(&connection, "primary_character_id")?.is_none() {
+        return Err(AppError::Validation(
+            "먼저 대표 캐릭터를 설정해 주세요.".into(),
+        ));
+    }
+    let characters = db::widget_character_records(&connection)?;
+    let completed_date = latest_completed_date(Utc::now())
+        .format("%Y-%m-%d")
+        .to_string();
+    let jobs = characters
+        .into_iter()
+        .map(|character| {
+            let has_daily = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM daily_snapshots WHERE character_id=?1 AND date=?2)",
+                    rusqlite::params![character.id, completed_date],
+                    |row| row.get::<_, bool>(0),
+                )
+                .unwrap_or(false);
+            (character, !has_daily)
+        })
+        .collect::<Vec<_>>();
+    drop(connection);
+
+    let results = stream::iter(jobs)
+        .map(|(character, needs_daily)| {
+            let client = client.clone();
+            let key = api_key.clone();
+            let date = completed_date.clone();
+            async move {
+                let live = client.character_basic(&key, &character.ocid, None).await;
+                let daily = if needs_daily {
+                    Some(
+                        client
+                            .character_basic(&key, &character.ocid, Some(&date))
+                            .await,
+                    )
+                } else {
+                    None
+                };
+                (character, date, live, daily)
+            }
+        })
+        .buffer_unordered(5)
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut live_successes = 0_usize;
+    for (character, date, live, daily) in results {
+        if let Ok(basic) = live {
+            let raw_json = serde_json::to_string(&basic)?;
+            let connection = db::open(db_path)?;
+            connection.execute(
+                "UPDATE characters SET current_name=?2, world_name=?3, character_class=?4, image_url=COALESCE(?5,image_url), updated_at=CURRENT_TIMESTAMP WHERE id=?1",
+                rusqlite::params![character.id, basic.character_name, basic.world_name, basic.character_class, basic.character_image],
+            )?;
+            db::save_live_snapshot(
+                &connection,
+                &Snapshot {
+                    character_id: character.id,
+                    date: String::new(),
+                    level: basic.character_level,
+                    exp: basic.character_exp,
+                    exp_rate: basic.character_exp_rate,
+                    access_flag: basic.access_flag,
+                    raw_json,
+                },
+            )?;
+            live_successes += 1;
+        }
+        if let Some(Ok(basic)) = daily {
+            let raw_json = serde_json::to_string(&basic)?;
+            let connection = db::open(db_path)?;
+            db::save_snapshot(
+                &connection,
+                &Snapshot {
+                    character_id: character.id,
+                    date,
+                    level: basic.character_level,
+                    exp: basic.character_exp,
+                    exp_rate: basic.character_exp_rate,
+                    access_flag: basic.access_flag,
+                    raw_json,
+                },
+            )?;
+            db::recalculate_character(&connection, character.id)?;
+        }
+    }
+    if live_successes == 0 {
+        return Err(AppError::Validation(
+            "백그라운드 위젯 정보를 갱신하지 못했습니다.".into(),
+        ));
+    }
+    let connection = db::open(db_path)?;
+    db::mobile_widget_snapshot_for_date(&connection, &completed_date)
 }
 
 fn is_configured(app: &AppHandle) -> bool {

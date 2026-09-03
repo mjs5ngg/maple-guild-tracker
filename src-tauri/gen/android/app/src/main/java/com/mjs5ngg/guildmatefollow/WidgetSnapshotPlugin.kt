@@ -21,14 +21,9 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
     try {
       val snapshot = JSONObject(invoke.getRawArgs()).getJSONObject("snapshot")
       val context = activity.applicationContext
-      context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
-        .edit()
-        .putString(MapleWidgetRenderer.SNAPSHOT_KEY, snapshot.toString())
-        .apply()
-      MapleWidgetRenderer.updateAll(context)
+      WidgetSnapshotStore.save(context, snapshot)
       Thread {
-        cacheAvatars(context.filesDir, snapshot)
-        MapleWidgetRenderer.updateAll(context)
+        WidgetSnapshotStore.cacheImagesAndRefresh(context, snapshot)
       }.start()
       invoke.resolve()
     } catch (error: Exception) {
@@ -36,8 +31,24 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
-  private fun cacheAvatars(filesDir: File, snapshot: JSONObject) {
-    val directory = File(filesDir, MapleWidgetRenderer.AVATAR_DIRECTORY).apply { mkdirs() }
+}
+
+object WidgetSnapshotStore {
+  fun save(context: android.content.Context, snapshot: JSONObject) {
+    context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
+      .edit()
+      .putString(MapleWidgetRenderer.SNAPSHOT_KEY, snapshot.toString())
+      .apply()
+    MapleWidgetRenderer.updateAll(context)
+  }
+
+  fun cacheImagesAndRefresh(context: android.content.Context, snapshot: JSONObject) {
+    cacheAvatars(context, snapshot)
+    MapleWidgetRenderer.updateAll(context)
+  }
+
+  private fun cacheAvatars(context: android.content.Context, snapshot: JSONObject) {
+    val directory = File(context.filesDir, MapleWidgetRenderer.AVATAR_DIRECTORY).apply { mkdirs() }
     val activeFiles = mutableSetOf<String>()
     val characters = snapshot.optJSONArray("characters") ?: return
     for (index in 0 until characters.length()) {
@@ -49,12 +60,13 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
       activeFiles += fileName
       val destination = File(directory, fileName)
       val urlKey = "avatar_url_$id"
-      cacheAvatarFile(destination, urlKey, imageUrl)
+      cacheAvatarFile(context, destination, urlKey, imageUrl)
       if (character.optBoolean("is_primary")) {
         repeat(4) { frame ->
           val standingFileName = "${id}_stand_$frame.png"
           activeFiles += standingFileName
           cacheAvatarFile(
+            context,
             File(directory, standingFileName),
             "avatar_stand_url_${id}_$frame",
             standingAvatarUrl(imageUrl, frame),
@@ -65,8 +77,13 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
     directory.listFiles()?.filter { it.name !in activeFiles }?.forEach { it.delete() }
   }
 
-  private fun cacheAvatarFile(destination: File, urlKey: String, imageUrl: String) {
-    val preferences = activity.applicationContext.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
+  private fun cacheAvatarFile(
+    context: android.content.Context,
+    destination: File,
+    urlKey: String,
+    imageUrl: String,
+  ) {
+    val preferences = context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
     if (destination.isFile && preferences.getString(urlKey, null) == imageUrl) return
     try {
       val connection = URL(imageUrl).openConnection() as HttpURLConnection

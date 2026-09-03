@@ -12,5 +12,6 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     Keyring.initializeNdkContext(applicationContext)
     super.onCreate(savedInstanceState)
+    WidgetSyncScheduler.ensureScheduled(applicationContext)
   }
 }
