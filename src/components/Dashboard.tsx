@@ -383,6 +383,7 @@ export function Dashboard({ status, progress, onRefreshStatus }: Props) {
         <div className="settings-api-heading"><div className="settings-icon"><KeyRound /></div><button className="section-help-button" title="서비스 API 키 발급 도움말" aria-label="서비스 API 키 발급 도움말" onClick={() => setApiHelpOpen(true)}><HelpCircle /></button></div><h2>NEXON API 키 변경</h2><p>새 키로 대표 캐릭터 조회가 성공한 경우에만 기존 키를 교체합니다.</p>
         <form onSubmit={replaceApiKey}><label>새 API 키</label><input type="password" value={newApiKey} onChange={(event) => setNewApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} /><button className="primary-button" disabled={busy || !newApiKey.trim()}>{busy ? "키를 확인하는 중" : "새 키로 교체"}</button></form>
         {keyMessage && <div className="confirmed">{keyMessage}</div>}{error && <div className="error-banner">{error}</div>}<small>키는 파일이나 SQLite가 아닌 운영체제 보안 저장소에 저장됩니다.</small>
+        <h2>경험치 날짜 안내</h2><p>자정 전후에는 NEXON API의 반영 지연으로 실제 경험치 획득일과 조회 시각이 다를 수 있습니다. 전일 종료 데이터가 없으면 자정에 가장 가까운 수집 기록으로 오늘 획득량을 추정합니다. 앱을 오래 꺼두었거나 수집 간격이 길면 오차가 커질 수 있으며, 오전 2시 이후 전일 데이터가 수집되면 획득량과 순위가 보정될 수 있습니다. 최근 7일·30일에는 오늘이 포함되고, 오늘의 획득량이 0이어도 성장 평균에 포함됩니다.</p>
       </section></div>}
       {apiHelpOpen && <ApiKeyHelpModal onClose={() => setApiHelpOpen(false)} />}
     </div>

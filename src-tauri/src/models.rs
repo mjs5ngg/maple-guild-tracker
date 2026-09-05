@@ -54,6 +54,14 @@ pub struct RankingRow {
     pub live_updated_at: Option<String>,
 }
 
+pub fn compare_current_position(left: &RankingRow, right: &RankingRow) -> std::cmp::Ordering {
+    right
+        .level
+        .cmp(&left.level)
+        .then_with(|| right.current_exp.cmp(&left.current_exp))
+        .then_with(|| left.character_name.cmp(&right.character_name))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SeriesPoint {
     pub date: String,
@@ -139,14 +147,7 @@ impl DashboardData {
             right
                 .today_exp
                 .cmp(&left.today_exp)
-                .then_with(|| right.level.cmp(&left.level))
-                .then_with(|| {
-                    right
-                        .current_exp_rate
-                        .unwrap_or(-1.0)
-                        .total_cmp(&left.current_exp_rate.unwrap_or(-1.0))
-                })
-                .then_with(|| left.character_name.cmp(&right.character_name))
+                .then_with(|| compare_current_position(left, right))
         });
         let primary_id = rows
             .iter()

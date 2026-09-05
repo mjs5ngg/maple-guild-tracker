@@ -9,13 +9,19 @@ export function sortByOverallProgress(rows: RankingRow[]): RankingRow[] {
   return [...rows].sort((left, right) =>
     right.level - left.level
     || (right.current_exp ?? -1) - (left.current_exp ?? -1)
-    || left.character_name.localeCompare(right.character_name));
+    || compareNames(left.character_name, right.character_name));
+}
+
+function compareNames(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 export function sortByTodayGain(rows: RankingRow[]): RankingRow[] {
   return [...rows].sort((left, right) =>
     (right.today_exp ?? -1) - (left.today_exp ?? -1)
-    || left.character_name.localeCompare(right.character_name));
+    || right.level - left.level
+    || (right.current_exp ?? -1) - (left.current_exp ?? -1)
+    || compareNames(left.character_name, right.character_name));
 }
 
 export function sortFavoritesByLevel(rows: RankingRow[]): RankingRow[] {

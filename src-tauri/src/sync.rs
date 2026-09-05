@@ -403,14 +403,15 @@ pub async fn sync_live(app: AppHandle) -> Result<SyncReport, AppError> {
             let key = api_key.clone();
             async move {
                 let result = client.character_basic(&key, &character.ocid, None).await;
-                (character, result)
+                let observed_at = Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
+                (character, result, observed_at)
             }
         })
         .buffer_unordered(5);
     let mut completed = 0_usize;
     let mut success_count = 0_usize;
     let mut failure_count = 0_usize;
-    while let Some((character, result)) = results.next().await {
+    while let Some((character, result, observed_at)) = results.next().await {
         completed += 1;
         match result {
             Ok(basic) => {
@@ -420,7 +421,7 @@ pub async fn sync_live(app: AppHandle) -> Result<SyncReport, AppError> {
                     "UPDATE characters SET current_name=?2, world_name=?3, character_class=?4, image_url=COALESCE(?5,image_url), updated_at=CURRENT_TIMESTAMP WHERE id=?1",
                     rusqlite::params![character.id, basic.character_name, basic.world_name, basic.character_class, basic.character_image],
                 )?;
-                db::save_live_snapshot(
+                db::save_live_snapshot_at(
                     &connection,
                     &Snapshot {
                         character_id: character.id,
@@ -431,6 +432,7 @@ pub async fn sync_live(app: AppHandle) -> Result<SyncReport, AppError> {
                         access_flag: basic.access_flag,
                         raw_json,
                     },
+                    &observed_at,
                 )?;
                 success_count += 1;
             }
@@ -496,13 +498,14 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
         .collect::<Vec<_>>();
     drop(connection);
 
-    let results = stream::iter(jobs)
+    let mut results = stream::iter(jobs)
         .map(|(character, needs_daily)| {
             let client = client.clone();
             let key = api_key.clone();
             let date = completed_date.clone();
             async move {
                 let live = client.character_basic(&key, &character.ocid, None).await;
+                let observed_at = Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string();
                 let daily = if needs_daily {
                     Some(
                         client
@@ -512,15 +515,13 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
                 } else {
                     None
                 };
-                (character, date, live, daily)
+                (character, date, live, daily, observed_at)
             }
         })
-        .buffer_unordered(5)
-        .collect::<Vec<_>>()
-        .await;
+        .buffer_unordered(5);
 
     let mut live_successes = 0_usize;
-    for (character, date, live, daily) in results {
+    while let Some((character, date, live, daily, observed_at)) = results.next().await {
         if let Ok(basic) = live {
             let raw_json = serde_json::to_string(&basic)?;
             let connection = db::open(db_path)?;
@@ -528,7 +529,7 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
                 "UPDATE characters SET current_name=?2, world_name=?3, character_class=?4, image_url=COALESCE(?5,image_url), updated_at=CURRENT_TIMESTAMP WHERE id=?1",
                 rusqlite::params![character.id, basic.character_name, basic.world_name, basic.character_class, basic.character_image],
             )?;
-            db::save_live_snapshot(
+            db::save_live_snapshot_at(
                 &connection,
                 &Snapshot {
                     character_id: character.id,
@@ -539,6 +540,7 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
                     access_flag: basic.access_flag,
                     raw_json,
                 },
+                &observed_at,
             )?;
             live_successes += 1;
         }
@@ -566,7 +568,8 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
         ));
     }
     let connection = db::open(db_path)?;
-    db::mobile_widget_snapshot_for_date(&connection, &completed_date)
+    let today = Utc::now().with_timezone(&Seoul).date_naive().to_string();
+    db::mobile_widget_snapshot_for_date(&connection, &today)
 }
 
 fn is_configured(app: &AppHandle) -> bool {

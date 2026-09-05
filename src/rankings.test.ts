@@ -13,6 +13,10 @@ function row(character_name: string, level: number, current_exp: number | null, 
 }
 
 describe("경험치 랭킹", () => {
+  it("획득량 동점은 레벨, 현재 경험치, 닉네임 순으로 정렬한다", () => {
+    const rows = [row("가", 281, 100, 0), row("나", 282, 10, 0), row("다", 281, 200, 0), row("라", 281, 200, 0)];
+    expect(sortByTodayGain(rows).map((value) => value.character_name)).toEqual(["나", "다", "라", "가"]);
+  });
   it("전체 경험치는 레벨을 먼저 보고 같은 레벨에서는 현재 경험치를 비교한다", () => {
     const rows = [row("가", 281, 900, 100), row("나", 282, 10, 0), row("다", 281, 1_000, 50)];
     expect(sortByOverallProgress(rows).map((value) => value.character_name)).toEqual(["나", "다", "가"]);

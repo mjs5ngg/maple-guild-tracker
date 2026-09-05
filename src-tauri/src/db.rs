@@ -1,12 +1,12 @@
 // SQLite 스키마와 앱 데이터 조회·저장 작업을 제공합니다.
 use std::{collections::HashSet, path::Path};
 
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate, TimeZone, Utc};
 use chrono_tz::Asia::Seoul;
 use rusqlite::{params, Connection, OptionalExtension};
 
 #[cfg(any(target_os = "android", test))]
-use crate::models::{MobileWidgetCharacter, MobileWidgetDailyPoint, MobileWidgetSnapshot};
+use crate::models::MobileWidgetSnapshot;
 use crate::{
     exp::{self, ExpCalculation},
     models::{
@@ -123,6 +123,11 @@ pub fn migrate(connection: &Connection) -> Result<(), AppError> {
             exp::table_checksum(),
             "KMS 1.2.413 성장 동선 개편 및 현재 Non-GMS 레벨링 표. API 경험치율과 교차 검증."
         ],
+    )?;
+    // 원본 스냅샷은 보존하고, 날짜를 건너뛴 기존 일간 파생값만 무효화합니다.
+    connection.execute(
+        "UPDATE xp_deltas SET gained_exp=NULL, status='missing_snapshot' WHERE date(from_date, '+1 day') IS NOT date",
+        [],
     )?;
     Ok(())
 }
@@ -429,10 +434,14 @@ pub fn membership_names(connection: &Connection, date: &str) -> Result<Vec<Strin
 pub fn earliest_missing_snapshot_date(connection: &Connection) -> Result<Option<String>, AppError> {
     connection
         .query_row(
-            r#"SELECT MIN(gm.date)
+            r#"SELECT MIN(date) FROM (SELECT gm.date
            FROM guild_memberships gm
            LEFT JOIN daily_snapshots ds ON ds.character_id=gm.character_id AND ds.date=gm.date
-           WHERE gm.character_id IS NOT NULL AND ds.character_id IS NULL"#,
+           WHERE gm.character_id IS NOT NULL AND ds.character_id IS NULL
+           UNION ALL
+           SELECT date(xd.from_date, '+1 day') FROM xp_deltas xd
+           JOIN characters c ON c.id=xd.character_id
+           WHERE xd.status='missing_snapshot' AND (c.is_primary=1 OR c.is_favorite=1))"#,
             [],
             |row| row.get(0),
         )
@@ -463,13 +472,26 @@ pub fn save_snapshot(connection: &Connection, snapshot: &Snapshot) -> Result<(),
     Ok(())
 }
 
+#[cfg(test)]
 pub fn save_live_snapshot(connection: &Connection, snapshot: &Snapshot) -> Result<(), AppError> {
+    save_live_snapshot_at(
+        connection,
+        snapshot,
+        &Utc::now().format("%Y-%m-%d %H:%M:%S%.6f").to_string(),
+    )
+}
+
+pub fn save_live_snapshot_at(
+    connection: &Connection,
+    snapshot: &Snapshot,
+    observed_at: &str,
+) -> Result<(), AppError> {
     connection.execute(
-        r#"INSERT INTO live_snapshots(character_id, level, exp, exp_rate, raw_json)
-           VALUES (?1, ?2, ?3, ?4, ?5)
+        r#"INSERT INTO live_snapshots(character_id, level, exp, exp_rate, raw_json, fetched_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)
            ON CONFLICT(character_id, fetched_at) DO UPDATE SET
              level=excluded.level, exp=excluded.exp, exp_rate=excluded.exp_rate, raw_json=excluded.raw_json"#,
-        params![snapshot.character_id, snapshot.level, snapshot.exp, snapshot.exp_rate, snapshot.raw_json],
+        params![snapshot.character_id, snapshot.level, snapshot.exp, snapshot.exp_rate, snapshot.raw_json, observed_at],
     )?;
     Ok(())
 }
@@ -567,7 +589,11 @@ fn live_activity(
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let latest_at = samples.last().map(|sample| sample.0.clone());
+    let latest_at = connection.query_row(
+        "SELECT MAX(fetched_at) FROM live_snapshots WHERE character_id=?1",
+        params![character_id],
+        |row| row.get::<_, Option<String>>(0),
+    )?;
     if samples.len() < 2 {
         return Ok((false, latest_at));
     }
@@ -586,24 +612,33 @@ struct CurrentProgress {
     exp: Option<i64>,
     rate: Option<f64>,
     today_exp: Option<i64>,
+    estimated: bool,
 }
 
 fn current_progress(
     connection: &Connection,
     character_id: i64,
-    completed_date: &str,
+    today_date: &str,
 ) -> Result<CurrentProgress, AppError> {
+    let today = NaiveDate::parse_from_str(today_date, "%Y-%m-%d")?;
+    let yesterday = (today - Duration::days(1)).to_string();
+    let midnight = Seoul
+        .from_local_datetime(&today.and_hms_opt(0, 0, 0).unwrap())
+        .single()
+        .unwrap()
+        .with_timezone(&Utc);
+    let midnight_key = midnight.format("%Y-%m-%d %H:%M:%S").to_string();
     let live = connection
         .query_row(
-            "SELECT level, exp, exp_rate FROM live_snapshots WHERE character_id=?1 ORDER BY fetched_at DESC LIMIT 1",
-            params![character_id],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)),
+            "SELECT level, exp, exp_rate, fetched_at FROM live_snapshots WHERE character_id=?1 AND fetched_at<datetime(?2, '+1 day') ORDER BY fetched_at DESC LIMIT 1",
+            params![character_id, midnight_key],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?)),
         )
         .optional()?;
     let completed = connection
         .query_row(
-            "SELECT level, exp, exp_rate FROM daily_snapshots WHERE character_id=?1 AND date=?2",
-            params![character_id, completed_date],
+            "SELECT level, exp, exp_rate FROM daily_snapshots WHERE character_id=?1 AND date<=?2 ORDER BY date DESC LIMIT 1",
+            params![character_id, yesterday],
             |row| {
                 Ok((
                     row.get::<_, i64>(0)?,
@@ -621,13 +656,35 @@ fn current_progress(
                 .as_ref()
                 .and_then(|sample| sample.2.parse::<f64>().ok())
         });
-    let today_exp = match (&completed, &live) {
-        (Some(from), Some(to)) => match exp::calculate_gain(from.0, from.1, to.0, to.1) {
-            ExpCalculation::Ok(value) => Some(value),
-            _ => None,
-        },
-        _ => None,
+    let official_baseline = connection
+        .query_row(
+            "SELECT level, exp FROM daily_snapshots WHERE character_id=?1 AND date=?2",
+            params![character_id, yesterday],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()?;
+    let estimated = official_baseline.is_none();
+    // 전일 종료 기록이 없을 때만 자정에 가장 가까운 전일·당일 관측값을 기준으로 삼습니다.
+    let baseline = if official_baseline.is_some() {
+        official_baseline
+    } else {
+        connection.query_row(
+            "SELECT level, exp FROM live_snapshots WHERE character_id=?1 AND fetched_at>=datetime(?2, '-1 day') AND fetched_at<datetime(?2, '+1 day') ORDER BY ABS(julianday(fetched_at)-julianday(?2)), fetched_at LIMIT 1",
+            params![character_id, midnight_key],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        ).optional()?
     };
+    let today_exp = live
+        .as_ref()
+        .filter(|to| to.3 >= midnight_key)
+        .and_then(|to| {
+            baseline.and_then(
+                |from| match exp::calculate_gain(from.0, from.1, to.0, to.1) {
+                    ExpCalculation::Ok(value) => Some(value),
+                    _ => None,
+                },
+            )
+        });
     Ok(CurrentProgress {
         level: live
             .as_ref()
@@ -639,134 +696,16 @@ fn current_progress(
             .or_else(|| completed.as_ref().map(|sample| sample.1)),
         rate: current_rate,
         today_exp,
+        estimated,
     })
 }
 
 #[cfg(any(target_os = "android", test))]
 pub fn mobile_widget_snapshot_for_date(
     connection: &Connection,
-    completed_date: &str,
+    today_date: &str,
 ) -> Result<MobileWidgetSnapshot, AppError> {
-    let mut statement = connection.prepare(
-        r#"SELECT id, current_name, character_class, image_url, is_primary
-           FROM characters
-           WHERE is_primary=1 OR is_favorite=1"#,
-    )?;
-    let raw = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, bool>(4)?,
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut characters = Vec::with_capacity(raw.len());
-    let mut primary_progress = None;
-    for row in raw {
-        let current = current_progress(connection, row.0, completed_date)?;
-        if row.4 {
-            primary_progress = Some((
-                row.0,
-                current.level,
-                current.exp,
-                current.rate,
-                current.today_exp,
-            ));
-        }
-        characters.push(MobileWidgetCharacter {
-            character_id: row.0,
-            rank: 0,
-            character_name: row.1,
-            character_class: row.2,
-            character_image: row.3,
-            level: current.level.unwrap_or(0),
-            current_exp_rate: current.rate,
-            today_exp: current.today_exp,
-            is_primary: row.4,
-        });
-    }
-    characters.sort_by(|left, right| {
-        right
-            .today_exp
-            .cmp(&left.today_exp)
-            .then_with(|| right.level.cmp(&left.level))
-            .then_with(|| left.character_name.cmp(&right.character_name))
-    });
-    for (index, character) in characters.iter_mut().enumerate() {
-        character.rank = index + 1;
-    }
-
-    let mut primary_weekly_points = Vec::new();
-    let mut primary_remaining_exp = None;
-    if let Some((primary_id, level, current_exp, rate, today_exp)) = primary_progress {
-        let mut weekly_statement = connection.prepare(
-            r#"SELECT ds.date, ds.level, ds.exp_rate, xd.gained_exp
-               FROM daily_snapshots ds
-               LEFT JOIN xp_deltas xd ON xd.character_id=ds.character_id AND xd.date=ds.date AND xd.status='ok'
-               WHERE ds.character_id=?1 AND ds.date<=?2
-               ORDER BY ds.date DESC LIMIT 6"#,
-        )?;
-        primary_weekly_points = weekly_statement
-            .query_map(params![primary_id, completed_date], |row| {
-                Ok(MobileWidgetDailyPoint {
-                    date: row.get(0)?,
-                    level: row.get(1)?,
-                    exp_rate: row.get::<_, String>(2)?.parse::<f64>().ok(),
-                    gained_exp: row.get(3)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        primary_weekly_points.reverse();
-        let today = Utc::now()
-            .with_timezone(&Seoul)
-            .format("%Y-%m-%d")
-            .to_string();
-        if primary_weekly_points
-            .last()
-            .map(|point| point.date.as_str())
-            != Some(today.as_str())
-        {
-            primary_weekly_points.push(MobileWidgetDailyPoint {
-                date: today,
-                level,
-                exp_rate: rate,
-                gained_exp: today_exp,
-            });
-        }
-        if let Some(first) = primary_weekly_points.first_mut() {
-            first.gained_exp = None;
-        }
-        primary_remaining_exp = level.zip(current_exp).and_then(|(level, current)| {
-            exp::required_exp(level).map(|required| required.saturating_sub(current))
-        });
-    }
-    let available: Vec<i64> = primary_weekly_points
-        .iter()
-        .filter_map(|point| point.gained_exp)
-        .collect();
-    let primary_weekly_exp = (!available.is_empty()).then(|| available.iter().sum());
-    let primary_daily_average_exp =
-        (!available.is_empty()).then(|| available.iter().sum::<i64>() / available.len() as i64);
-    let primary_estimated_days = primary_remaining_exp
-        .zip(primary_daily_average_exp)
-        .filter(|(_, average)| *average > 0)
-        .map(|(remaining, average)| (remaining as f64 / average as f64).ceil() as i64);
-    let updated_at =
-        connection.query_row("SELECT MAX(fetched_at) FROM live_snapshots", [], |row| {
-            row.get::<_, Option<String>>(0)
-        })?;
-    Ok(MobileWidgetSnapshot {
-        updated_at,
-        characters,
-        primary_weekly_exp,
-        primary_weekly_points,
-        primary_daily_average_exp,
-        primary_remaining_exp,
-        primary_estimated_days,
-    })
+    Ok(dashboard_for_date(connection, "7d", today_date)?.mobile_widget_snapshot())
 }
 
 pub fn recalculate_character(connection: &Connection, character_id: i64) -> Result<(), AppError> {
@@ -786,11 +725,18 @@ pub fn recalculate_character(connection: &Connection, character_id: i64) -> Resu
         let (from_date, from_level, from_exp) = &pair[0];
         let (to_date, to_level, to_exp) = &pair[1];
         let calculation = exp::calculate_gain(*from_level, *from_exp, *to_level, *to_exp);
-        let (gained, status) = match calculation {
-            ExpCalculation::Ok(value) => (Some(value), "ok"),
-            ExpCalculation::MissingTable => (None, "table_update_required"),
-            ExpCalculation::InvalidDecrease => (None, "invalid_decrease"),
-            ExpCalculation::Overflow => (None, "overflow"),
+        let (gained, status) = if NaiveDate::parse_from_str(to_date, "%Y-%m-%d")?
+            - NaiveDate::parse_from_str(from_date, "%Y-%m-%d")?
+            != Duration::days(1)
+        {
+            (None, "missing_snapshot")
+        } else {
+            match calculation {
+                ExpCalculation::Ok(value) => (Some(value), "ok"),
+                ExpCalculation::MissingTable => (None, "table_update_required"),
+                ExpCalculation::InvalidDecrease => (None, "invalid_decrease"),
+                ExpCalculation::Overflow => (None, "overflow"),
+            }
         };
         connection.execute(
             r#"INSERT INTO xp_deltas(character_id, date, from_date, gained_exp, table_version, status)
@@ -838,6 +784,9 @@ fn period_dates(latest: &str, period: &str) -> Result<(String, String), AppError
             .ok_or_else(|| AppError::Validation("종료일이 없습니다.".into()))?;
         NaiveDate::parse_from_str(start, "%Y-%m-%d")?;
         NaiveDate::parse_from_str(finish, "%Y-%m-%d")?;
+        if start > finish || parts.next().is_some() {
+            return Err(AppError::Validation("날짜 범위를 확인해 주세요.".into()));
+        }
         return Ok((start.to_string(), finish.to_string()));
     }
     let days = match period {
@@ -854,29 +803,29 @@ fn period_dates(latest: &str, period: &str) -> Result<(String, String), AppError
 }
 
 pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData, AppError> {
+    dashboard_for_date(
+        connection,
+        period,
+        &Utc::now().with_timezone(&Seoul).date_naive().to_string(),
+    )
+}
+
+fn dashboard_for_date(
+    connection: &Connection,
+    period: &str,
+    today_date: &str,
+) -> Result<DashboardData, AppError> {
     let latest: Option<String> =
         connection.query_row("SELECT MAX(date) FROM guild_memberships", [], |row| {
             row.get(0)
         })?;
-    let Some(latest_date) = latest else {
-        return Ok(DashboardData {
-            summary: DashboardSummary {
-                latest_date: None,
-                period_start: None,
-                period_end: None,
-                primary_daily_exp: None,
-                primary_period_exp: None,
-                primary_current_exp_rate: None,
-                primary_today_exp: None,
-                primary_rank: None,
-                leader_gap: None,
-                last_sync_at: None,
-            },
-            rankings: vec![],
-            series: vec![],
-        });
-    };
-    let (start, end) = period_dates(&latest_date, period)?;
+    let latest_date = latest.clone().unwrap_or_default();
+    let (start, end) = period_dates(today_date, period)?;
+    let includes_today = start.as_str() <= today_date && end.as_str() >= today_date;
+    let expected_days = (NaiveDate::parse_from_str(&end, "%Y-%m-%d")?
+        - NaiveDate::parse_from_str(&start, "%Y-%m-%d")?)
+    .num_days()
+        + 1;
     let primary_id = get_setting(connection, "primary_character_id")?
         .and_then(|value| value.parse::<i64>().ok());
 
@@ -885,20 +834,16 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                   COALESCE((SELECT level FROM daily_snapshots ds WHERE ds.character_id=c.id AND ds.date<=?2 ORDER BY ds.date DESC LIMIT 1), 0),
                   SUM(CASE WHEN xd.status='ok' THEN xd.gained_exp ELSE NULL END),
                   c.is_primary, c.is_favorite,
-                  EXISTS(SELECT 1 FROM guild_memberships gm WHERE gm.date=?2 AND gm.character_id=c.id),
-                  CASE
-                    WHEN SUM(CASE WHEN xd.status='ok' THEN 1 ELSE 0 END)>0 THEN '정상'
-                    WHEN EXISTS(SELECT 1 FROM daily_snapshots ds WHERE ds.character_id=c.id) THEN '기준점 수집됨'
-                    ELSE '자료 없음'
-                  END
+                  EXISTS(SELECT 1 FROM guild_memberships gm WHERE gm.date=?3 AND gm.character_id=c.id),
+                  SUM(CASE WHEN xd.status='ok' THEN 1 ELSE 0 END)
            FROM characters c
-           LEFT JOIN xp_deltas xd ON xd.character_id=c.id AND xd.date BETWEEN ?1 AND ?2
-           WHERE c.is_favorite=1 OR EXISTS(SELECT 1 FROM guild_memberships gm WHERE gm.date=?2 AND gm.character_id=c.id)
+           LEFT JOIN xp_deltas xd ON xd.character_id=c.id AND xd.date BETWEEN ?1 AND ?2 AND xd.date<?4
+           WHERE c.is_primary=1 OR c.is_favorite=1 OR EXISTS(SELECT 1 FROM guild_memberships gm WHERE gm.date=?3 AND gm.character_id=c.id)
            GROUP BY c.id
            ORDER BY SUM(CASE WHEN xd.status='ok' THEN xd.gained_exp ELSE NULL END) DESC, c.current_name"#,
     )?;
     let raw = statement
-        .query_map(params![start, end], |row| {
+        .query_map(params![start, end, latest_date, today_date], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
@@ -909,14 +854,33 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                 row.get::<_, bool>(6)?,
                 row.get::<_, bool>(7)?,
                 row.get::<_, bool>(8)?,
-                row.get::<_, String>(9)?,
+                row.get::<_, i64>(9)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut rankings = Vec::with_capacity(raw.len());
     for (index, row) in raw.into_iter().enumerate() {
-        let current = current_progress(connection, row.0, &latest_date)?;
+        let current = current_progress(connection, row.0, today_date)?;
         let (is_hunting, live_updated_at) = live_activity(connection, row.0)?;
+        let live_gain = if includes_today {
+            current.today_exp
+        } else {
+            None
+        };
+        let collected_days = row.9 + i64::from(live_gain.is_some());
+        let gained_exp = match (row.5, live_gain) {
+            (Some(past), Some(live)) => past.checked_add(live),
+            (past, live) => past.or(live),
+        };
+        let status = if collected_days == 0 {
+            "자료 없음".to_string()
+        } else if collected_days < expected_days {
+            format!("일부 수집 ({collected_days}/{expected_days}일)")
+        } else if includes_today && current.estimated {
+            "추정".to_string()
+        } else {
+            "정상".to_string()
+        };
         rankings.push(RankingRow {
             character_id: row.0,
             rank: index + 1,
@@ -925,32 +889,26 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             character_image: row.3,
             level: current.level.unwrap_or(row.4),
             current_exp: current.exp,
-            gained_exp: row.5,
+            gained_exp,
             current_exp_rate: current.rate,
             today_exp: current.today_exp,
             gap_from_primary: None,
             is_primary: row.6,
             is_favorite: row.7,
             is_current_member: row.8,
-            status: row.9,
+            status,
             is_hunting,
             live_updated_at,
         });
     }
-    if period == "daily" {
-        for row in &mut rankings {
-            row.gained_exp = row.today_exp;
-        }
-        rankings.sort_by(|left, right| {
-            right
-                .gained_exp
-                .unwrap_or(-1)
-                .cmp(&left.gained_exp.unwrap_or(-1))
-                .then_with(|| left.character_name.cmp(&right.character_name))
-        });
-        for (index, row) in rankings.iter_mut().enumerate() {
-            row.rank = index + 1;
-        }
+    rankings.sort_by(|left, right| {
+        right
+            .gained_exp
+            .cmp(&left.gained_exp)
+            .then_with(|| crate::models::compare_current_position(left, right))
+    });
+    for (index, row) in rankings.iter_mut().enumerate() {
+        row.rank = index + 1;
     }
     let primary_exp = rankings
         .iter()
@@ -977,8 +935,9 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
     }
     let primary_rank = rankings
         .iter()
-        .find(|row| row.is_primary)
-        .map(|row| row.rank);
+        .filter(|row| row.is_current_member)
+        .position(|row| row.is_primary)
+        .map(|index| index + 1);
     let primary_current_exp_rate = rankings
         .iter()
         .find(|row| row.is_primary)
@@ -987,7 +946,13 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         .iter()
         .find(|row| row.is_primary)
         .and_then(|row| row.today_exp);
-    let leader_gap = match (rankings.first().and_then(|row| row.gained_exp), primary_exp) {
+    let leader_gap = match (
+        rankings
+            .iter()
+            .find(|row| row.is_current_member)
+            .and_then(|row| row.gained_exp),
+        primary_exp,
+    ) {
         (Some(leader), Some(primary)) => Some(leader - primary),
         _ => None,
     };
@@ -1016,10 +981,6 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         }
         selected_ids.push(character_id);
     }
-    let today_date = Utc::now()
-        .with_timezone(&Seoul)
-        .format("%Y-%m-%d")
-        .to_string();
     let mut series = Vec::new();
     for id in selected_ids {
         let name = rankings
@@ -1028,13 +989,13 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
             .map(|row| row.character_name.clone())
             .unwrap_or_default();
         let mut series_statement = connection.prepare(
-            "SELECT xd.date, xd.gained_exp, ds.level, ds.exp_rate
-             FROM xp_deltas xd
-             LEFT JOIN daily_snapshots ds ON ds.character_id=xd.character_id AND ds.date=xd.date
-             WHERE xd.character_id=?1 AND xd.date BETWEEN ?2 AND ?3
-             ORDER BY xd.date",
+            "SELECT ds.date, CASE WHEN xd.status='ok' THEN xd.gained_exp ELSE NULL END, ds.level, ds.exp_rate
+             FROM daily_snapshots ds
+             LEFT JOIN xp_deltas xd ON ds.character_id=xd.character_id AND ds.date=xd.date
+             WHERE ds.character_id=?1 AND ds.date BETWEEN ?2 AND ?3 AND ds.date<?4
+             ORDER BY ds.date",
         )?;
-        for point in series_statement.query_map(params![id, start, end], |row| {
+        for point in series_statement.query_map(params![id, start, end, today_date], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, Option<i64>>(1)?,
@@ -1052,9 +1013,10 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                 exp_rate: exp_rate.and_then(|value| value.parse::<f64>().ok()),
             });
         }
-        if !series
-            .iter()
-            .any(|point| point.character_id == id && point.date == today_date)
+        if includes_today
+            && !series
+                .iter()
+                .any(|point| point.character_id == id && point.date == today_date)
         {
             if let Some(today) =
                 rankings
@@ -1066,16 +1028,39 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
                     })
             {
                 series.push(SeriesPoint {
-                    date: today_date.clone(),
+                    date: today_date.to_string(),
                     character_id: id,
-                    character_name: name,
+                    character_name: name.clone(),
                     gained_exp: Some(today.0),
                     level: Some(today.1),
                     exp_rate: today.2,
                 });
             }
         }
+        // 빠진 날짜도 빈 점으로 유지해 그래프와 주간 위젯이 오래된 날짜로 빈칸을 채우지 않습니다.
+        let period_start = NaiveDate::parse_from_str(&start, "%Y-%m-%d")?;
+        for offset in 0..expected_days {
+            let date = (period_start + Duration::days(offset)).to_string();
+            if !series
+                .iter()
+                .any(|point| point.character_id == id && point.date == date)
+            {
+                series.push(SeriesPoint {
+                    date,
+                    character_id: id,
+                    character_name: name.clone(),
+                    gained_exp: None,
+                    level: None,
+                    exp_rate: None,
+                });
+            }
+        }
     }
+    series.sort_by(|left, right| {
+        left.date
+            .cmp(&right.date)
+            .then_with(|| left.character_id.cmp(&right.character_id))
+    });
     let last_sync_at = connection
         .query_row(
             "SELECT finished_at FROM sync_runs WHERE status='success' ORDER BY id DESC LIMIT 1",
@@ -1085,7 +1070,7 @@ pub fn dashboard(connection: &Connection, period: &str) -> Result<DashboardData,
         .optional()?;
     Ok(DashboardData {
         summary: DashboardSummary {
-            latest_date: Some(latest_date),
+            latest_date: latest,
             period_start: Some(start),
             period_end: Some(end),
             primary_daily_exp,
@@ -1117,6 +1102,252 @@ pub fn set_favorite(
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
+
+    fn add_daily(connection: &Connection, id: i64, date: &str, exp: i64) {
+        save_snapshot(
+            connection,
+            &Snapshot {
+                character_id: id,
+                date: date.into(),
+                level: 281,
+                exp,
+                exp_rate: "10.000".into(),
+                access_flag: None,
+                raw_json: "{}".into(),
+            },
+        )
+        .unwrap();
+    }
+
+    fn add_live(connection: &Connection, id: i64, at: &str, exp: i64) {
+        connection.execute("INSERT INTO live_snapshots(character_id,fetched_at,level,exp,exp_rate,raw_json) VALUES (?1,?2,281,?3,'10.000','{}')",
+            params![id, at, exp]).unwrap();
+    }
+
+    fn test_character(connection: &Connection) {
+        connection.execute("INSERT INTO characters(id,current_name,world_name,is_primary,is_favorite) VALUES (1,'대표','스카니아',1,1)", []).unwrap();
+        set_setting(connection, "primary_character_id", "1").unwrap();
+    }
+
+    #[test]
+    fn missing_day_is_not_a_daily_gain_and_is_repaired_after_backfill() {
+        let connection = Connection::open_in_memory().unwrap();
+        migrate(&connection).unwrap();
+        test_character(&connection);
+        add_daily(&connection, 1, "2026-09-01", 100);
+        add_daily(&connection, 1, "2026-09-03", 600);
+        recalculate_character(&connection, 1).unwrap();
+        let result: (Option<i64>, String) = connection
+            .query_row(
+                "SELECT gained_exp,status FROM xp_deltas WHERE date='2026-09-03'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(result, (None, "missing_snapshot".into()));
+        // 기존 버전에서 생성한 잘못된 파생값도 재시작 시 무효화되어야 합니다.
+        connection
+            .execute("UPDATE xp_deltas SET gained_exp=500,status='ok'", [])
+            .unwrap();
+        migrate(&connection).unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT gained_exp FROM xp_deltas", [], |row| row
+                    .get::<_, Option<i64>>(0))
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM daily_snapshots", [], |row| row
+                    .get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        add_daily(&connection, 1, "2026-09-02", 300);
+        recalculate_character(&connection, 1).unwrap();
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT SUM(gained_exp) FROM xp_deltas WHERE status='ok'",
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )
+                .unwrap(),
+            500
+        );
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT gained_exp FROM xp_deltas WHERE date='2026-09-03'",
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )
+                .unwrap(),
+            300
+        );
+    }
+
+    #[test]
+    fn midnight_estimate_is_corrected_by_official_yesterday_without_using_old_guild_date() {
+        let connection = Connection::open_in_memory().unwrap();
+        migrate(&connection).unwrap();
+        test_character(&connection);
+        add_daily(&connection, 1, "2026-09-01", 100);
+        connection.execute("INSERT INTO guild_memberships(date,member_name,character_id) VALUES ('2026-09-01','대표',1)", []).unwrap();
+        // KST 9월 5일 00:00은 UTC 9월 4일 15:00입니다.
+        add_live(&connection, 1, "2026-09-04 14:58:00", 1000);
+        add_live(&connection, 1, "2026-09-04 15:05:00", 1100);
+        add_live(&connection, 1, "2026-09-04 15:30:00", 1500);
+        let estimate = current_progress(&connection, 1, "2026-09-05").unwrap();
+        assert_eq!(estimate.today_exp, Some(500));
+        assert!(estimate.estimated);
+        assert_eq!(
+            dashboard_for_date(&connection, "daily", "2026-09-05")
+                .unwrap()
+                .rankings[0]
+                .status,
+            "추정"
+        );
+        add_daily(&connection, 1, "2026-09-04", 1200);
+        let official = current_progress(&connection, 1, "2026-09-05").unwrap();
+        assert_eq!(official.today_exp, Some(300));
+        assert!(!official.estimated);
+        assert_eq!(
+            dashboard_for_date(&connection, "daily", "2026-09-05")
+                .unwrap()
+                .summary
+                .primary_today_exp,
+            Some(300)
+        );
+    }
+
+    #[test]
+    fn first_observation_after_midnight_is_a_zero_estimate_and_stale_data_is_not_today() {
+        let connection = Connection::open_in_memory().unwrap();
+        migrate(&connection).unwrap();
+        test_character(&connection);
+        add_live(&connection, 1, "2026-09-03 12:00:00", 100);
+        assert_eq!(
+            current_progress(&connection, 1, "2026-09-05")
+                .unwrap()
+                .today_exp,
+            None
+        );
+        add_live(&connection, 1, "2026-09-04 15:10:00", 500);
+        assert_eq!(
+            current_progress(&connection, 1, "2026-09-05")
+                .unwrap()
+                .today_exp,
+            Some(0)
+        );
+        add_live(&connection, 1, "2026-09-04 15:20:00", 600);
+        assert_eq!(
+            current_progress(&connection, 1, "2026-09-05")
+                .unwrap()
+                .today_exp,
+            Some(100)
+        );
+    }
+
+    #[test]
+    fn rolling_periods_include_today_and_custom_history_never_appends_today() {
+        let connection = Connection::open_in_memory().unwrap();
+        migrate(&connection).unwrap();
+        test_character(&connection);
+        let end = NaiveDate::from_ymd_opt(2026, 9, 5).unwrap();
+        for offset in 0..31 {
+            add_daily(
+                &connection,
+                1,
+                &(end - Duration::days(31 - offset)).to_string(),
+                100 + offset * 100,
+            );
+        }
+        recalculate_character(&connection, 1).unwrap();
+        add_live(&connection, 1, "2026-09-05 01:00:00", 3150);
+        for (period, days, gain) in [("7d", 7, 650), ("30d", 30, 2950)] {
+            let data = dashboard_for_date(&connection, period, "2026-09-05").unwrap();
+            assert_eq!(data.series.len(), days);
+            assert_eq!(data.series.last().unwrap().date, "2026-09-05");
+            assert_eq!(data.rankings[0].gained_exp, Some(gain));
+            assert_eq!(
+                data.series
+                    .iter()
+                    .filter_map(|point| point.gained_exp)
+                    .sum::<i64>(),
+                gain
+            );
+            assert_eq!(data.rankings[0].status, "정상");
+        }
+        let custom =
+            dashboard_for_date(&connection, "custom:2026-09-01:2026-09-03", "2026-09-05").unwrap();
+        assert_eq!(custom.series.len(), 3);
+        assert!(custom
+            .series
+            .iter()
+            .all(|point| point.date.as_str() <= "2026-09-03"));
+        assert_eq!(custom.rankings[0].gained_exp, Some(300));
+        assert!(period_dates("2026-09-05", "custom:2026-09-03:2026-09-01").is_err());
+    }
+
+    #[test]
+    fn partial_collection_is_labelled_and_widget_keeps_seven_calendar_dates() {
+        let connection = Connection::open_in_memory().unwrap();
+        migrate(&connection).unwrap();
+        test_character(&connection);
+        add_daily(&connection, 1, "2026-08-01", 10);
+        add_daily(&connection, 1, "2026-09-03", 100);
+        add_daily(&connection, 1, "2026-09-04", 200);
+        recalculate_character(&connection, 1).unwrap();
+        add_live(&connection, 1, "2026-09-05 01:00:00", 200);
+        let data = dashboard_for_date(&connection, "7d", "2026-09-05").unwrap();
+        assert_eq!(data.rankings[0].status, "일부 수집 (2/7일)");
+        let widget = mobile_widget_snapshot_for_date(&connection, "2026-09-05").unwrap();
+        assert_eq!(
+            serde_json::to_value(&widget).unwrap(),
+            serde_json::to_value(data.mobile_widget_snapshot()).unwrap()
+        );
+        assert_eq!(widget.primary_weekly_points.len(), 7);
+        assert_eq!(widget.primary_weekly_points[0].date, "2026-08-30");
+        assert_eq!(
+            widget.primary_weekly_points.last().unwrap().gained_exp,
+            Some(0)
+        );
+        assert_eq!(widget.primary_daily_average_exp, Some(50));
+    }
+
+    #[test]
+    fn equal_gains_use_current_exp_and_external_favorites_do_not_change_guild_summary() {
+        let connection = Connection::open_in_memory().unwrap();
+        migrate(&connection).unwrap();
+        test_character(&connection);
+        connection.execute("INSERT INTO characters(id,current_name,world_name,is_favorite) VALUES (2,'가','스카니아',1),(3,'외부','루나',1)", []).unwrap();
+        connection.execute("INSERT INTO guild_memberships(date,member_name,character_id) VALUES ('2026-09-04','대표',1),('2026-09-04','가',2)", []).unwrap();
+        for (id, past, live) in [(1, 100, 200), (2, 200, 300), (3, 100, 1000)] {
+            add_daily(&connection, id, "2026-09-04", past);
+            add_live(&connection, id, "2026-09-05 01:00:00", live);
+        }
+        let data = dashboard_for_date(&connection, "daily", "2026-09-05").unwrap();
+        assert_eq!(
+            data.rankings
+                .iter()
+                .map(|row| row.character_id)
+                .collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        );
+        assert_eq!(data.summary.primary_rank, Some(2));
+        assert_eq!(data.summary.leader_gap, Some(0));
+        let widget = mobile_widget_snapshot_for_date(&connection, "2026-09-05").unwrap();
+        assert_eq!(
+            widget
+                .characters
+                .iter()
+                .map(|row| row.character_id)
+                .collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        );
+    }
 
     #[test]
     fn migration_and_settings_round_trip() {
@@ -1200,7 +1431,13 @@ mod tests {
 
         let records = widget_character_records(&connection).unwrap();
         assert_eq!(records.len(), 2);
-        let snapshot = mobile_widget_snapshot_for_date(&connection, "2026-09-02").unwrap();
+        connection
+            .execute(
+                "UPDATE live_snapshots SET fetched_at='2026-09-03 01:00:00'",
+                [],
+            )
+            .unwrap();
+        let snapshot = mobile_widget_snapshot_for_date(&connection, "2026-09-03").unwrap();
         assert_eq!(snapshot.characters.len(), 2);
         assert!(snapshot
             .characters
@@ -1210,7 +1447,7 @@ mod tests {
             .characters
             .iter()
             .any(|character| character.character_name == "일반"));
-        assert_eq!(snapshot.primary_weekly_points.len(), 2);
+        assert_eq!(snapshot.primary_weekly_points.len(), 7);
         assert_eq!(snapshot.primary_weekly_points[0].gained_exp, None);
     }
 
@@ -1405,13 +1642,20 @@ mod tests {
             [],
         ).unwrap();
 
+        connection
+            .execute(
+                "UPDATE live_snapshots SET fetched_at='2026-08-22 01:00:00'",
+                [],
+            )
+            .unwrap();
         assert_eq!(
-            current_progress(&connection, 1, "2026-08-21").unwrap(),
+            current_progress(&connection, 1, "2026-08-22").unwrap(),
             CurrentProgress {
                 level: Some(281),
                 exp: Some(220),
                 rate: Some(33.757),
                 today_exp: Some(120),
+                estimated: false,
             }
         );
     }
@@ -1448,11 +1692,14 @@ mod tests {
             [],
         ).unwrap();
 
-        let today = Utc::now()
-            .with_timezone(&Seoul)
-            .format("%Y-%m-%d")
-            .to_string();
-        let data = dashboard(&connection, "daily").unwrap();
+        connection
+            .execute(
+                "UPDATE live_snapshots SET fetched_at='2026-08-22 01:00:00'",
+                [],
+            )
+            .unwrap();
+        let today = "2026-08-22";
+        let data = dashboard_for_date(&connection, "daily", today).unwrap();
         assert!(data.series.iter().any(|point| {
             point.character_id == 1 && point.date == today && point.gained_exp == Some(120)
         }));
@@ -1519,7 +1766,13 @@ mod tests {
             [],
         ).unwrap();
 
-        let data = dashboard(&connection, "daily").unwrap();
+        connection
+            .execute(
+                "UPDATE live_snapshots SET fetched_at='2026-08-22 01:00:00'",
+                [],
+            )
+            .unwrap();
+        let data = dashboard_for_date(&connection, "daily", "2026-08-22").unwrap();
         assert_eq!(data.rankings[0].character_name, "길드원");
         assert_eq!(data.rankings[0].gained_exp, Some(200));
         assert_eq!(data.rankings[1].gained_exp, Some(10));

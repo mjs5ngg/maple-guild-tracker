@@ -11,12 +11,12 @@ describe("seriesColor", () => {
     expect(seriesColor(17)).not.toBe(seriesColor(18));
   });
 
-  it("일간 그래프에서는 완료일을 제외하고 오늘 점만 남긴다", () => {
+  it("일간 그래프에서는 선택한 오늘 날짜만 남긴다", () => {
     const series = [
       { date: "2026-08-21", character_id: 1, character_name: "대표", gained_exp: 100 },
       { date: "2026-08-22", character_id: 1, character_name: "대표", gained_exp: 200 },
     ];
-    expect(seriesForPeriod(series, "daily", "2026-08-21")).toEqual([series[1]]);
+    expect(seriesForPeriod(series, "daily", "2026-08-22")).toEqual([series[1]]);
     expect(seriesForPeriod(series, "7d", "2026-08-21")).toEqual(series);
   });
 });

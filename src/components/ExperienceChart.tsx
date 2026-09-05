@@ -7,7 +7,7 @@ export type ChartKind = "smooth" | "line" | "bar";
 
 export function seriesForPeriod(series: SeriesPoint[], period: string, completedEnd: string | null | undefined): SeriesPoint[] {
   if (period !== "daily" || !completedEnd) return series;
-  return series.filter((point) => point.date > completedEnd);
+  return series.filter((point) => point.date === completedEnd);
 }
 
 export function seriesColor(characterId: number): string {
@@ -24,7 +24,7 @@ export function ExperienceChart({ series, theme, kind }: { series: SeriesPoint[]
     row[point.character_name] = point.gained_exp;
     map.set(point.date, row);
   }
-  const rows = [...map.values()];
+  const rows = [...map.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, row]) => row);
   if (!rows.length) return <div className="empty-chart">동기화가 완료되면 날짜별 성장 그래프가 표시됩니다.</div>;
   const gridColor = theme === "light" ? "#d9dee7" : "#272d39";
   const axisColor = theme === "light" ? "#667085" : "#737c8d";

@@ -152,8 +152,12 @@ pub fn get_dashboard(
     let data = db::dashboard(&connection, &period).map_err(public_error)?;
     #[cfg(target_os = "android")]
     {
-        if let Ok(widget_data) = db::dashboard(&connection, "7d") {
-            let _ = crate::mobile_widgets::update(&_app, widget_data.mobile_widget_snapshot());
+        let today = chrono::Utc::now()
+            .with_timezone(&chrono_tz::Asia::Seoul)
+            .date_naive()
+            .to_string();
+        if let Ok(snapshot) = db::mobile_widget_snapshot_for_date(&connection, &today) {
+            let _ = crate::mobile_widgets::update(&_app, snapshot);
         }
     }
     Ok(data)
