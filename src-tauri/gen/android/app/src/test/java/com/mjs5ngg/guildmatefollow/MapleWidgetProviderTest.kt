@@ -50,6 +50,9 @@ class MapleWidgetProviderTest {
     assertEquals("2026-08-28 00:05", formatWidgetUpdatedAt("2026-08-28 오전 12:05"))
     assertEquals("2026-08-28 13:05", formatWidgetUpdatedAt("2026-08-28 오후 1:05"))
     assertEquals(null, formatWidgetUpdatedAt(null))
+    assertEquals("2026-08-29 01:05", formatWidgetUpdatedAt("2026-08-28 16:05:11"))
+    assertEquals("2026-08-29 01:05", formatWidgetUpdatedAt("2026-08-28T16:05:11.123Z"))
+    assertEquals(null, formatWidgetUpdatedAt("2026-99-99 30:05:00"))
   }
 
   @Test

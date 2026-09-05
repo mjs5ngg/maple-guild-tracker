@@ -42,6 +42,7 @@ object WidgetSnapshotStore {
     MapleWidgetRenderer.updateAll(context)
   }
 
+  @Synchronized
   fun cacheImagesAndRefresh(context: android.content.Context, snapshot: JSONObject) {
     cacheAvatars(context, snapshot)
     MapleWidgetRenderer.updateAll(context)
@@ -85,16 +86,25 @@ object WidgetSnapshotStore {
   ) {
     val preferences = context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
     if (destination.isFile && preferences.getString(urlKey, null) == imageUrl) return
+    var temporary: File? = null
+    var connection: HttpURLConnection? = null
     try {
-      val connection = URL(imageUrl).openConnection() as HttpURLConnection
+      connection = URL(imageUrl).openConnection() as HttpURLConnection
       connection.connectTimeout = 8_000
       connection.readTimeout = 8_000
       connection.instanceFollowRedirects = true
-      connection.inputStream.use { input -> destination.outputStream().use(input::copyTo) }
-      connection.disconnect()
+      val download = File.createTempFile("avatar-", ".tmp", destination.parentFile)
+      temporary = download
+      connection.inputStream.use { input -> download.outputStream().use(input::copyTo) }
+      val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      android.graphics.BitmapFactory.decodeFile(download.absolutePath, bounds)
+      if (bounds.outWidth <= 0 || bounds.outHeight <= 0 || !download.renameTo(destination)) return
       preferences.edit().putString(urlKey, imageUrl).apply()
     } catch (_: Exception) {
       // 기존 캐시가 있으면 유지하고 다음 동기화에서 다시 시도합니다.
+    } finally {
+      temporary?.delete()
+      connection?.disconnect()
     }
   }
 }

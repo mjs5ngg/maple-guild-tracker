@@ -20,6 +20,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -110,8 +111,16 @@ internal fun formatWeeklyGainSuffix(value: Long?, baseline: Boolean): String =
 
 internal fun formatWidgetUpdatedAt(value: String?): String? {
   if (value.isNullOrBlank()) return null
-  Regex("(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}):(\\d{2})").find(value)?.let { match ->
-    return "${match.groupValues[1]} ${match.groupValues[2]}:${match.groupValues[3]}"
+  Regex("^(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})(?::(\\d{2}))?(?:\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?$").find(value.trim())?.let { match ->
+    return try {
+      val seconds = match.groupValues[3].ifEmpty { "00" }
+      val offset = match.groupValues[4].ifEmpty { "+00:00" }.replace("Z", "+00:00")
+      val parser = SimpleDateFormat("yyyy-MM-dd HH:mm:ssXXX", Locale.US).apply { isLenient = false }
+      val instant = parser.parse("${match.groupValues[1]} ${match.groupValues[2]}:$seconds$offset") ?: return null
+      SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Seoul")
+      }.format(instant)
+    } catch (_: Exception) { null }
   }
   Regex("(\\d{4}-\\d{2}-\\d{2})\\s+(오전|오후)\\s+(\\d{1,2}):(\\d{2})").find(value)?.let { match ->
     val hour = match.groupValues[3].toInt() % 12 + if (match.groupValues[2] == "오후") 12 else 0
