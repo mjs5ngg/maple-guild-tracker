@@ -1,0 +1,85 @@
+# 로컬 중앙 서버 개발판
+
+기존 PC·Android 앱과 별개로 실행하는 메이플 EXP 트래커 웹 개발판입니다. 기존 SQLite 기록이나 앱 설치본을 변경하지 않습니다.
+
+## 실행
+
+저장소 루트에서 실행합니다.
+
+1. PostgreSQL에 전용 데이터베이스를 준비합니다.
+2. .env.example을 참고해 루트 .env에 DATABASE_URL과 PUBLIC_ORIGIN을 설정합니다. 이 파일은 Git에서 제외됩니다.
+3. npm run web:build
+4. npm run web:server
+5. http://127.0.0.1:3100 을 엽니다. 개인 직접 조회는 http://127.0.0.1:3101 입니다.
+
+현재 작업 PC에는 공식 EDB PostgreSQL 17.11 Windows 바이너리를 .local-runtime/postgres에 내려받았고, .local-runtime/pgdata에 새 개발 전용 DB를 생성했습니다. 운영체제 서비스 등록이나 방화벽 변경은 하지 않았습니다. DB는 127.0.0.1:55432에만 바인딩합니다. 개발용 DB 암호는 공개 운영에 재사용하지 마세요.
+
+DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
+
+```powershell
+& '.local-runtime/postgres/pgsql/bin/pg_ctl.exe' -D '.local-runtime/pgdata' -l '.local-runtime/postgres.log' -o '-h 127.0.0.1 -p 55432' -w start
+```
+
+서버 시작 시 버전형 SQL 마이그레이션을 적용합니다. 기존 앱 DB는 대상이 아닙니다. 웹 및 개인 조회 서버는 로컬 주소에만 바인딩하므로 외부에서 접근할 수 없습니다.
+
+## 연결에 필요한 설정
+
+- NEXON_OPERATOR_KEY는 중앙 수집기 전용 운영자 키입니다. 설정하지 않으면 수집기를 실행하지 않습니다.
+- GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+- KAKAO_CLIENT_ID / KAKAO_CLIENT_SECRET
+- NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
+- 각 OAuth 복귀 주소는 PUBLIC_ORIGIN/auth/google/callback, /auth/kakao/callback, /auth/naver/callback 입니다.
+- 발급 정보가 없는 로그인은 화면에서 비활성화됩니다. 개발용 인증 우회는 없습니다.
+- 카카오는 클라이언트 시크릿을 활성화한 구성입니다. 제공자별 로컬 복귀 주소 허용 여부와 공개 전 심사는 콘솔에서 확인해야 합니다.
+- 배포 주소 변경 시 WEB_DASHBOARD_ORIGIN과 WEB_DIRECT_ORIGIN을 지정하고 웹을 다시 빌드합니다. 개인 키 출처에는 광고·분석 스크립트를 넣지 않습니다.
+- 소셜 로그인 연결은 기존 로그인 세션과 제공자 인증을 모두 확인합니다. 이메일 자동 병합은 하지 않습니다. 연결 해제 및 계정 삭제 UI는 아직 없습니다.
+
+개인 넥슨 키는 별도 웹 출처의 로컬 저장소에 선택적으로 기억합니다. 서버 업로드 API는 제공하지 않습니다. 브라우저 비밀번호 관리자 동작 자체를 보장하지는 않습니다. 개인 결과는 브라우저 메모리에만 반영됩니다.
+
+## 구현된 동작
+
+- PostgreSQL 계정·소셜 ID·해시 세션·대표·즐겨찾기 분리.
+- Google·카카오·네이버 인증 코드 교환 및 제공자 프로필 식별. 상태 토큰 1회 사용과 브라우저 쿠키 결합.
+- 168시간 내 활성 사용자 필요 대상의 합집합 수집. 다른 활성 사용자의 길드원·대표·즐겨찾기는 수집 유지.
+- 서버 프로세스 간 PostgreSQL advisory lock, 15분 주기와 중복 실행 방지.
+- 직렬 API 요청과 429/서버 장애 재시도. 최신 수집 후 주기당 최대 300개 과거 스냅샷 보충.
+- 최근 30일 보충과 원본 보존. 역사 길드 가입일별 랭킹은 아직 구현하지 않았습니다.
+- 오늘·7일·30일, 전체 경험치/기간 획득 정렬, 즐겨찾기 탭, 대표 성장 그래프.
+- 자정 기준점 부족 시 근처 서버 관측값 사용 및 추정 안내.
+- 개인 개발키 대표 조회, 서비스키 현재 길드와 즐겨찾기 조회. 조회 중 잠금 및 완료 후 60초 제한.
+- 필수 출처 표기, 키 종류·168시간 정책·자정 경계 안내.
+
+## 검증
+
+```text
+npm test
+npm run web:build
+cargo test --manifest-path server/Cargo.toml
+cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
+```
+
+실제 DB 통합 테스트는 DATABASE_URL을 개발용 PostgreSQL로 설정한 상태에서 다음처럼 실행합니다. sqlx 테스트 도구가 격리 DB를 만들고 정리하므로 테스트 DB 생성 권한이 필요합니다.
+
+```text
+cargo test --manifest-path server/Cargo.toml -- --ignored
+```
+
+## 남은 검증과 공개 전 작업
+
+- 실제 제공자 등록 정보로 세 가지 로그인과 계정 연결 검증.
+- 실제 운영자 키로 길드 단위 수집, 실패 재개, 호출량·장시간 부하 측정.
+- 실제 개인 키로 브라우저 CORS 조회·저장·새로고침 결과 검증. 현재는 HTTP 사전 요청만 검증한 상태입니다.
+- 신규 수집량이 큰 경우의 과거 보충 공정성, 장기 실패 대상의 재시도 효율화.
+- 닉네임/OCID 변경 이력, 날짜별 길드 가입·탈퇴 순위의 기존 앱 수준 이관.
+- 원본 장기 보관량 측정 및 승인된 보관 정책 결정. 현재 자동 원본 삭제는 없습니다.
+- Android/PC의 서버 연결 전환, 위젯 활동 연결은 후속 단계입니다.
+- 광고 네트워크 등록 정보 연결과 도메인·HTTPS·백업/복구 공개 환경 설정.
+- WebMCP 서버 상태 조회는 기능 감지 방식으로 추가했으나 지원 브라우저 실행 검증은 하지 않았습니다.
+
+공식 근거.
+- https://www.enterprisedb.com/download-postgresql-binaries?lang=en
+- https://docs.rs/axum/latest/axum/
+- https://docs.rs/sqlx/latest/sqlx/
+- https://developers.google.com/identity/openid-connect/openid-connect
+- https://developers.kakao.com/docs/ko/kakaologin/rest-api
+- https://developers.naver.com/docs/login/api/api.md

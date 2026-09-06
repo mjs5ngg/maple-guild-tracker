@@ -4,3 +4,8 @@ src-tauri/target/
 release/
 *.log
 .DS_Store
+server/target/
+.env
+.env.local
+web-dist/
+.local-runtime/
