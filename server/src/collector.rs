@@ -2,21 +2,34 @@
 use crate::*;
 use chrono::{Duration as Days, Timelike, Utc};
 use serde_json::Value;
-use sqlx::Row;
+use sqlx::{Connection, Row};
 use std::collections::HashMap;
 
 async fn api(app: &App, path: &str, params: &[(&str, &str)]) -> Result<Value, ()> {
+    #[cfg(test)]
+    let base = app.nexon_origin.as_str();
+    #[cfg(not(test))]
+    let base = "https://open.api.nexon.com";
     for attempt in 0..4 {
         // 직렬 수집과 호출 간격으로 동시 실행·순간 호출량을 제한합니다.
-        tokio::time::sleep(Duration::from_millis(220)).await;
+        tokio::time::sleep(Duration::from_millis(if cfg!(test) { 1 } else { 220 })).await;
         let response = app
             .http
-            .get(format!("https://open.api.nexon.com/maplestory/v1/{path}"))
+            .get(format!("{base}/maplestory/v1/{path}"))
             .header("x-nxopen-api-key", app.operator_key.as_deref().ok_or(())?)
             .query(params)
             .send()
-            .await
-            .map_err(|_| ())?;
+            .await;
+        let response = match response {
+            Ok(response) => response,
+            Err(_) => {
+                if attempt < 3 {
+                    tokio::time::sleep(Duration::from_millis(500u64 << attempt)).await;
+                    continue;
+                }
+                return Err(());
+            }
+        };
         if response.status().is_success() {
             return response.json().await.map_err(|_| ());
         }
@@ -48,18 +61,17 @@ async fn current(app: &App, name: &str) -> Result<(String, Value), ()> {
     };
     let basic = api(app, "character/basic", &[("ocid", &ocid)]).await?;
     let observed = Utc::now();
-    sqlx::query("INSERT INTO characters(ocid,name,basic,observed_at) VALUES($1,$2,$3,$4) ON CONFLICT(ocid) DO UPDATE SET name=excluded.name,basic=excluded.basic,observed_at=excluded.observed_at")
-        .bind(&ocid).bind(basic["character_name"].as_str().ok_or(())?).bind(&basic).bind(observed).execute(app.pool().map_err(|_|())?).await.map_err(|_|())?;
-    sqlx::query("INSERT INTO observations VALUES($1,$2,$3) ON CONFLICT DO NOTHING")
-        .bind(&ocid)
-        .bind(observed)
-        .bind(&basic)
-        .execute(app.pool().map_err(|_| ())?)
+    records::save_current(app.pool().map_err(|_| ())?, &ocid, &basic, observed)
         .await
         .map_err(|_| ())?;
     Ok((ocid, basic))
 }
-async fn guild(app: &App, ocid: &str, basic: &Value) -> Result<(), ()> {
+async fn guild(
+    app: &App,
+    ocid: &str,
+    basic: &Value,
+    cache: &mut HashMap<(String, String), String>,
+) -> Result<(), ()> {
     let pool = app.pool().map_err(|_| ())?;
     let name = basic["character_guild_name"].as_str().unwrap_or("");
     if name.is_empty() {
@@ -71,6 +83,16 @@ async fn guild(app: &App, ocid: &str, basic: &Value) -> Result<(), ()> {
         return Ok(());
     }
     let world = basic["world_name"].as_str().ok_or(())?;
+    let cache_key = (world.to_owned(), name.to_owned());
+    if let Some(id) = cache.get(&cache_key) {
+        sqlx::query("UPDATE characters SET guild_key=$1 WHERE ocid=$2")
+            .bind(id)
+            .bind(ocid)
+            .execute(pool)
+            .await
+            .map_err(|_| ())?;
+        return Ok(());
+    }
     let id = api(
         app,
         "guild/id",
@@ -98,27 +120,39 @@ async fn guild(app: &App, ocid: &str, basic: &Value) -> Result<(), ()> {
             .map_err(|_| ())?;
     }
     sqlx::query("UPDATE characters SET guild_key=$1 WHERE ocid=$2")
-        .bind(id)
+        .bind(&id)
         .bind(ocid)
         .execute(&mut *tx)
         .await
         .map_err(|_| ())?;
     tx.commit().await.map_err(|_| ())?;
+    cache.insert(cache_key, id);
     Ok(())
 }
-async fn cycle(app: &App) -> Result<(), sqlx::Error> {
+pub(crate) async fn cycle(app: &App) -> Result<(), sqlx::Error> {
     let pool = app.db.as_ref().unwrap();
     // 전용 연결의 잠금으로 여러 서버 프로세스의 중복 수집을 방지합니다.
-    let mut lock = pool.acquire().await?;
+    let mut lock = pool.acquire().await?.detach();
     let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock(7420913)")
-        .fetch_one(&mut *lock)
+        .fetch_one(&mut lock)
         .await?;
     if !acquired {
         return Ok(());
     }
-    let result = cycle_locked(app).await;
+    let result = async {
+        sqlx::query(
+            "UPDATE sync_runs SET finished_at=now(),status='interrupted' WHERE finished_at IS NULL",
+        )
+        .execute(&mut lock)
+        .await?;
+        cycle_locked(app).await
+    }
+    .await;
+    if result.is_err() {
+        let _=sqlx::query("UPDATE sync_runs SET finished_at=now(),status='storage_error' WHERE finished_at IS NULL").execute(&mut lock).await;
+    }
     let unlocked = sqlx::query("SELECT pg_advisory_unlock(7420913)")
-        .execute(&mut *lock)
+        .execute(&mut lock)
         .await;
     if unlocked.is_err() {
         let _ = lock.close().await;
@@ -133,6 +167,7 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let rows=sqlx::query("SELECT id,last_active,primary_name FROM users WHERE last_active>now()-interval '168 hours'").fetch_all(pool).await?;
     let mut users = Vec::new();
     let mut basics = HashMap::new();
+    let mut guild_cache = HashMap::new();
     let mut failed = 0i32;
     let mut succeeded = 0i32;
     for row in rows {
@@ -149,7 +184,7 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
         }
         match current(app, &primary).await {
             Ok((ocid, basic)) => {
-                if guild(app, &ocid, &basic).await.is_err() {
+                if guild(app, &ocid, &basic, &mut guild_cache).await.is_err() {
                     failed += 1;
                 }
                 basics.insert(primary, (ocid, basic));
@@ -193,50 +228,26 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     // 최신 수집을 먼저 끝내고, 과거 보충은 한 주기당 제한하여 신규 길드가 최신화를 막지 않게 합니다.
     let now = Utc::now().with_timezone(&chrono_tz::Asia::Seoul);
     let end = now.date_naive() - Days::days(if now.hour() >= 2 { 1 } else { 2 });
-    let mut budget = 300usize;
-    for ocid in collected {
-        for offset in 0..31 {
-            if budget == 0 {
-                break;
-            }
-            let date = end - Days::days(offset);
-            if date < now.date_naive() - Days::days(30) {
-                continue;
-            }
-            let exists: bool = sqlx::query_scalar(
-                "SELECT EXISTS(SELECT 1 FROM daily_snapshots WHERE ocid=$1 AND date=$2)",
-            )
-            .bind(&ocid)
-            .bind(date)
-            .fetch_one(pool)
-            .await?;
-            if exists {
-                continue;
-            }
-            budget -= 1;
-            let date_string = date.to_string();
-            match api(
-                app,
-                "character/basic",
-                &[("ocid", &ocid), ("date", &date_string)],
-            )
-            .await
-            {
-                Ok(basic) => {
-                    sqlx::query(
-                        "INSERT INTO daily_snapshots VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-                    )
-                    .bind(&ocid)
-                    .bind(date)
-                    .bind(basic)
-                    .execute(pool)
-                    .await?;
-                }
-                Err(_) => failed += 1,
+    let start = now.date_naive() - Days::days(30);
+    backfill::enqueue(pool, &collected, start, end).await?;
+    let jobs = backfill::due(pool, &collected, start, Utc::now(), 300).await?;
+    for (ocid, date, attempts) in jobs {
+        let date_string = date.to_string();
+        match api(
+            app,
+            "character/basic",
+            &[("ocid", &ocid), ("date", &date_string)],
+        )
+        .await
+        {
+            Ok(basic) => backfill::complete(pool, &ocid, date, &basic).await?,
+            Err(_) => {
+                failed += 1;
+                backfill::failed(pool, &ocid, date, attempts, Utc::now()).await?;
             }
         }
     }
-    sqlx::query("UPDATE sync_runs SET finished_at=now(),succeeded=$1,failed=$2 WHERE id=$3")
+    sqlx::query("UPDATE sync_runs SET finished_at=now(),succeeded=$1,failed=$2,status=CASE WHEN $2>0 THEN 'partial' ELSE 'completed' END WHERE id=$3")
         .bind(succeeded)
         .bind(failed)
         .bind(run)

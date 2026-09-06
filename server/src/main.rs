@@ -1,10 +1,12 @@
 // 로컬 웹 서버와 PostgreSQL 연결 및 안전한 공통 응답을 구성합니다.
 mod auth;
+mod backfill;
 mod collector;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/exp.rs"]
 mod exp;
 mod policy;
+mod records;
 mod routes;
 
 use axum::{
@@ -22,6 +24,8 @@ use std::{sync::Arc, time::Duration};
 
 #[derive(Clone)]
 pub struct App {
+    #[cfg(test)]
+    nexon_origin: String,
     db: Option<PgPool>,
     http: reqwest::Client,
     origin: String,
@@ -133,6 +137,8 @@ async fn main() {
         None
     };
     let app = Arc::new(App {
+        #[cfg(test)]
+        nexon_origin: "https://open.api.nexon.com".into(),
         db,
         http: reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
