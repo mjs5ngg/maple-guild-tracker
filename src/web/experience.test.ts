@@ -1,0 +1,20 @@
+// 웹 정수 보존과 날짜 및 동점 정렬 회귀를 검증합니다.
+import {describe,it,expect} from "vitest";
+import {parseNexon,gain,dayBefore,sortRows,dailyPoints,periodGain,kstDate} from "./experience";
+import type {Basic,Snapshot} from "./types";
+const basic=(level:number,xp:string):Basic=>({character_name:"A",world_name:"스카니아",character_class:"은월",character_level:level,character_exp:xp,character_exp_rate:"1"});
+describe("웹 경험치",()=>{
+ it("최근 기간은 오늘 포함이며 오늘 0을 누락으로 보지 않음",()=>{
+ const today=kstDate();const s:Snapshot={ocid:"A",basic:basic(200,"5"),observedAt:new Date().toISOString(),history:[{date:dayBefore(today),basic:basic(200,"5")}]};
+ expect(dailyPoints(s,7,["10"])).toHaveLength(7);expect(dailyPoints(s,7,["10"])[6]).toEqual({date:today,value:0n});expect(periodGain(s,1,["10"])).toEqual({value:0n,complete:true});expect(periodGain(s,7,["10"]).complete).toBe(false);
+ });
+ it("공식 전일 기준은 추정 표본보다 우선함",()=>{
+ const s:Snapshot={ocid:"A",basic:basic(200,"8"),observedAt:new Date().toISOString(),todayBaseline:basic(200,"3"),history:[{date:dayBefore(kstDate()),basic:basic(200,"5")}]};
+ expect(periodGain(s,1,["10"]).value).toBe(3n);
+ });
+ it("안전 정수 범위 밖의 API 정수를 문자열로 보존",()=>expect((parseNexon('{"character_exp":99999999999999999}') as Basic).character_exp).toBe("99999999999999999"));
+ it("동일 레벨과 다중 레벨업 계산",()=>{expect(gain(basic(200,"5"),basic(200,"8"),["10"])).toBe(3n);expect(gain(basic(200,"5"),basic(202,"3"),["10","20"])).toBe(28n);});
+ it("누락과 역행을 0으로 바꾸지 않음",()=>{expect(gain(undefined,basic(200,"0"),[])).toBe(null);expect(gain(basic(200,"5"),basic(200,"3"),[])).toBe(null);});
+ it("연도 경계 전일",()=>expect(dayBefore("2026-01-01")).toBe("2025-12-31"));
+ it("레벨 현재 경험치 닉네임 정렬",()=>{const rows=["나","가"].map(name=>({ocid:name,basic:{...basic(200,"5"),character_name:name},observedAt:"2026-01-01",history:[]} as Snapshot));expect(sortRows(rows,false,[])[0].ocid).toBe("가");});
+});
