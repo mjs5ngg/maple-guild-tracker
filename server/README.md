@@ -53,6 +53,25 @@ DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
 
 ## 검증
 
+### WSL2 Ubuntu 개발 환경
+
+Ubuntu 24.04에서 root로 `bash scripts/setup-linux.sh`를 실행하면 개발 도구와 별도 `mapledev` 계정·PostgreSQL DB를 준비합니다. Rust는 해당 사용자로 공식 rustup을 설치합니다. Windows DB나 자격 증명은 복사하지 않습니다.
+
+현재 Linux 작업본은 `/home/mapledev/maple-guild-tracker`입니다. 해당 경로에서 다음 명령으로 검증할 수 있습니다.
+
+```bash
+export DATABASE_URL='postgresql:///maple_exp?host=/var/run/postgresql&user=mapledev'
+cargo test --manifest-path server/Cargo.toml -- --include-ignored
+npm ci
+npm test
+npx tsc --noEmit
+npx vite build --config vite.web.config.ts
+WEB_DIRECT=1 npx vite build --config vite.web.config.ts
+cargo run --manifest-path server/Cargo.toml
+```
+
+Linux 테스트 서버도 3100·3101 포트를 사용하므로 Windows 서버와 동시에 실행하지 않습니다. Linux는 Windows 자격 증명에 접근하지 않으며, 운영 키와 소셜 인증 설정이 없는 상태에서는 실제 수집·로그인은 비활성화됩니다. 개발 환경 설치는 운영 서버 자동 시작이나 운영 DB 이전을 의미하지 않습니다.
+
 ```text
 npm test
 npm run web:build

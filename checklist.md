@@ -2,7 +2,7 @@
 
 - [x] 기존 Windows 자격 증명 키의 명시적 재사용과 조회 검증.
 - [x] WSL 설치 및 VirtualMachinePlatform 활성화. RestartNeeded=True 확인.
-- [ ] Windows 재부팅 후 Ubuntu 설치·실행과 Linux 서버 환경 구성.
+- [x] Windows 재부팅 후 Ubuntu 설치·실행과 Linux 서버 환경 구성. Linux 서버 15개·화면 34개 테스트, 웹 빌드와 HTTP 확인.
 - [x] 테스트와 키 미노출 점검 및 결과 기록.
 
 ## 후속 서버 수집 안정화

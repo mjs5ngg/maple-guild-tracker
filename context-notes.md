@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- 재부팅 후 WSL2의 가상화 오류가 해소되었고 Ubuntu-24.04 설치를 시작했다. Linux에는 별도 개발 DB를 사용하여 Windows 원본 DB를 변경하지 않는다.
+
 - 승인된 기존 앱 키를 keyring windows-native로 서버 메모리에서만 읽도록 연결했다. .env에는 비밀 값 대신 NEXON_USE_WINDOWS_CREDENTIAL=1만 추가했다. 실제 Nexon 캐릭터 식별자 조회 HTTP 200을 확인했고 서버 상태는 collector=true, database=true다.
 - WSL 2.7.13을 설치하고 관리자 승인으로 VirtualMachinePlatform을 활성화했다. Windows가 RestartNeeded=True를 반환했다. 펌웨어 가상화와 SLAT는 활성화되어 있으며 Ubuntu는 아직 등록되지 않았다. 사용자의 작업을 보호하기 위해 자동 재부팅하지 않았다.
 - 재부팅 후 scripts/install-wsl.ps1로 Ubuntu-24.04 설치를 이어가고 Linux 환경을 구성한다. Windows 자격 증명은 Linux에 복사하지 않았으며 현재 서버는 Windows에서 실행한다. 소셜 제공자 발급 정보는 미설정이다.
@@ -258,3 +260,9 @@
 - 백그라운드 Worker는 API 키를 별도 저장하지 않고 기존 `android-native-keyring-store`를 JNI Rust 계층에서 읽는다. 전체 길드 대신 대표 및 즐겨찾기만 조회해 15분 주기의 API 호출량을 제한한다.
 - `v0.3.12`는 네트워크 연결 조건의 15분 고유 WorkManager 작업을 앱 시작 또는 첫 위젯 추가 시 등록한다. Worker는 위젯이 없으면 API를 호출하지 않고, 실패하면 30초부터 지수 백오프로 재시도한다.
 - 백그라운드 JNI 동기화는 대표·즐겨찾기의 실시간 정보와 누락된 최근 완료일 스냅샷을 저장한 뒤 모바일 전용 7일 스냅샷을 생성한다. 프런트엔드 26건, Rust 24건, Android 위젯 단위 테스트와 ARM64 JNI 심볼·R8 릴리스·APK v2·v3 서명을 검증했고 휴대폰 Download 전송본의 SHA-256 일치를 확인했다.
+# Linux 환경 검증 결과 — 2026-09-07
+
+- Ubuntu 24.04.4 LTS, WSL2, systemd에서 PostgreSQL 16.15, Rust 1.98.1, Node 18.19.1을 설치했다.
+- `/home/mapledev/maple-guild-tracker`는 GitHub에서 복제한 별도 작업본이다. Windows .env와 DB 및 키는 복사하지 않았다.
+- Linux에서 서버 테스트 15개(실제 PostgreSQL 통합 4개 포함), 화면 테스트 34개, TypeScript, 웹 두 화면 빌드, clippy가 통과했다. HTTP 상태에서 database=true와 개인 조회 화면 200을 확인했다.
+- Linux 테스트 서버는 종료하고 Windows 서버를 기존 자격 증명 사용 방식으로 다시 실행했다. Linux 운영 전환·DB 이전·비밀 키 전달은 아직 수행하지 않았다. 소셜 제공자 등록 정보도 별도 연결이 필요하다.
