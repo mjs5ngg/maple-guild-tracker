@@ -1,5 +1,12 @@
 # 구현 결정 기록
 
+- 승인된 기존 앱 키를 keyring windows-native로 서버 메모리에서만 읽도록 연결했다. .env에는 비밀 값 대신 NEXON_USE_WINDOWS_CREDENTIAL=1만 추가했다. 실제 Nexon 캐릭터 식별자 조회 HTTP 200을 확인했고 서버 상태는 collector=true, database=true다.
+- WSL 2.7.13을 설치하고 관리자 승인으로 VirtualMachinePlatform을 활성화했다. Windows가 RestartNeeded=True를 반환했다. 펌웨어 가상화와 SLAT는 활성화되어 있으며 Ubuntu는 아직 등록되지 않았다. 사용자의 작업을 보호하기 위해 자동 재부팅하지 않았다.
+- 재부팅 후 scripts/install-wsl.ps1로 Ubuntu-24.04 설치를 이어가고 Linux 환경을 구성한다. Windows 자격 증명은 Linux에 복사하지 않았으며 현재 서버는 Windows에서 실행한다. 소셜 제공자 발급 정보는 미설정이다.
+- 서버 단위 11개, 실제 PostgreSQL 통합 4개 및 clippy가 통과했다. 비밀 키를 출력하거나 Git에 추가하지 않았다.
+
+- 사용자가 기존 PC 서비스 키의 중앙 수집 재사용과 Linux 환경 구성을 승인했다. Windows는 유지하고 WSL2/Ubuntu를 우선한다. 현재 프로세스는 관리자 권한이 아니며 WSL이 설치되지 않은 상태다.
+
 ## 후속 작업 범위
 
 - 사용자 발급 정보가 없어도 검증 가능한 중앙 수집기의 무한 실패 반복·과거 보충 편중을 우선 수정한다.

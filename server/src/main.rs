@@ -5,6 +5,7 @@ mod collector;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/exp.rs"]
 mod exp;
+mod operator_key;
 mod policy;
 mod records;
 mod routes;
@@ -146,10 +147,38 @@ async fn main() {
             .build()
             .unwrap(),
         origin,
-        operator_key: std::env::var("NEXON_OPERATOR_KEY")
-            .ok()
-            .filter(|v| !v.is_empty()),
+        operator_key: operator_key::load(),
     });
+    if std::env::args().any(|arg| arg == "--check-operator-key") {
+        let Some(key) = app.operator_key.as_deref() else {
+            eprintln!("운영자 키를 읽지 못했습니다.");
+            std::process::exit(1);
+        };
+        let result = app
+            .http
+            .get("https://open.api.nexon.com/maplestory/v1/id")
+            .query(&[("character_name", "엘크라우치")])
+            .header("x-nxopen-api-key", key)
+            .send()
+            .await;
+        match result {
+            Ok(response) if response.status().is_success() => {
+                println!("NEXON 운영자 키 조회 검증 성공 (HTTP 200)")
+            }
+            Ok(response) => {
+                eprintln!(
+                    "NEXON 운영자 키 조회 검증 실패 (HTTP {})",
+                    response.status().as_u16()
+                );
+                std::process::exit(1);
+            }
+            Err(_) => {
+                eprintln!("NEXON 검증 요청의 네트워크 오류");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if app.db.is_some() && app.operator_key.is_some() {
         tokio::spawn(collector::run(app.clone()));
     }

@@ -1,5 +1,10 @@
 # 구현 체크리스트
 
+- [x] 기존 Windows 자격 증명 키의 명시적 재사용과 조회 검증.
+- [x] WSL 설치 및 VirtualMachinePlatform 활성화. RestartNeeded=True 확인.
+- [ ] Windows 재부팅 후 Ubuntu 설치·실행과 Linux 서버 환경 구성.
+- [x] 테스트와 키 미노출 점검 및 결과 기록.
+
 ## 후속 서버 수집 안정화
 
 - [x] 보충 작업 큐·캐릭터별 공정성·지연 재시도를 구현한다.

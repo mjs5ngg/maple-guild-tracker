@@ -25,6 +25,8 @@ DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
 ## 연결에 필요한 설정
 
 - NEXON_OPERATOR_KEY는 중앙 수집기 전용 운영자 키입니다. 설정하지 않으면 수집기를 실행하지 않습니다.
+- Windows에서 NEXON_USE_WINDOWS_CREDENTIAL=1을 설정하면 사용자 승인하에 기존 앱 자격 증명 키를 메모리로 읽습니다. 실제 키를 .env로 복사하지 않습니다. 명시한 NEXON_OPERATOR_KEY가 있으면 우선합니다. Linux에는 이 방식이 적용되지 않습니다.
+- cargo run --manifest-path server/Cargo.toml -- --check-operator-key 로 기존 대표 닉네임의 식별자 조회를 검증할 수 있습니다. 키나 요청 URL은 출력하지 않습니다.
 - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
 - KAKAO_CLIENT_ID / KAKAO_CLIENT_SECRET
 - NAVER_CLIENT_ID / NAVER_CLIENT_SECRET
