@@ -164,21 +164,16 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let run: i64 = sqlx::query_scalar("INSERT INTO sync_runs DEFAULT VALUES RETURNING id")
         .fetch_one(pool)
         .await?;
-    let rows=sqlx::query("SELECT id,last_active,primary_name FROM users WHERE last_active>now()-interval '168 hours'").fetch_all(pool).await?;
-    let mut users = Vec::new();
+    let primaries: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT primary_name FROM users WHERE last_active>now()-interval '168 hours'",
+    )
+    .fetch_all(pool)
+    .await?;
     let mut basics = HashMap::new();
     let mut guild_cache = HashMap::new();
     let mut failed = 0i32;
     let mut succeeded = 0i32;
-    for row in rows {
-        let id: String = row.get("id");
-        let primary: String = row.get("primary_name");
-        let favorites: Vec<String> =
-            sqlx::query_scalar("SELECT name FROM favorites WHERE user_id=$1")
-                .bind(id)
-                .fetch_all(pool)
-                .await?;
-        users.push((row.get("last_active"), primary.clone(), favorites));
+    for primary in primaries {
         if primary.is_empty() || basics.contains_key(&primary) {
             continue;
         }
@@ -187,10 +182,31 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
                 if guild(app, &ocid, &basic, &mut guild_cache).await.is_err() {
                     failed += 1;
                 }
-                basics.insert(primary, (ocid, basic));
+                // 저장 중 바뀐 새 이름으로도 같은 응답을 재사용합니다.
+                let value = Ok((ocid, basic));
+                if let Ok((_, basic)) = &value {
+                    if let Some(name) = basic["character_name"].as_str() {
+                        basics.insert(name.to_owned(), value.clone());
+                    }
+                }
+                basics.insert(primary, value);
             }
-            Err(_) => failed += 1,
+            Err(_) => {
+                basics.insert(primary, Err(()));
+            }
         }
+    }
+    // 대표 저장 과정의 닉네임 변경을 반영한 뒤 구독 합집합을 계산합니다.
+    let rows=sqlx::query("SELECT id,last_active,primary_name FROM users WHERE last_active>now()-interval '168 hours'").fetch_all(pool).await?;
+    let mut users = Vec::new();
+    for row in rows {
+        let id: String = row.get("id");
+        let favorites: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM favorites WHERE user_id=$1")
+                .bind(id)
+                .fetch_all(pool)
+                .await?;
+        users.push((row.get("last_active"), row.get("primary_name"), favorites));
     }
     let mut guild_of = HashMap::new();
     let mut members: HashMap<String, Vec<String>> = HashMap::new();
@@ -212,8 +228,8 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let targets = policy::targets(&users, &guild_of, &members, Utc::now());
     let mut collected = Vec::new();
     for name in targets {
-        let result = if let Some(value) = basics.remove(&name) {
-            Ok(value)
+        let result = if let Some(value) = basics.get(&name) {
+            value.clone()
         } else {
             current(app, &name).await
         };

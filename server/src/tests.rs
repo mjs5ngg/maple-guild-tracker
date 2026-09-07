@@ -3,6 +3,96 @@ use crate::*;
 use axum::body::{to_bytes, Body};
 use tower::ServiceExt;
 
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
+async fn collector_caches_failures_and_refreshes_renamed_subscriptions(pool: PgPool) {
+    use axum::extract::{Path, Query};
+    use std::{
+        collections::HashMap,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+    let failures = Arc::new(AtomicUsize::new(0));
+    async fn mock(
+        State(failures): State<Arc<AtomicUsize>>,
+        Path(path): Path<String>,
+        Query(q): Query<HashMap<String, String>>,
+    ) -> Response {
+        let value = match path.as_str() {
+            "id" if q["character_name"] == "실패" => {
+                failures.fetch_add(1, Ordering::SeqCst);
+                return StatusCode::BAD_REQUEST.into_response();
+            }
+            "id" => json!({"ocid":q["character_name"]}),
+            "character/basic" => {
+                json!({"character_name":if q["ocid"]=="stable-id" {"새이름"} else {&q["ocid"]},"character_level":281,"character_exp":100,"character_exp_rate":"0.1","world_name":"스카니아","character_guild_name":"길드"})
+            }
+            "guild/id" => json!({"oguild_id":"guild-id"}),
+            "guild/basic" => json!({"guild_member":["새이름","길드원"]}),
+            _ => return StatusCode::NOT_FOUND.into_response(),
+        };
+        Json(value).into_response()
+    }
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let state = failures.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/maplestory/v1/{*path}", get(mock))
+                .with_state(state),
+        )
+        .await
+        .unwrap();
+    });
+    records::save_current(
+        &pool,
+        "stable-id",
+        &json!({"character_name":"이전"}),
+        chrono::Utc::now(),
+    )
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO users(id,primary_name) VALUES('rename','이전'),('fail-a','실패'),('fail-b','실패')").execute(&pool).await.unwrap();
+    let app = App {
+        db: Some(pool.clone()),
+        http: reqwest::Client::new(),
+        origin: "http://127.0.0.1:3100".into(),
+        operator_key: Some("mock-only".into()),
+        nexon_origin: origin,
+    };
+    collector::cycle(&app).await.unwrap();
+    server.abort();
+    assert_eq!(
+        failures.load(Ordering::SeqCst),
+        1,
+        "같은 실패 대상을 한 주기에서 반복 조회하면 안 됩니다"
+    );
+    let names: Vec<String> = sqlx::query_scalar("SELECT name FROM characters ORDER BY name")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert!(
+        names.contains(&"길드원".to_owned()),
+        "대표 닉네임이 바뀐 주기에도 길드원을 수집해야 합니다"
+    );
+    let (succeeded, failed): (i32, i32) =
+        sqlx::query_as("SELECT succeeded,failed FROM sync_runs ORDER BY id DESC LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!((succeeded, failed), (2, 1));
+    let observations: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM observations WHERE ocid='stable-id'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        observations, 2,
+        "대표 최신 조회는 한 번만 추가되어야 합니다"
+    );
+}
+
 // 큐 상태는 재시작 후에도 남고 활성 대상에만 공정하게 배분됩니다.
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
