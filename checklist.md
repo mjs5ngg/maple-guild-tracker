@@ -1,5 +1,12 @@
 # 구현 체크리스트
 
+## Linux 실행·백업 절차
+
+- [x] Windows/Linux 공통 웹 빌드 명령 검증.
+- [x] systemd 서비스 구성 검증. 운영 전환 전에는 비활성 유지.
+- [x] Linux DB 백업 및 별도 DB 복원 검증.
+- [x] 테스트와 운영 전환 제한 사항 기록.
+
 - [x] 기존 Windows 자격 증명 키의 명시적 재사용과 조회 검증.
 - [x] WSL 설치 및 VirtualMachinePlatform 활성화. RestartNeeded=True 확인.
 - [x] Windows 재부팅 후 Ubuntu 설치·실행과 Linux 서버 환경 구성. Linux 서버 15개·화면 34개 테스트, 웹 빌드와 HTTP 확인.

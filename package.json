@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
-    "web:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-web.ps1",
+    "web:build": "node scripts/build-web.mjs",
     "web:server": "cargo run --manifest-path server/Cargo.toml",
     "web:direct": "powershell -NoProfile -Command \"$env:WEB_DIRECT='1'; npx vite --config vite.web.config.ts\"",
     "android:init": "tauri android init",

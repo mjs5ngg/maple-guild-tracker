@@ -1,5 +1,9 @@
 # 구현 결정 기록
 
+- 공통 웹 빌드를 Windows/Linux에서 검증했고 기존 34개 프런트 테스트가 통과했다. Linux release 빌드와 systemd 구성 검증, 백업 파일 600 권한 및 임시 DB 복원(한글·큰 정수) 테스트가 통과했다. 실제 Windows 서버는 database=true, collector=true를 유지한다. 서비스는 아직 활성화하지 않았으며 정기 백업·Windows 부팅 연동·실제 OAuth 연결은 남아 있다.
+
+- Linux 배포를 재현 가능하게 만드는 다음 단위로 공통 웹 빌드, systemd 구성, DB 백업·복원 검증을 진행한다. Windows 서버를 몰래 빈 Linux DB로 교체하지 않고, 서비스 구성은 활성화하지 않는다. 사용자 소셜 인증 정보 없이 인증 우회 계정을 만들지 않는다.
+
 - 재부팅 후 WSL2의 가상화 오류가 해소되었고 Ubuntu-24.04 설치를 시작했다. Linux에는 별도 개발 DB를 사용하여 Windows 원본 DB를 변경하지 않는다.
 
 - 승인된 기존 앱 키를 keyring windows-native로 서버 메모리에서만 읽도록 연결했다. .env에는 비밀 값 대신 NEXON_USE_WINDOWS_CREDENTIAL=1만 추가했다. 실제 Nexon 캐릭터 식별자 조회 HTTP 200을 확인했고 서버 상태는 collector=true, database=true다.

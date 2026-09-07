@@ -53,6 +53,28 @@ DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
 
 ## 검증
 
+### Linux 서비스와 백업
+
+Windows와 Linux 모두 `npm run web:build`로 두 웹 화면을 빌드합니다. 기존 PowerShell 빌드 파일도 같은 Node 스크립트를 호출합니다.
+
+`server/deploy/maple-exp.service`는 `/home/mapledev/maple-guild-tracker`의 release 서버를 실행하는 systemd 구성입니다. 비정상 종료 시 10초 후 재시작하며 일반 사용자·읽기 전용 파일시스템으로 실행합니다. 서비스 문법 검증만 수행했고 아직 설치·활성화하지 않았습니다. 실제 재시작 검증과 운영 이전은 남아 있습니다.
+
+운영 전환 시 기존 서버 중지, DB 이전·검증과 비밀 설정을 먼저 완료해야 합니다. 다음 명령은 전환 시 사용할 절차이며 지금 자동 실행하지 않습니다.
+
+```bash
+cargo build --release --manifest-path server/Cargo.toml
+npm run web:build
+sudo install -m 644 server/deploy/maple-exp.service /etc/systemd/system/maple-exp.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now maple-exp
+```
+
+현재 서비스 설정은 로컬 Linux DB만 지정합니다. 운영자 키·OAuth 설정이 없으면 수집·로그인은 비활성화됩니다. WSL의 systemd 서비스 활성화는 Windows 부팅 시 WSL 자체의 자동 기동까지 보장하지 않습니다. 외부 공개·Windows 부팅 연동은 별도 단계입니다.
+
+Linux 작업본에서 `bash scripts/backup-linux.sh`로 `.local-runtime/backups`에 PostgreSQL custom-format 백업을 만듭니다. Unix 소켓과 현재 사용자 인증을 사용하고, 파일 권한은 600입니다. 비밀이 담길 수 있으므로 Git에 포함하지 않습니다. 백업 실패 파일은 `.partial`로 남고, 정상 백업은 자동 삭제하지 않습니다. 다른 DB를 대상으로 할 때는 libpq의 `PGHOST`, `PGDATABASE`, `PGUSER` 설정을 사용합니다.
+
+`bash scripts/test-linux-backup.sh`는 신규 임시 DB 두 개를 생성하여 한글과 큰 정수를 실제 복원하고 파일 권한을 검사합니다. 이 테스트에서 생성한 DB만 정리하며 표본 백업 파일은 남깁니다. 백업 생성은 수동 방식이며 정기 백업·다른 디스크 보관과 보관 기간 정책은 아직 적용하지 않았습니다.
+
 ### WSL2 Ubuntu 개발 환경
 
 Ubuntu 24.04에서 root로 `bash scripts/setup-linux.sh`를 실행하면 개발 도구와 별도 `mapledev` 계정·PostgreSQL DB를 준비합니다. Rust는 해당 사용자로 공식 rustup을 설치합니다. Windows DB나 자격 증명은 복사하지 않습니다.
