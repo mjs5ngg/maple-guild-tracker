@@ -7,5 +7,7 @@ release/
 server/target/
 .env
 .env.local
+.google-*
+__pycache__/
 web-dist/
 .local-runtime/
