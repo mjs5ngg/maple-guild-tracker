@@ -5,6 +5,7 @@ mod collector;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/exp.rs"]
 mod exp;
+mod guild_history;
 mod operator_key;
 mod policy;
 mod records;

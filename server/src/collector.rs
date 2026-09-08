@@ -5,7 +5,7 @@ use serde_json::Value;
 use sqlx::{Connection, Row};
 use std::collections::HashMap;
 
-async fn api(app: &App, path: &str, params: &[(&str, &str)]) -> Result<Value, ()> {
+pub(crate) async fn api(app: &App, path: &str, params: &[(&str, &str)]) -> Result<Value, ()> {
     #[cfg(test)]
     let base = app.nexon_origin.as_str();
     #[cfg(not(test))]
@@ -245,6 +245,10 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let now = Utc::now().with_timezone(&chrono_tz::Asia::Seoul);
     let end = now.date_naive() - Days::days(if now.hour() >= 2 { 1 } else { 2 });
     let start = now.date_naive() - Days::days(30);
+    let mut active_guilds: Vec<String> = guild_cache.values().cloned().collect();
+    active_guilds.sort();
+    active_guilds.dedup();
+    failed += crate::guild_history::collect(app, &active_guilds, start, end).await?;
     backfill::enqueue(pool, &collected, start, end).await?;
     let jobs = backfill::due(pool, &collected, start, Utc::now(), 300).await?;
     for (ocid, date, attempts) in jobs {

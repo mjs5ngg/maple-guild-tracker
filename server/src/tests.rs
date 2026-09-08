@@ -5,6 +5,96 @@ use tower::ServiceExt;
 
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
+async fn dated_guild_history_keeps_current_roster_and_retries(pool: PgPool) {
+    use axum::extract::Query;
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let calls = Arc::new(AtomicUsize::new(0));
+    async fn mock(
+        State(calls): State<Arc<AtomicUsize>>,
+        Query(q): Query<HashMap<String, String>>,
+    ) -> Json<serde_json::Value> {
+        calls.fetch_add(1, Ordering::SeqCst);
+        assert_eq!(q["oguild_id"], "active");
+        Json(match q["date"].as_str() {
+            "2026-09-01" => json!({"guild_member":["탈퇴자"]}),
+            "2026-09-02" => json!({"guild_member":[]}),
+            _ => json!({"guild_member":[null]}),
+        })
+    }
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let state = calls.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/maplestory/v1/guild/basic", get(mock))
+                .with_state(state),
+        )
+        .await
+        .unwrap();
+    });
+    sqlx::query("INSERT INTO guilds VALUES('active','스카니아','길드',now()),('inactive','스카니아','미이용',now())").execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO guild_members VALUES('active','현재길드원')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO guild_history_jobs(guild_key,date) VALUES('inactive','2026-09-01')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let app = App {
+        db: Some(pool.clone()),
+        http: reqwest::Client::new(),
+        origin: "http://127.0.0.1:3100".into(),
+        operator_key: Some("mock".into()),
+        nexon_origin: origin,
+    };
+    let start = "2026-09-01".parse().unwrap();
+    let end = "2026-09-03".parse().unwrap();
+    assert_eq!(
+        guild_history::collect(&app, &["active".into()], start, end)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        guild_history::collect(&app, &["active".into()], start, end)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    let snapshots: Vec<serde_json::Value> =
+        sqlx::query_scalar("SELECT basic FROM guild_daily_snapshots ORDER BY date")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        snapshots,
+        vec![
+            json!({"guild_member":["탈퇴자"]}),
+            json!({"guild_member":[]})
+        ]
+    );
+    let current: String =
+        sqlx::query_scalar("SELECT name FROM guild_members WHERE guild_key='active'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(current, "현재길드원");
+    let attempt: i32 =
+        sqlx::query_scalar("SELECT attempts FROM guild_history_jobs WHERE guild_key='active'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(attempt, 1);
+    server.abort();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
 async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
     use chrono::{Duration, TimeZone, Utc};
     let today = Utc::now()
