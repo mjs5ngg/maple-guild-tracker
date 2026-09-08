@@ -1,5 +1,9 @@
 # 구현 결정 기록
 
+- systemd 시험 도구를 추가하고 bash 문법 및 실제 임시 서비스 실행을 검증했다. 운영 구성과 같은 읽기 전용 파일시스템·일반 사용자·권한 제한·10초 재시작 설정에서 SIGKILL 후 PID 변경/NRestarts 증가/database=true/collector=false를 확인했다. trap으로 서비스 중지 후 unit not-found 및 3200 리스너 없음 확인. 첫 직접 WSL 명령의 인수 전달 오류로 실행된 별도 Linux 프로세스는 실행 경로 확인 후 종료했다. Windows 운영 프로세스는 변경하지 않았다.
+
+- systemd 복구 시험은 별도 이름 maple-exp-rehearsal, 3200/3201, 복원 DB와 키 없는 환경으로 수행한다. Windows 운영 프로세스와 Linux PostgreSQL은 종료하지 않는다. 시험 후 임시 서비스만 중지한다.
+
 - 병행 서버 검증에서 SERVER_PORT=3200/DIRECT_PORT=3201로 복원 DB를 연결했다. database=true/collector=false와 Google·카카오·네이버 미설정, 정적 화면 두 개 200, /api/me 401을 확인했다. 테스트 실행은 timeout 45초로 자동 종료하도록 제한했다. Windows 단위 12개(통합 7개 제외)·clippy와 Linux 통합 포함 19개·개발 빌드가 통과했다. 정적 파일은 기존 빌드이므로 별도 포트의 실제 브라우저 흐름 완료로 간주하지 않는다.
 
 - 서버가 3100/3101에 고정되어 있어 운영 서버와 분리된 검증을 위해 SERVER_PORT/DIRECT_PORT를 추가한다. 루프백 바인딩은 그대로 두고 포트 0·잘못된 값·중복 포트는 시작 전에 거부한다. Linux 검증에는 키를 옮기지 않는다.
