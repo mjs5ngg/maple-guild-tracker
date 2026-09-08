@@ -116,11 +116,11 @@ pub async fn dashboard(
         characters.push(json!({"ocid":ocid,"basic":basic,"observedAt":observed,"history":history,"todayBaseline":baseline,"estimated":estimated}));
     }
     let last = sqlx::query(
-        "SELECT started_at,finished_at,succeeded,failed FROM sync_runs ORDER BY id DESC LIMIT 1",
+        "SELECT started_at,finished_at,succeeded,failed,status FROM sync_runs ORDER BY id DESC LIMIT 1",
     )
     .fetch_optional(app.pool()?)
     .await?;
-    let sync=last.map(|r|json!({"startedAt":r.get::<chrono::DateTime<chrono::Utc>,_>("started_at"),"finishedAt":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("finished_at"),"succeeded":r.get::<i32,_>("succeeded"),"failed":r.get::<i32,_>("failed")}));
+    let sync=last.map(|r|json!({"status":r.get::<String,_>("status"),"startedAt":r.get::<chrono::DateTime<chrono::Utc>,_>("started_at"),"finishedAt":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("finished_at"),"succeeded":r.get::<i32,_>("succeeded"),"failed":r.get::<i32,_>("failed")}));
     Ok(Json(
         json!({"characters":characters,"sync":sync,"today":today}),
     ))
