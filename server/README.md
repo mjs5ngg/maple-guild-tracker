@@ -63,6 +63,12 @@ DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
 
 ## 검증
 
+### 정기 백업 활성화 전 확인
+
+`server/deploy/maple-exp-backup.service`와 `.timer`는 매일 04:30 KST에 백업하며, 중지 중 놓친 실행은 재시작 후 보충합니다. 현재 운영 데이터가 Windows에 있으므로 아직 활성화하지 않습니다. Linux 운영 DB 이전·복원 확인 후 두 파일을 `/etc/systemd/system/`에 설치하고 `systemctl enable --now maple-exp-backup.timer`로 활성화합니다.
+
+서비스는 `/var/lib/maple-exp-backups`만 쓰기 가능한 상태 디렉터리로 사용하며 디렉터리 700·백업 파일 600 권한을 사용합니다. DB 설정은 root 소유 600 권한의 `/etc/maple-exp/backup.env`에서 PGHOST/PGDATABASE/PGUSER/PGPASSFILE로 전달합니다. 비밀을 명령 인수에 넣지 않습니다. 성공한 백업도 실제 복원 시험을 정기적으로 해야 하며, 다른 디스크 보관·용량 경보는 추가 작업입니다. 자동 백업 삭제는 수행하지 않습니다.
+
 ### Linux 서비스와 백업
 
 Windows와 Linux 모두 `npm run web:build`로 두 웹 화면을 빌드합니다. 기존 PowerShell 빌드 파일도 같은 Node 스크립트를 호출합니다.

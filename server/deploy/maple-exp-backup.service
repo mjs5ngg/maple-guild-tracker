@@ -1,0 +1,25 @@
+# 운영 DB를 제한된 쓰기 경로에 비공개 아카이브로 백업합니다.
+[Unit]
+Description=Maple EXP PostgreSQL backup
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=mapledev
+Group=mapledev
+WorkingDirectory=/home/mapledev/maple-guild-tracker
+Environment=PGHOST=/var/run/postgresql
+Environment=PGDATABASE=maple_exp
+Environment=MAPLE_BACKUP_DIR=/var/lib/maple-exp-backups
+EnvironmentFile=-/etc/maple-exp/backup.env
+StateDirectory=maple-exp-backups
+StateDirectoryMode=0700
+ExecStart=/usr/bin/bash /home/mapledev/maple-guild-tracker/scripts/backup-linux.sh
+TimeoutStartSec=1h
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=true

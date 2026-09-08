@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-backup_dir="$project_dir/.local-runtime/backups"
+backup_dir="${MAPLE_BACKUP_DIR:-$project_dir/.local-runtime/backups}"
 mkdir -p -- "$backup_dir"
 export PGHOST="${PGHOST:-/var/run/postgresql}"
 export PGDATABASE="${PGDATABASE:-maple_exp}"

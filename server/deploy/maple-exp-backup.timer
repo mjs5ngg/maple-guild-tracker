@@ -1,0 +1,11 @@
+# 매일 한국 시각 04시 30분에 백업하고 놓친 실행을 재기동 후 보충합니다.
+[Unit]
+Description=Daily Maple EXP backup
+
+[Timer]
+OnCalendar=*-*-* 19:30:00 UTC
+Persistent=true
+Unit=maple-exp-backup.service
+
+[Install]
+WantedBy=timers.target
