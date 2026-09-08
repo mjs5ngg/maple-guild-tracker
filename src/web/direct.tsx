@@ -1,13 +1,16 @@
 // 개인 키를 별도 출처에 저장하고 넥슨으로만 직접 전송합니다.
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {createRoot} from "react-dom/client";
 import {parseNexon} from "./experience";
 import type {Basic,Snapshot} from "./types";
 import "./web.css";
+import {readPersonal,writePersonal} from "./personalStorage";
 const KEY="maple-personal-key",KIND="maple-personal-kind";
 function App(){
- const [key,setKey]=useState(()=>localStorage.getItem(KEY)||""),[remember,setRemember]=useState(()=>!!localStorage.getItem(KEY));
- const [kind,setKind]=useState(localStorage.getItem(KIND)||"development"),[primary,setPrimary]=useState(""),[names,setNames]=useState<string[]>([]);
+ const [key,setKey]=useState(()=>readPersonal(KEY)||""),[remember,setRemember]=useState(()=>!!readPersonal(KEY));
+ const [kind,setKind]=useState(readPersonal(KIND)==="service"?"service":"development"),[primary,setPrimary]=useState(""),[names,setNames]=useState<string[]>([]);
+ const [storageWarning,setStorageWarning]=useState("");
+ const nextRefresh=useRef(0);
  const [message,setMessage]=useState("대시보드 연결을 기다립니다."),[busy,setBusy]=useState(false),[count,setCount]=useState(0);
  useEffect(()=>{
  const receive=(event:MessageEvent)=>{
@@ -36,12 +39,13 @@ function App(){
  }
  async function executeRefresh(){
  if(busy||!primary||!key.trim())return;
- const until=Number(localStorage.getItem("maple-next-refresh")||0);
+ const until=Math.max(nextRefresh.current,Number(readPersonal("maple-next-refresh"))||0);
  if(Date.now()<until){setMessage("연속 조회 방지를 위해 잠시 기다려 주세요.");return;}
  setBusy(true);setCount(0);
  try{
- if(remember)localStorage.setItem(KEY,key.trim());else localStorage.removeItem(KEY);
- localStorage.setItem(KIND,kind);
+ const saved=writePersonal(KEY,remember?key.trim():null);
+ setStorageWarning(saved?"":"브라우저 저장 또는 삭제가 차단됐습니다. 이번 조회는 가능하지만, 기존 저장 키 삭제는 브라우저 사이트 데이터 설정에서 확인하세요.");
+ writePersonal(KIND,kind);
  let targets=kind==="development"?[primary]:[...new Set([primary,...names])];
  if(kind==="service"){
  const id=await request("id",{character_name:primary});
@@ -62,13 +66,14 @@ function App(){
  window.opener?.postMessage({type:"maple-results",rows},__DASHBOARD_ORIGIN__);
  setMessage("조회 완료 "+rows.length+"명 · 실패 "+failed+"명. 결과는 개인 화면에만 반영됩니다.");
  }catch{setMessage("저장 또는 조회에 실패했습니다. 브라우저 저장 권한과 네트워크를 확인하세요.");}
- finally{localStorage.setItem("maple-next-refresh",String(Date.now()+60000));setBusy(false);}
+ finally{nextRefresh.current=Date.now()+60000;writePersonal("maple-next-refresh",String(nextRefresh.current));setBusy(false);}
  }
  return <main><header><h1>개인 새로고침</h1></header><section className="panel"><p>대표캐릭터 <strong>{primary||"연결 대기"}</strong></p><form onSubmit={e=>{e.preventDefault();void refresh();}}>
  <label>넥슨 API 키<input name="password" type="password" autoComplete="current-password" value={key} onChange={e=>setKey(e.target.value)}/></label>
  <label>발급받은 키 종류<select value={kind} onChange={e=>setKind(e.target.value)}><option value="development">개발키 · 대표캐릭터만</option><option value="service">서비스키 · 모든 등록 캐릭터</option></select></label>
  <p className="muted">개발키는 초당 5건·하루 1,000건, 서비스키는 초당 500건·하루 2,000만 건입니다. 한도는 애플리케이션별 합산이며, 대표만 조회하는 것은 이 서비스의 정책입니다.</p>
- <label className="check"><input type="checkbox" checked={remember} onChange={e=>{setRemember(e.target.checked);if(!e.target.checked)localStorage.removeItem(KEY);}}/>이 브라우저에 키 기억하기</label><p className="muted">공용 기기에서는 저장하지 마세요. 브라우저 저장소와 확장 프로그램을 통한 노출 가능성은 남습니다.</p>
- <div className="actions"><button disabled={busy||!primary||!key.trim()}>{busy?count+"명 조회 중…":"최신 정보 조회"}</button><button type="button" onClick={()=>{localStorage.removeItem(KEY);setKey("");setRemember(false);}}>저장된 키 삭제</button></div></form><p role="status">{message}</p><a href="https://openapi.nexon.com/ko/guide/prepare-in-advance/" target="_blank" rel="noreferrer">API 발급 안내</a></section><footer>Data based on NEXON Open API</footer></main>;
+ <label className="check"><input type="checkbox" checked={remember} onChange={e=>{setRemember(e.target.checked);if(!e.target.checked&&!writePersonal(KEY,null))setStorageWarning("저장 키 삭제가 차단됐습니다. 브라우저 사이트 데이터 설정에서 삭제하세요.");}}/>이 브라우저에 키 기억하기</label><p className="muted">공용 기기에서는 저장하지 마세요. 브라우저 저장소와 확장 프로그램을 통한 노출 가능성은 남습니다.</p>
+ {storageWarning&&<p role="alert">{storageWarning}</p>}
+ <div className="actions"><button disabled={busy||!primary||!key.trim()}>{busy?count+"명 조회 중…":"최신 정보 조회"}</button><button type="button" onClick={()=>{setStorageWarning(writePersonal(KEY,null)?"":"저장 키 삭제가 차단됐습니다. 브라우저 사이트 데이터 설정에서 삭제하세요.");setKey("");setRemember(false);}}>저장된 키 삭제</button></div></form><p role="status">{message}</p><a href="https://openapi.nexon.com/ko/guide/prepare-in-advance/" target="_blank" rel="noreferrer">API 발급 안내</a></section><footer>Data based on NEXON Open API</footer></main>;
 }
 createRoot(document.getElementById("root")!).render(<App/>);
