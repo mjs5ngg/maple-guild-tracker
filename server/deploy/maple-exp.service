@@ -14,6 +14,7 @@ Group=mapledev
 WorkingDirectory=/home/mapledev/maple-guild-tracker
 Environment=DATABASE_URL=postgresql:///maple_exp?host=/var/run/postgresql&user=mapledev
 Environment=PUBLIC_ORIGIN=http://127.0.0.1:3100
+EnvironmentFile=-/etc/maple-exp/server.env
 ExecStart=/home/mapledev/maple-guild-tracker/server/target/release/maple-exp-server
 Restart=on-failure
 RestartSec=10
