@@ -1,0 +1,10 @@
+# 고정 도메인의 대시보드와 개인 키 조회를 서로 다른 출처로 연결합니다.
+# example.com과 tunnel UUID는 실제 발급값으로 바꾼 뒤 사용합니다.
+tunnel: 00000000-0000-0000-0000-000000000000
+credentials-file: /etc/maple-exp/tunnel.json
+ingress:
+  - hostname: app.example.com
+    service: http://127.0.0.1:3100
+  - hostname: personal.example.com
+    service: http://127.0.0.1:3101
+  - service: http_status:404
