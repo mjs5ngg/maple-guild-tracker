@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- 개인 키 저장 차단 대응을 반영했다. localStorage 예외는 읽기null/쓰기false로 변환하며 삭제 실패를 성공이라고 표시하지 않는다. finally에서도 busy를 해제하고 메모리60초 제한을 유지한다. 48개 테스트·TypeScript·Linux 웹 빌드 통과. 실제 유효키 브라우저 실증이나 대표 중복 조회 제거는 완료 범위가 아니다.
+
 - 개인 조회의 초기 localStorage 읽기와 finally 저장이 예외를 던지면 화면/조회가 멈추는 경로를 확인했다. Sites 기존 구조 보존 지침을 적용해 저장 실패를 안내하고 메모리 조회를 허용한다. Cloudflare 로그인 화면 열기는 queued 응답이며 사용자가 보았다고 단정하지 않는다.
 
 - 공개 접속 작업 시작. 공식 pkg.cloudflare.com의 서명 저장소에서 cloudflared2026.8.3을 Linux에 설치하고 실행 확인. tunnel.example.yml의 ingress validate, personal 호스트3101 연결·미등록호스트404 매칭 테스트 통과. 실터널 생성/실도메인 변경/외부 공개는 아직 하지 않았다. mapleexp.com 및 mapleexptracker.com은 Verisign RDAP404지만 판매처 가격·구매 가능 확정은 아니다. 구매/계정 절차가 대기해도 개인 키·신규 사용자 검증은 다음 출시 작업으로 유지한다.
