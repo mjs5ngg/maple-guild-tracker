@@ -32,7 +32,7 @@
 
 ### 진행 중
 
-- [ ] 서버 포트 설정·유효성 검사 및 복원 DB 기반 Linux 병행 실행 검증.
+- [x] 서버 포트 설정·유효성 검사. Windows 단위 12개·clippy, Linux PostgreSQL 포함 19개 및 빌드 통과. 복원 DB 병행 실행에서 database=true, collector=false, 두 정적 화면 200, 비로그인 401 확인. 실제 로그인·화면 조작은 별도.
 
 - [x] Linux PostgreSQL 17.11 병행 설치(5433), 기존 16 보존(5432). 표본 복원 및 PostgreSQL 포함 서버 18개 테스트 통과. Windows 실제 백업을 별도 검증 DB에 복원하여 스냅샷 11,113건 확인. 운영 연결/키 이전은 미수행.
 

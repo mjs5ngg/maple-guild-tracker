@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- 병행 서버 검증에서 SERVER_PORT=3200/DIRECT_PORT=3201로 복원 DB를 연결했다. database=true/collector=false와 Google·카카오·네이버 미설정, 정적 화면 두 개 200, /api/me 401을 확인했다. 테스트 실행은 timeout 45초로 자동 종료하도록 제한했다. Windows 단위 12개(통합 7개 제외)·clippy와 Linux 통합 포함 19개·개발 빌드가 통과했다. 정적 파일은 기존 빌드이므로 별도 포트의 실제 브라우저 흐름 완료로 간주하지 않는다.
+
 - 서버가 3100/3101에 고정되어 있어 운영 서버와 분리된 검증을 위해 SERVER_PORT/DIRECT_PORT를 추가한다. 루프백 바인딩은 그대로 두고 포트 0·잘못된 값·중복 포트는 시작 전에 거부한다. Linux 검증에는 키를 옮기지 않는다.
 
 - 2026-09-08 PGDG에서 PostgreSQL 17.11을 설치했다. 16/main은 5432 그대로, 17/main은 5433이며 둘 다 online이다. 17에 mapledev 역할과 개발 DB를 준비하고 표본 백업/복원·서버 테스트 18개를 통과했다. Windows 실제 DB 백업 linux17-rehearsal-20260908-220111.dump를 Linux ~/.local/share/maple-migration(700)에 600 권한으로 복사해 maple_rehearsal_20260908_220111 새 DB에 단일 트랜잭션 복원했다. daily_snapshots 11,113건을 확인했다. 이 DB는 검증용 복사본이며 운영 서버·OAuth/NEXON 키·연결 설정은 변경하지 않았다. 운영 전환 시에는 새 백업과 앱 수준 검증이 필요하다.
