@@ -4,6 +4,16 @@ import {parseNexon,gain,dayBefore,sortRows,dailyPoints,periodGain,kstDate} from 
 import type {Basic,Snapshot} from "./types";
 const basic=(level:number,xp:string):Basic=>({character_name:"A",world_name:"스카니아",character_class:"은월",character_level:level,character_exp:xp,character_exp_rate:"1"});
 describe("웹 경험치",()=>{
+ it("길드 소속 날짜만 합산하고 미수집 명단은 부분 자료로 표시",()=>{
+ const today=kstDate(),yesterday=dayBefore(today),before=dayBefore(yesterday);
+ const s:Snapshot={ocid:"A",basic:basic(200,"9"),observedAt:new Date().toISOString(),history:[{date:before,basic:basic(200,"1")},{date:yesterday,basic:basic(200,"5")}],guildMembership:{[today]:true,[yesterday]:false}};
+ expect(periodGain(s,2,["10"],true)).toEqual({value:4n,complete:true});
+ expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true});
+ s.guildMembership={[today]:true};
+ expect(periodGain(s,2,["10"],true)).toEqual({value:4n,complete:false});
+ s.guildMembership={};
+ expect(periodGain(s,2,["10"],true)).toEqual({value:null,complete:false});
+ });
  it("최근 기간은 오늘 포함이며 오늘 0을 누락으로 보지 않음",()=>{
  const today=kstDate();const s:Snapshot={ocid:"A",basic:basic(200,"5"),observedAt:new Date().toISOString(),history:[{date:dayBefore(today),basic:basic(200,"5")}]};
  expect(dailyPoints(s,7,["10"])).toHaveLength(7);expect(dailyPoints(s,7,["10"])[6]).toEqual({date:today,value:0n});expect(periodGain(s,1,["10"])).toEqual({value:0n,complete:true});expect(periodGain(s,7,["10"]).complete).toBe(false);

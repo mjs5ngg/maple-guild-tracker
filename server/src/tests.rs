@@ -133,7 +133,7 @@ async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
             sqlx::query("INSERT INTO daily_snapshots VALUES($1,$2,$3)")
                 .bind(name)
                 .bind(today - Duration::days(offset))
-                .bind(json!({"name":name,"offset":offset}))
+                .bind(json!({"name":name,"offset":offset,"character_name":if name=="대표"&&offset==2 {"옛대표"} else {name}}))
                 .execute(&pool)
                 .await
                 .unwrap();
@@ -153,6 +153,28 @@ async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query("INSERT INTO guilds VALUES('scope','스카니아','테스트',now())")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE characters SET guild_key='scope' WHERE name='대표'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO guild_members VALUES('scope','대표')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    for (offset, members) in [(2, json!(["옛대표"])), (1, json!([]))] {
+        sqlx::query(
+            "INSERT INTO guild_daily_snapshots(guild_key,date,basic) VALUES('scope',$1,$2)",
+        )
+        .bind(today - Duration::days(offset))
+        .bind(json!({"guild_member":members}))
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
     let app = Arc::new(App {
         db: Some(pool),
         http: reqwest::Client::new(),
@@ -179,6 +201,19 @@ async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
     assert!(!rows.iter().any(|r| r["ocid"] == "다른사용자"));
     for row in rows {
         let name = row["ocid"].as_str().unwrap();
+        assert_eq!(row["isGuildMember"], name == "대표");
+        assert_eq!(row["guildMembership"][today.to_string()], name == "대표");
+        if name != "빈기록" {
+            assert_eq!(
+                row["guildMembership"][(today - Duration::days(2)).to_string()],
+                name == "대표"
+            );
+            assert_eq!(
+                row["guildMembership"][(today - Duration::days(1)).to_string()],
+                false
+            );
+        }
+        assert!(row["guildMembership"][(today - Duration::days(30)).to_string()].is_null());
         let history = row["history"].as_array().unwrap();
         if name == "빈기록" {
             assert!(history.is_empty());

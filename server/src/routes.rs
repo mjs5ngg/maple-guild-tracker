@@ -114,6 +114,26 @@ pub async fn dashboard(
         .map(|row| (row.get("ocid"), row.get("basic")))
         .collect();
     let mut characters = Vec::new();
+    let guild_key: Option<String> = sqlx::query_scalar(
+        "SELECT c.guild_key FROM characters c JOIN users u ON u.primary_name=c.name WHERE u.id=$1",
+    )
+    .bind(&id)
+    .fetch_optional(app.pool()?)
+    .await?
+    .flatten();
+    let current_members: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM guild_members WHERE guild_key=$1")
+            .bind(&guild_key)
+            .fetch_all(app.pool()?)
+            .await?;
+    let guild_dates: Vec<(chrono::NaiveDate, serde_json::Value)> = sqlx::query_as(
+        "SELECT date,basic FROM guild_daily_snapshots WHERE guild_key=$1 AND date >=$2 AND date<$3",
+    )
+    .bind(&guild_key)
+    .bind(today - chrono::Duration::days(30))
+    .bind(today)
+    .fetch_all(app.pool()?)
+    .await?;
     for row in rows {
         let ocid: String = row.get("ocid");
         let basic: serde_json::Value = row.get("basic");
@@ -124,7 +144,28 @@ pub async fn dashboard(
         let estimated = !history
             .iter()
             .any(|h| h["date"].as_str() == Some(yesterday.as_str()));
-        characters.push(json!({"ocid":ocid,"basic":basic,"observedAt":observed,"history":history,"todayBaseline":baseline,"estimated":estimated}));
+        let current_member = current_members
+            .iter()
+            .any(|name| Some(name.as_str()) == basic["character_name"].as_str());
+        let membership = guild_key.as_ref().map(|_| {
+            let mut dates = serde_json::Map::new();
+            dates.insert(today.to_string(), json!(current_member));
+            for (date, roster) in &guild_dates {
+                let date = date.to_string();
+                let name = history
+                    .iter()
+                    .find(|h| h["date"].as_str() == Some(date.as_str()))
+                    .and_then(|h| h["basic"]["character_name"].as_str());
+                if let (Some(name), Some(members)) = (name, roster["guild_member"].as_array()) {
+                    dates.insert(
+                        date,
+                        json!(members.iter().any(|m| m.as_str() == Some(name))),
+                    );
+                }
+            }
+            dates
+        });
+        characters.push(json!({"ocid":ocid,"basic":basic,"observedAt":observed,"history":history,"todayBaseline":baseline,"estimated":estimated,"isGuildMember":current_member,"guildMembership":membership}));
     }
     let last = sqlx::query(
         "SELECT started_at,finished_at,succeeded,failed,status FROM sync_runs ORDER BY id DESC LIMIT 1",

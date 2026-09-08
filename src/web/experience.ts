@@ -34,9 +34,11 @@ export function dailyPoints(s:Snapshot,days:number,table:string[]) {
  }
  return result;
 }
-export function periodGain(s:Snapshot,days:number,table:string[]){
- const points=dailyPoints(s,days,table);const valid=points.filter(p=>p.value!==null);
- return {value:valid.length?valid.reduce((sum,p)=>sum+p.value!,0n):null,complete:valid.length===days};
+export function periodGain(s:Snapshot,days:number,table:string[],guildOnly=false){
+ const points=dailyPoints(s,days,table).filter(p=>!guildOnly||s.guildMembership?.[p.date]!==false)
+  .map(p=>guildOnly&&s.guildMembership&&s.guildMembership[p.date]!==true?{...p,value:null}:p);
+ const valid=points.filter(p=>p.value!==null);
+ return {value:points.length===0?0n:valid.length?valid.reduce((sum,p)=>sum+p.value!,0n):null,complete:valid.length===points.length};
 }
 export function compact(value:bigint|null){
  if(value===null)return "자료 없음";
