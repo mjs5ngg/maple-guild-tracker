@@ -218,6 +218,7 @@ fn router(app: Arc<App>) -> Router {
         .route("/auth/{provider}/start", get(auth::start))
         .route("/auth/{provider}/callback", get(auth::callback))
         .route("/api/logout", post(auth::logout))
+        .route("/api/account/delete", post(auth::delete_account))
         .fallback_service(tower_http::services::ServeDir::new("web-dist/dashboard"))
         .layer(axum::extract::DefaultBodyLimit::max(8192))
         .layer(middleware::from_fn_with_state(app.clone(), guard))

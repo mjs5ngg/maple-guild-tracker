@@ -628,6 +628,7 @@ async fn database_account_isolation(pool: PgPool) {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let response = router
+        .clone()
         .oneshot(
             axum::http::Request::builder()
                 .uri("/api/dashboard")
@@ -640,4 +641,82 @@ async fn database_account_isolation(pool: PgPool) {
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), 100000).await.unwrap();
     assert!(!String::from_utf8_lossy(&body).contains("DO-NOT-STORE"));
+    sqlx::query("INSERT INTO identities VALUES('google','a','test-a'),('google','b','test-b')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO login_attempts VALUES('state','google','browser',now()+interval '1 hour','test-a')").execute(&pool).await.unwrap();
+    for (body, origin, expected) in [
+        (
+            r#"{"confirmation":""}"#,
+            "http://127.0.0.1:3100",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            r#"{"confirmation":"탈퇴"}"#,
+            "https://evil.invalid",
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            r#"{"confirmation":"탈퇴","user_id":"test-b"}"#,
+            "http://127.0.0.1:3100",
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+    ] {
+        assert_eq!(
+            router
+                .clone()
+                .oneshot(request("/api/account/delete", body, origin))
+                .await
+                .unwrap()
+                .status(),
+            expected
+        );
+    }
+    let response = router
+        .clone()
+        .oneshot(request(
+            "/api/account/delete",
+            r#"{"confirmation":"탈퇴"}"#,
+            "http://127.0.0.1:3100",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get_all("set-cookie").iter().count(), 2);
+    let users: Vec<String> = sqlx::query_scalar("SELECT id FROM users")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(users, vec!["test-b"]);
+    for table in ["sessions", "favorites", "login_attempts"] {
+        let count: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM {table}"))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+    let preserved: i64 = sqlx::query_scalar("SELECT count(*) FROM characters")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(preserved, 1);
+    let identities: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM identities WHERE user_id='test-b'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(identities, 1);
+    assert_eq!(
+        router
+            .oneshot(request(
+                "/api/account/delete",
+                r#"{"confirmation":"탈퇴"}"#,
+                "http://127.0.0.1:3100"
+            ))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
 }

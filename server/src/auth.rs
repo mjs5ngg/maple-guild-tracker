@@ -272,3 +272,44 @@ pub async fn logout(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<R
     );
     Ok(response)
 }
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeleteAccount {
+    confirmation: String,
+}
+pub async fn delete_account(
+    State(app): State<Arc<App>>,
+    headers: HeaderMap,
+    Json(input): Json<DeleteAccount>,
+) -> Result<Response, Failure> {
+    let id = user(&app, &headers).await?;
+    if input.confirmation != "탈퇴" {
+        return Err(Failure(
+            StatusCode::BAD_REQUEST,
+            "탈퇴 확인 문구를 입력하세요.",
+        ));
+    }
+    let mut tx = app.pool()?.begin().await?;
+    sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+        .bind(&id)
+        .fetch_one(&mut *tx)
+        .await?;
+    for query in [
+        "DELETE FROM login_attempts WHERE link_user=$1",
+        "DELETE FROM sessions WHERE user_id=$1",
+        "DELETE FROM identities WHERE user_id=$1",
+        "DELETE FROM favorites WHERE user_id=$1",
+        "DELETE FROM users WHERE id=$1",
+    ] {
+        sqlx::query(query).bind(&id).execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    let mut response = Json(json!({"ok":true})).into_response();
+    for name in ["maple_session", "maple_login"] {
+        response
+            .headers_mut()
+            .append("set-cookie", set_cookie(&app, name, "", 0).parse().unwrap());
+    }
+    Ok(response)
+}
