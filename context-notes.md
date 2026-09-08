@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- 서버가 3100/3101에 고정되어 있어 운영 서버와 분리된 검증을 위해 SERVER_PORT/DIRECT_PORT를 추가한다. 루프백 바인딩은 그대로 두고 포트 0·잘못된 값·중복 포트는 시작 전에 거부한다. Linux 검증에는 키를 옮기지 않는다.
+
 - 2026-09-08 PGDG에서 PostgreSQL 17.11을 설치했다. 16/main은 5432 그대로, 17/main은 5433이며 둘 다 online이다. 17에 mapledev 역할과 개발 DB를 준비하고 표본 백업/복원·서버 테스트 18개를 통과했다. Windows 실제 DB 백업 linux17-rehearsal-20260908-220111.dump를 Linux ~/.local/share/maple-migration(700)에 600 권한으로 복사해 maple_rehearsal_20260908_220111 새 DB에 단일 트랜잭션 복원했다. daily_snapshots 11,113건을 확인했다. 이 DB는 검증용 복사본이며 운영 서버·OAuth/NEXON 키·연결 설정은 변경하지 않았다. 운영 전환 시에는 새 백업과 앱 수준 검증이 필요하다.
 
 - PostgreSQL 공식 Ubuntu 안내의 PGDG 저장소 설치 경로를 확인했다. Linux 16을 업그레이드/삭제하지 않고 17을 별도 클러스터로 준비한다. 운영 서버의 연결 주소와 키는 이 단계에서 변경하지 않는다.

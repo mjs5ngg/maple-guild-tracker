@@ -101,9 +101,31 @@ async fn guard(State(app): State<Arc<App>>, request: Request, next: Next) -> Res
     headers.insert("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
     response
 }
+fn parse_port(value: Option<&str>, default: u16) -> Result<u16, &'static str> {
+    match value {
+        None => Ok(default),
+        Some(value) => value.parse::<u16>().ok().filter(|port| *port != 0)
+            .ok_or("port must be an integer from 1 to 65535"),
+    }
+}
+
+#[test]
+fn configured_ports_are_valid() {
+    assert_eq!(parse_port(None, 3100), Ok(3100));
+    assert_eq!(parse_port(Some("3200"), 3100), Ok(3200));
+    for value in ["0", "65536", "-1", "invalid", ""] {
+        assert!(parse_port(Some(value), 3100).is_err());
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
+    let server_port = parse_port(std::env::var("SERVER_PORT").ok().as_deref(), 3100)
+        .expect("invalid SERVER_PORT");
+    let direct_port = parse_port(std::env::var("DIRECT_PORT").ok().as_deref(), 3101)
+        .expect("invalid DIRECT_PORT");
+    assert_ne!(server_port, direct_port, "server ports must differ");
     let origin = std::env::var("PUBLIC_ORIGIN").unwrap_or("http://127.0.0.1:3100".into());
     let parsed = reqwest::Url::parse(&origin).expect("PUBLIC_ORIGIN URL");
     assert!(
@@ -194,18 +216,18 @@ async fn main() {
             response.headers_mut().insert("x-content-type-options","nosniff".parse().unwrap());
             response
         }));
-    let direct_listener = tokio::net::TcpListener::bind("127.0.0.1:3101")
+    let direct_listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, direct_port))
         .await
-        .expect("local port 3101");
+        .expect("direct loopback port unavailable");
     tokio::spawn(async move {
         axum::serve(direct_listener, direct)
             .await
             .expect("direct server failed");
     });
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3100")
+    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, server_port))
         .await
-        .expect("local port 3100");
-    println!("Maple EXP server http://127.0.0.1:3100");
+        .expect("server loopback port unavailable");
+    println!("Maple EXP server http://127.0.0.1:{server_port}");
     axum::serve(listener, router).await.unwrap();
 }
 fn router(app: Arc<App>) -> Router {
