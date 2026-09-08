@@ -33,7 +33,7 @@
 ### 진행 중
 
 - [x] 기존 브라우저 로그인 세션이 Linux 전환 뒤 유지되고 최신 순위/대표캐릭터를 표시함을 확인. 신규 OAuth 인증 완료와는 구분.
-- [ ] 브라우저 복구 후 과거 Failed to fetch 문구 잔존 수정. src/web/main.tsx load 성공 경로에서 오류 해제 없음 확인. 다른 작업의 오류를 무조건 지우지 않도록 조회 오류 상태를 분리할 것.
+- [x] 대시보드 조회 오류를 별도 상태로 분리하고 성공 시 해제. 마지막 정상 데이터 및 저장/팝업 오류 보존. 회귀 포함46개 테스트·TypeScript·Windows/Linux 웹 빌드 통과, Linux 정적 화면 반영. 열린 화면은 새로고침 후 적용.
 
 - [x] Linux 운영 Google 로그인 시작 HTTP303, Google 대상·기존 localhost callback·HttpOnly/SameSite 확인. 입력 없는 callback400 거부. 수집221도369 성공/0 실패. 실제 Google 인증 완료는 별도 미검증.
 
