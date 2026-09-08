@@ -12,7 +12,8 @@ def enough_space(free, minimum):
 
 def main():
     minimum = int(os.environ.get("MAPLE_BACKUP_MIN_FREE_BYTES", 5 * 1024**3))
-    for path in ("/var/lib/maple-exp-backups", "/mnt/d/MapleEXPBackups"):
+    # WSL 가상 디스크 여유와 실제 호스트 C의 여유는 서로 다릅니다.
+    for path in ("/var/lib/maple-exp-backups", "/mnt/c", "/mnt/d/MapleEXPBackups"):
         if not enough_space(shutil.disk_usage(path).free, minimum):
             print(f"백업 여유 공간 부족: {path}. 기존 파일을 보존하고 중단합니다.", file=sys.stderr)
             return 1
