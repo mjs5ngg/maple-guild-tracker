@@ -63,6 +63,10 @@ DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
 
 ## 검증
 
+### 현재 운영 상태 — 2026-09-09
+
+실제 서버는 WSL Ubuntu의 `maple-exp.service`로 전환했습니다. 운영 DB는 PostgreSQL 17의 `maple_live_20260909_0235`(5433), 설정은 root 전용 `/etc/maple-exp/server.env`입니다. Windows 원본 DB는 보존하지만 최신 데이터는 Linux에 쌓이므로 이전 Windows 서버를 그대로 켜면 안 됩니다. 정기 백업은 활성화했고 수동 첫 실행도 성공했습니다. 아래의 미활성화 설명은 전환 전 준비 이력입니다. Windows 부팅 시 WSL 자동 실행·재부팅 복구와 Google 실제 재로그인은 아직 남아 있습니다.
+
 ### 정기 백업 활성화 전 확인
 
 `server/deploy/maple-exp-backup.service`와 `.timer`는 매일 04:30 KST에 백업하며, 중지 중 놓친 실행은 재시작 후 보충합니다. 현재 운영 데이터가 Windows에 있으므로 아직 활성화하지 않습니다. Linux 운영 DB 이전·복원 확인 후 두 파일을 `/etc/systemd/system/`에 설치하고 `systemctl enable --now maple-exp-backup.timer`로 활성화합니다.

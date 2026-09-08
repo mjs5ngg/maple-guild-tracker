@@ -1,5 +1,9 @@
 # 구현 결정 기록
 
+- 2026-09-09 02:35 KST 실제 운영 전환. Windows 수집 215 completed/369 성공/0 실패 확인 후 PID4256 경로 검증·중지. linux-live-20260909-0235.dump를 생성해 Linux 17/5433 maple_live_20260909_0235에 복원했다. 운영 키/Google 설정을 stdin으로 /etc/maple-exp/server.env(root600)에 전달하고 maple-exp 서비스를 enable/start했다. Windows localhost 상태 database/collector/Google 모두 true, Linux 수집216 running 확인. 운영 백업 Result=success 및 다음04:30 타이머 활성화 확인. Python 문법 검증 통과. Windows 원본은 보존했으나 이후 데이터는 Linux에 축적되므로 단순 Windows 재가동은 금지하고 최신 역방향 이전을 먼저 검토한다. 실제 Google 재로그인과 Windows 재부팅은 아직 검증하지 않았다.
+
+- 사용자가 실제 Linux 운영 전환을 명시적으로 요청했다. 운영자 Windows 저장 키와 Google 설정을 Linux root 전용 설정 파일로 비공개 전달하는 것을 이전 범위로 해석한다. 개인 사용자 키는 이전하지 않는다. 원본 DB와 Windows 실행 파일은 되돌리기용으로 보존한다.
+
 - systemd 시험 도구를 추가하고 bash 문법 및 실제 임시 서비스 실행을 검증했다. 운영 구성과 같은 읽기 전용 파일시스템·일반 사용자·권한 제한·10초 재시작 설정에서 SIGKILL 후 PID 변경/NRestarts 증가/database=true/collector=false를 확인했다. trap으로 서비스 중지 후 unit not-found 및 3200 리스너 없음 확인. 첫 직접 WSL 명령의 인수 전달 오류로 실행된 별도 Linux 프로세스는 실행 경로 확인 후 종료했다. Windows 운영 프로세스는 변경하지 않았다.
 
 - systemd 복구 시험은 별도 이름 maple-exp-rehearsal, 3200/3201, 복원 DB와 키 없는 환경으로 수행한다. Windows 운영 프로세스와 Linux PostgreSQL은 종료하지 않는다. 시험 후 임시 서비스만 중지한다.

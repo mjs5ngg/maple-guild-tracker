@@ -32,6 +32,9 @@
 
 ### 진행 중
 
+- [x] 실제 Linux 운영 전환. Windows 수집 215 완료 후 서버 중지, 최신 백업을 Linux 17의 maple_live_20260909_0235에 복원. root 600 설정 이전, systemd 활성화, Windows localhost 상태 DB/collector/Google=true, 운영 백업 성공·04:30 타이머 활성화.
+- [ ] 전환 후 첫 수집 완료·실제 로그인 재검증, Windows 부팅 WSL 자동 기동과 재부팅 복구. 운영 DB가 Linux로 바뀌었으므로 Windows 구 DB를 그대로 재가동하지 않는다.
+
 - [x] 별도 임시 systemd 서비스의 권한 제한 실행·SIGKILL 후 새 PID 재시작·DB 연결 복구 검증. collector=false 확인, 시험 서비스 정리 및 3200 포트 종료 확인. 운영 서비스 설치/재부팅 시험은 미완료.
 
 - [x] 서버 포트 설정·유효성 검사. Windows 단위 12개·clippy, Linux PostgreSQL 포함 19개 및 빌드 통과. 복원 DB 병행 실행에서 database=true, collector=false, 두 정적 화면 200, 비로그인 401 확인. 실제 로그인·화면 조작은 별도.
