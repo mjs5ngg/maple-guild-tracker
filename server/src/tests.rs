@@ -5,6 +5,113 @@ use tower::ServiceExt;
 
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
+async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
+    use chrono::{Duration, TimeZone, Utc};
+    let today = Utc::now()
+        .with_timezone(&chrono_tz::Asia::Seoul)
+        .date_naive();
+    let midnight = chrono_tz::Asia::Seoul
+        .from_local_datetime(&today.and_hms_opt(0, 0, 0).unwrap())
+        .single()
+        .unwrap()
+        .with_timezone(&Utc);
+    sqlx::query("INSERT INTO users(id,primary_name) VALUES('batch','대표')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO favorites VALUES('batch','즐겨찾기'),('batch','빈기록')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO sessions VALUES($1,'batch',now()+interval '1 hour')")
+        .bind(hash("batch-session"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    for name in ["대표", "즐겨찾기", "빈기록", "다른사용자"] {
+        let basic = json!({"character_name":name,"character_level":281,"character_exp":100});
+        sqlx::query("INSERT INTO characters(ocid,name,basic,observed_at) VALUES($1,$1,$2,now())")
+            .bind(name)
+            .bind(&basic)
+            .execute(&pool)
+            .await
+            .unwrap();
+        if name == "빈기록" {
+            continue;
+        }
+        for offset in [31, 30, 2, 1, 0] {
+            sqlx::query("INSERT INTO daily_snapshots VALUES($1,$2,$3)")
+                .bind(name)
+                .bind(today - Duration::days(offset))
+                .bind(json!({"name":name,"offset":offset}))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        // 같은 거리의 앞/뒤 표본은 앞 표본을 고르고 캐릭터별로 독립 선택해야 합니다.
+        for offset in [-30, -5, 5, 30] {
+            sqlx::query("INSERT INTO observations VALUES($1,$2,$3)")
+                .bind(name)
+                .bind(midnight + Duration::minutes(offset))
+                .bind(json!({"name":name,"offset":offset}))
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+    }
+    sqlx::query("INSERT INTO sync_runs(status) VALUES('running')")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let app = Arc::new(App {
+        db: Some(pool),
+        http: reqwest::Client::new(),
+        origin: "http://127.0.0.1:3100".into(),
+        operator_key: None,
+        nexon_origin: String::new(),
+    });
+    let response = router(app)
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/api/dashboard")
+                .header("cookie", "maple_session=batch-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 100000).await.unwrap()).unwrap();
+    assert_eq!(body["sync"]["status"], "running");
+    let rows = body["characters"].as_array().unwrap();
+    assert_eq!(rows.len(), 3);
+    assert!(!rows.iter().any(|r| r["ocid"] == "다른사용자"));
+    for row in rows {
+        let name = row["ocid"].as_str().unwrap();
+        let history = row["history"].as_array().unwrap();
+        if name == "빈기록" {
+            assert!(history.is_empty());
+            assert!(row["todayBaseline"].is_null());
+            assert_eq!(row["estimated"], true);
+        } else {
+            assert_eq!(history.len(), 3);
+            assert_eq!(
+                history
+                    .iter()
+                    .map(|h| h["basic"]["offset"].as_i64().unwrap())
+                    .collect::<Vec<_>>(),
+                vec![30, 2, 1]
+            );
+            assert!(history.iter().all(|h| h["basic"]["name"] == name));
+            assert_eq!(row["todayBaseline"], json!({"name":name,"offset":-5}));
+            assert_eq!(row["estimated"], false);
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
 async fn collector_caches_failures_and_refreshes_renamed_subscriptions(pool: PgPool) {
     use axum::extract::{Path, Query};
     use std::{

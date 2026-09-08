@@ -93,22 +93,33 @@ pub async fn dashboard(
     let today = chrono::Utc::now()
         .with_timezone(&chrono_tz::Asia::Seoul)
         .date_naive();
+    use chrono::TimeZone;
+    use std::collections::HashMap;
+    let midnight = chrono_tz::Asia::Seoul
+        .from_local_datetime(&today.and_hms_opt(0, 0, 0).unwrap())
+        .single()
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let ocids: Vec<String> = rows.iter().map(|row| row.get("ocid")).collect();
+    let history_rows=sqlx::query("SELECT ocid,date,basic FROM daily_snapshots WHERE ocid=ANY($1) AND date >=$2 AND date<$3 ORDER BY ocid,date")
+        .bind(&ocids).bind(today-chrono::Duration::days(30)).bind(today).fetch_all(app.pool()?).await?;
+    let mut histories: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    for row in history_rows {
+        histories.entry(row.get("ocid")).or_default().push(json!({"date":row.get::<chrono::NaiveDate,_>("date"),"basic":row.get::<serde_json::Value,_>("basic")}));
+    }
+    let baseline_rows=sqlx::query("SELECT DISTINCT ON (ocid) ocid,basic FROM observations WHERE ocid=ANY($1) AND observed_at >=$2 AND observed_at<$3 ORDER BY ocid,abs(extract(epoch FROM observed_at-$4)),observed_at")
+        .bind(&ocids).bind(midnight-chrono::Duration::days(1)).bind(midnight+chrono::Duration::days(1)).bind(midnight).fetch_all(app.pool()?).await?;
+    let mut baselines: HashMap<String, serde_json::Value> = baseline_rows
+        .into_iter()
+        .map(|row| (row.get("ocid"), row.get("basic")))
+        .collect();
     let mut characters = Vec::new();
     for row in rows {
         let ocid: String = row.get("ocid");
         let basic: serde_json::Value = row.get("basic");
         let observed: chrono::DateTime<chrono::Utc> = row.get("observed_at");
-        let history=sqlx::query("SELECT date,basic FROM daily_snapshots WHERE ocid=$1 AND date >=$2 AND date<$3 ORDER BY date")
-            .bind(&ocid).bind(today-chrono::Duration::days(30)).bind(today).fetch_all(app.pool()?).await?;
-        let history:Vec<_>=history.into_iter().map(|r|json!({"date":r.get::<chrono::NaiveDate,_>("date"),"basic":r.get::<serde_json::Value,_>("basic")})).collect();
-        use chrono::TimeZone;
-        let midnight = chrono_tz::Asia::Seoul
-            .from_local_datetime(&today.and_hms_opt(0, 0, 0).unwrap())
-            .single()
-            .unwrap()
-            .with_timezone(&chrono::Utc);
-        let baseline:Option<serde_json::Value> = sqlx::query_scalar("SELECT basic FROM observations WHERE ocid=$1 AND observed_at >=$2 AND observed_at<$3 ORDER BY abs(extract(epoch FROM observed_at-$4)),observed_at LIMIT 1")
-            .bind(&ocid).bind(midnight-chrono::Duration::days(1)).bind(midnight+chrono::Duration::days(1)).bind(midnight).fetch_optional(app.pool()?).await?;
+        let history = histories.remove(&ocid).unwrap_or_default();
+        let baseline = baselines.remove(&ocid);
         let yesterday = (today - chrono::Duration::days(1)).to_string();
         let estimated = !history
             .iter()
