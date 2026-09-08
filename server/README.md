@@ -71,6 +71,10 @@ DB 재시작은 저장소 루트에서 다음 명령으로 수행합니다.
 
 ### Linux 서비스와 백업
 
+복원은 `bash scripts/restore-linux.sh /보호된/경로/backup.dump 새_DB명`으로 수행합니다. 기존 DB가 있으면 즉시 실패하며, 새 DB에 단일 트랜잭션으로 복원합니다. 실패한 새 DB와 원본 파일은 자동 삭제하지 않습니다. 복원 완료는 서비스 전환 완료가 아니므로 기록 수·대표/즐겨찾기·로그인·수집을 확인한 뒤 연결 설정을 바꾸어야 합니다. 이전 DB와 서버 설정은 되돌리기용으로 보존합니다.
+
+현재 Windows 운영 DB는 PostgreSQL 17, Linux 개발 DB는 16입니다. 운영 이전 전 대상 버전을 맞추고 해당 도구 버전으로 다시 검증해야 합니다. 현재 복원 테스트는 Linux 16 표본 DB끼리 수행한 것이며 Windows 운영 데이터의 이전 성공을 의미하지 않습니다.
+
 Windows와 Linux 모두 `npm run web:build`로 두 웹 화면을 빌드합니다. 기존 PowerShell 빌드 파일도 같은 Node 스크립트를 호출합니다.
 
 `server/deploy/maple-exp.service`는 `/home/mapledev/maple-guild-tracker`의 release 서버를 실행하는 systemd 구성입니다. 비정상 종료 시 10초 후 재시작하며 일반 사용자·읽기 전용 파일시스템으로 실행합니다. 서비스 문법 검증만 수행했고 아직 설치·활성화하지 않았습니다. 실제 재시작 검증과 운영 이전은 남아 있습니다.
@@ -89,7 +93,7 @@ sudo systemctl enable --now maple-exp
 
 Linux 작업본에서 `bash scripts/backup-linux.sh`로 `.local-runtime/backups`에 PostgreSQL custom-format 백업을 만듭니다. Unix 소켓과 현재 사용자 인증을 사용하고, 파일 권한은 600입니다. 비밀이 담길 수 있으므로 Git에 포함하지 않습니다. 백업 실패 파일은 `.partial`로 남고, 정상 백업은 자동 삭제하지 않습니다. 다른 DB를 대상으로 할 때는 libpq의 `PGHOST`, `PGDATABASE`, `PGUSER` 설정을 사용합니다.
 
-`bash scripts/test-linux-backup.sh`는 신규 임시 DB 두 개를 생성하여 한글과 큰 정수를 실제 복원하고 파일 권한을 검사합니다. 이 테스트에서 생성한 DB만 정리하며 표본 백업 파일은 남깁니다. 백업 생성은 수동 방식이며 정기 백업·다른 디스크 보관과 보관 기간 정책은 아직 적용하지 않았습니다.
+`bash scripts/test-linux-backup.sh`는 신규 임시 DB 두 개로 한글과 큰 정수를 실제 복원하고 파일 권한, 기존 대상과 잘못된 백업 거부를 검사합니다. 이 테스트에서 생성한 DB만 정리하며 표본 백업 파일은 남깁니다. 정기 백업 구성은 준비했지만 아직 활성화하지 않았고 다른 디스크 보관과 보관 기간 정책도 미적용입니다.
 
 ### WSL2 Ubuntu 개발 환경
 
