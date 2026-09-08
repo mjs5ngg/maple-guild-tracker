@@ -32,6 +32,8 @@
 
 ### 진행 중
 
+- [x] Windows 로그인 시 WSL 실행 유지 작업 `Maple EXP Linux Runtime` 등록·수동 실행 Running 확인. Linux 수집217 completed/369 성공/0 실패. 실제 재부팅과 로그인 전 무인 시작은 별도.
+
 - [x] 실제 Linux 운영 전환. Windows 수집 215 완료 후 서버 중지, 최신 백업을 Linux 17의 maple_live_20260909_0235에 복원. root 600 설정 이전, systemd 활성화, Windows localhost 상태 DB/collector/Google=true, 운영 백업 성공·04:30 타이머 활성화.
 - [ ] 전환 후 첫 수집 완료·실제 로그인 재검증, Windows 부팅 WSL 자동 기동과 재부팅 복구. 운영 DB가 Linux로 바뀌었으므로 Windows 구 DB를 그대로 재가동하지 않는다.
 

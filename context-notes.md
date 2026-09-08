@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- Linux 전환 후 수집217이 369 성공/0 실패로 완료됐다. Windows 현재 사용자 Interactive/Limited 로그인 트리거의 Maple EXP Linux Runtime 작업을 등록했다. 숨김 PowerShell 명령으로 WSL sleep infinity 실행, 실행시간 제한 없음·중복 IgnoreNew·실패1분 재시도 설정이다. .ps1 파일 실행은 해당 PowerShell 정책으로 실패해 정책을 변경하지 않고 직접 명령 실행 방식으로 수정했으며 최종 Running/267009(실행 중), Linux active 확인. 임시로 만든 스크립트는 제거했다. 로그인 전 부팅 자동 기동과 재부팅 시험, Google 재로그인은 미검증이다.
+
 - 2026-09-09 02:35 KST 실제 운영 전환. Windows 수집 215 completed/369 성공/0 실패 확인 후 PID4256 경로 검증·중지. linux-live-20260909-0235.dump를 생성해 Linux 17/5433 maple_live_20260909_0235에 복원했다. 운영 키/Google 설정을 stdin으로 /etc/maple-exp/server.env(root600)에 전달하고 maple-exp 서비스를 enable/start했다. Windows localhost 상태 database/collector/Google 모두 true, Linux 수집216 running 확인. 운영 백업 Result=success 및 다음04:30 타이머 활성화 확인. Python 문법 검증 통과. Windows 원본은 보존했으나 이후 데이터는 Linux에 축적되므로 단순 Windows 재가동은 금지하고 최신 역방향 이전을 먼저 검토한다. 실제 Google 재로그인과 Windows 재부팅은 아직 검증하지 않았다.
 
 - 사용자가 실제 Linux 운영 전환을 명시적으로 요청했다. 운영자 Windows 저장 키와 Google 설정을 Linux root 전용 설정 파일로 비공개 전달하는 것을 이전 범위로 해석한다. 개인 사용자 키는 이전하지 않는다. 원본 DB와 Windows 실행 파일은 되돌리기용으로 보존한다.
