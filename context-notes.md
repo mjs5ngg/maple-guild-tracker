@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- 날짜별 길드 이력 1단계 완료. Windows/Linux 각각 실제 PostgreSQL 포함 18개 테스트·clippy·release 빌드가 통과했다. Windows DB를 .local-runtime/backups의 custom archive로 백업·목록 검증 후 추가 전용 migration 0004를 적용했다. 실제 2026-08-09~2026-09-07 명단 30개와 보충 작업 0건, 실행 173번 completed/368 성공/0 실패를 확인했다. Windows 실행 바이너리는 이번 변경의 debug 버전이며 release 산출물도 빌드 완료했다. 현재 명단과 기존 원본 기록은 변경/삭제하지 않았다. 다음 단계는 기간별 순위에 날짜 명단을 연결하고 과거 등장 캐릭터를 안전하게 식별·보충하는 작업이다.
+
 - 날짜별 길드 이력은 현재 명단 복제가 아니라 날짜 지정 guild/basic 응답을 별도 저장하는 단계부터 구현한다. 성공한 빈 명단은 저장 행이 있고 미수집은 행이 없는 것으로 구분한다. 주기당 최대 30개 날짜 명단을 활성 길드에 한해 최신 날짜부터 공정하게 처리하고 실패를 영속 재시도한다. https://openapi.nexon.com/ko/game/maplestory/?id=16 의 과거 일자 조회 안내를 확인했다. 순위 정책 연결과 과거 탈퇴자 보충은 아직 이 단계의 완료 범위가 아니다.
 
 - 9efdb1a를 Linux 별도 체크아웃에 fast-forward로 반영하고 PostgreSQL 통합 포함 서버 17개·clippy·release 빌드를 재검증했다. Windows 키·실제 DB는 이동하지 않았다. 운영 서버는 Windows release 바이너리로 계속 실행하며 Linux 서비스 활성화는 별도 단계다.
