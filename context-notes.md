@@ -1,5 +1,7 @@
 # 구현 결정 기록
 
+- Sites의 기존 구조 보존 지침에 따라 현재 React/로컬 Linux 호스팅을 유지한다. 화면 재설계나 외부 Sites 배포 없이 대시보드 조회 오류만 별도 상태로 분리한다.
+
 - 브라우저 탭5에서 로그인된 대표 엘크라우치와 Linux 최신03:52 갱신 순위가 보임을 확인했다. 새 Google 인증 절차는 수행하지 않았다. 최신 데이터가 보이는데 상단 TypeError: Failed to fetch 잔존, src/web/main.tsx load 성공 시 setError 해제 없음 확인. 조회 오류를 저장/팝업 오류와 분리해 복구 시 조회 오류만 지우는 후속 수정이 필요하다.
 
 - 2026-09-09 Linux 운영 주소에서 Google 시작 응답303, accounts.google.com 대상, localhost3100 callback, HttpOnly/SameSite=Lax를 비밀 출력 없이 확인했다. callback 입력 누락은400으로 거부됐다. 테스트 로그인 요청은10분 만료이며 실제 Google 인증 요청을 따라가거나 사용자 계정을 변경하지 않았다. 수집221 completed/369 성공/0 실패를 확인했다. 실제 브라우저 인증 완료와 구분한다.

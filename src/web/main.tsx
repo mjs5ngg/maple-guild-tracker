@@ -7,6 +7,7 @@ import {ResponsiveContainer,LineChart,Line,XAxis,YAxis,Tooltip,CartesianGrid} fr
 import "./web.css";
 import {registerStatusTool} from "./webmcp";
 import {syncStatusText} from "./syncStatus";
+import {loadDashboard} from "./loadDashboard";
 async function api(path:string,body?:unknown){
  const response=await fetch(path,{method:body===undefined?"GET":"POST",headers:body===undefined?{}:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
  const data= parseNexon(await response.text()) as Record<string,any>;
@@ -15,11 +16,12 @@ async function api(path:string,body?:unknown){
 function App(){
  useEffect(registerStatusTool,[]);
  const [status,setStatus]=useState<any>(null),[me,setMe]=useState<any>(null),[error,setError]=useState("");
+ const [loadError,setLoadError]=useState("");
  const [primary,setPrimary]=useState(""),[favorites,setFavorites]=useState(""),[rows,setRows]=useState<Snapshot[]>([]);
  const [personal,setPersonal]=useState<Snapshot[]>([]),[period,setPeriod]=useState(localStorage.getItem("web-ranking")!=="total");
  const [scope,setScope]=useState("guild"),[sync,setSync]=useState<any>(null);
  const [days,setDays]=useState(Number(localStorage.getItem("web-days"))===7?7:Number(localStorage.getItem("web-days"))===30?30:1);
- async function load(){try{const data=await api("/api/dashboard");setRows(data.characters);setSync(data.sync);}catch(e){setError(String(e));}}
+ async function load(){await loadDashboard(()=>api("/api/dashboard"),data=>{setRows(data.characters);setSync(data.sync);},setLoadError);}
  useEffect(()=>{
  let loggedIn=false;
  void api("/api/status").then(setStatus).catch(e=>setError(String(e)));
@@ -64,6 +66,7 @@ function App(){
  return <main>
  <header><div><span className="eyebrow">길드원 따라가기 · 비공식 서비스</span><h1>메이플 EXP 트래커</h1></div><span className="badge">15분 자동 수집</span><select aria-label="기간" value={days} onChange={e=>{setDays(Number(e.target.value));localStorage.setItem("web-days",e.target.value);}}><option value="1">오늘</option><option value="7">오늘 포함 7일</option><option value="30">오늘 포함 30일</option></select></header>
  {error&&<p role="alert" className="error">{error}</p>}
+ {loadError&&<p role="alert" className="error">{loadError}</p>}
  {!status?<p>서버 연결 중…</p>:<section className="status">저장소 {status.database?"연결됨":"설정 필요"} · 자동 수집 {status.collector?"설정됨":"설정 필요"}</section>}
  {!me?<section className="panel"><h2>로그인</h2><p>대표캐릭터와 즐겨찾기를 기기 간 함께 사용합니다.</p><div className="actions">{status?.providers.map((p:any)=><button key={p.name} disabled={!p.configured||!status.database} onClick={()=>location.href="/auth/"+p.name+"/start"}>{p.name} {p.configured?"로그인":"설정 대기"}</button>)}</div><p className="muted">실제 로그인은 개발자 앱 등록 후 연결됩니다. 넥슨 계정 비밀번호는 받지 않습니다.</p></section>:<>
  <section className="panel"><div className="actions"><h2>캐릭터 설정</h2><button onClick={()=>void api("/api/logout",{}).then(()=>location.reload())}>로그아웃</button></div><label>대표캐릭터<input value={primary} onChange={e=>setPrimary(e.target.value)} maxLength={20}/></label><label>즐겨찾기 · 최대 30명<textarea value={favorites} onChange={e=>setFavorites(e.target.value)} placeholder="한 줄에 한 캐릭터"/></label><button onClick={()=>void save()}>설정 저장</button><p className="muted">마지막 이용 후 168시간이 지나면 필요 대상 수집이 중단됩니다. 다른 활성 사용자가 필요한 캐릭터는 계속 수집합니다.</p><div className="actions">{status?.providers.map((p:any)=><button key={p.name} disabled={!p.configured} onClick={()=>location.href="/auth/"+p.name+"/start?link=1"}>{p.name} 계정 연결</button>)}</div></section>
