@@ -32,6 +32,8 @@
 
 ### 진행 중
 
+- [x] Linux 운영 Google 로그인 시작 HTTP303, Google 대상·기존 localhost callback·HttpOnly/SameSite 확인. 입력 없는 callback400 거부. 수집221도369 성공/0 실패. 실제 Google 인증 완료는 별도 미검증.
+
 - [x] 백업 전 WSL/C/D 여유 공간 5GiB 검사. Windows/Linux 경계값·잘못된 설정 테스트 통과, 서비스 후처리 포함 Result=success. 상시 감시·알림은 미구현.
 
 - [x] D:\MapleEXPBackups ACL을 현재 사용자/SYSTEM/관리자로 제한. 복사 스크립트 문법·실행·기존 파일 재검증, 백업 서비스 후처리 Result=success 및 원본/복사본 SHA-256 일치 확인. 자동 삭제 없음.
