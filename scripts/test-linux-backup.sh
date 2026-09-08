@@ -16,6 +16,9 @@ createdb "$restore_db"
 restore_created=1
 psql --dbname="$source_db" --set=ON_ERROR_STOP=1 --command="CREATE TABLE backup_probe (name text, xp bigint); INSERT INTO backup_probe VALUES ('복원 검증', 123456789012345);" > /dev/null
 archive="$(PGDATABASE="$source_db" bash "$script_dir/backup-linux.sh")"
+if [ -n "${MAPLE_BACKUP_DIR:-}" ]; then
+  test "$(dirname -- "$archive")" = "$MAPLE_BACKUP_DIR"
+fi
 test "$(stat -c %a "$archive")" = 600
 pg_restore --exit-on-error --no-owner --no-acl --dbname="$restore_db" "$archive"
 restored="$(psql --dbname="$restore_db" --tuples-only --no-align --command="SELECT name || ':' || xp FROM backup_probe")"
