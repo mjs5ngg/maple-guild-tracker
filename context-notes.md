@@ -1,5 +1,9 @@
 # 구현 결정 기록
 
+- 2026-09-08 PGDG에서 PostgreSQL 17.11을 설치했다. 16/main은 5432 그대로, 17/main은 5433이며 둘 다 online이다. 17에 mapledev 역할과 개발 DB를 준비하고 표본 백업/복원·서버 테스트 18개를 통과했다. Windows 실제 DB 백업 linux17-rehearsal-20260908-220111.dump를 Linux ~/.local/share/maple-migration(700)에 600 권한으로 복사해 maple_rehearsal_20260908_220111 새 DB에 단일 트랜잭션 복원했다. daily_snapshots 11,113건을 확인했다. 이 DB는 검증용 복사본이며 운영 서버·OAuth/NEXON 키·연결 설정은 변경하지 않았다. 운영 전환 시에는 새 백업과 앱 수준 검증이 필요하다.
+
+- PostgreSQL 공식 Ubuntu 안내의 PGDG 저장소 설치 경로를 확인했다. Linux 16을 업그레이드/삭제하지 않고 17을 별도 클러스터로 준비한다. 운영 서버의 연결 주소와 키는 이 단계에서 변경하지 않는다.
+
 - 새 DB 복원 도구의 bash 문법, Linux PostgreSQL 16 임시 DB 정상 복원, 동일 대상 재실행 거부, 잘못된 파일 거부 후 기존 복원값 유지, 파일 600 권한을 검증했다. 실제 Windows DB·자격 증명·실행 서버는 변경하지 않았다.
 
 - 복원 도구는 기존 DB 삭제나 덮어쓰기를 지원하지 않는다. createdb 성공 시에만 단일 트랜잭션으로 복원하고 실패한 새 DB도 자동 삭제하지 않는다. Windows 운영 PostgreSQL 17과 Linux 개발 16의 차이를 확인했으므로 실제 운영 데이터 이전은 이번 도구 검증과 분리한다.
