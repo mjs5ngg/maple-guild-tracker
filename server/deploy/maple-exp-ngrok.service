@@ -1,0 +1,26 @@
+# 무료 할당 HTTPS 주소를 루프백 웹 서버로 연결하며 요청 본문 검사를 비활성화합니다.
+[Unit]
+Description=Maple EXP ngrok ingress
+After=network-online.target maple-exp.service
+Wants=network-online.target
+Requires=maple-exp.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=mapledev
+Group=mapledev
+EnvironmentFile=/etc/maple-exp/ngrok.env
+ExecStart=/home/mapledev/.local/bin/ngrok http http://127.0.0.1:3100 --url ${NGROK_URL} --inspect=false --log=false
+Restart=on-failure
+RestartSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
