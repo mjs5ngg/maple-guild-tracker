@@ -64,6 +64,26 @@ fn set_cookie(app: &App, name: &str, value: &str, age: i64) -> String {
         }
     )
 }
+
+// 소셜 로그인 없이 기기별 수집 구독을 만들며 계정 쿠키는 변경하지 않습니다.
+pub async fn device(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Response, Failure> {
+    if user(&app, &headers).await.is_ok() {
+        return Ok(Json(json!({"ok":true})).into_response());
+    }
+    if cookie(&headers, "maple_session").is_some() {
+        return Err(Failure(StatusCode::UNAUTHORIZED, "로그인이 만료되었습니다. 로그아웃 후 다시 시도하세요."));
+    }
+    let id = Uuid::new_v4().to_string();
+    let token = Uuid::new_v4().to_string() + &Uuid::new_v4().to_string();
+    let mut tx = app.pool()?.begin().await?;
+    sqlx::query("INSERT INTO users(id) VALUES($1)").bind(&id).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO sessions VALUES($1,$2,now()+interval '30 days')")
+        .bind(hash(&token)).bind(&id).execute(&mut *tx).await?;
+    tx.commit().await?;
+    let mut response = Json(json!({"ok":true})).into_response();
+    response.headers_mut().insert("set-cookie", set_cookie(&app,"maple_device",&token,30*86400).parse().unwrap());
+    Ok(response)
+}
 pub async fn start(
     State(app): State<Arc<App>>,
     Path(name): Path<String>,
@@ -80,6 +100,9 @@ pub async fn start(
         .execute(app.pool()?)
         .await?;
     let link_user = if options.get("link").map(String::as_str) == Some("1") {
+        if cookie(&headers, "maple_session").is_none() {
+            return Err(Failure(StatusCode::UNAUTHORIZED, "계정 연결은 로그인 후 가능합니다."));
+        }
         Some(user(&app, &headers).await?)
     } else {
         None
@@ -283,6 +306,9 @@ pub async fn delete_account(
     headers: HeaderMap,
     Json(input): Json<DeleteAccount>,
 ) -> Result<Response, Failure> {
+    if cookie(&headers, "maple_session").is_none() {
+        return Err(Failure(StatusCode::UNAUTHORIZED, "계정 탈퇴는 로그인 후 가능합니다."));
+    }
     let id = user(&app, &headers).await?;
     if input.confirmation != "탈퇴" {
         return Err(Failure(

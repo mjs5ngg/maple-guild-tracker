@@ -71,6 +71,13 @@ fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
         })
 }
 async fn user(app: &App, headers: &HeaderMap) -> Result<String, Failure> {
+    if cookie(headers, "maple_session").is_none() {
+        let token = cookie(headers, "maple_device")
+            .ok_or(Failure(StatusCode::UNAUTHORIZED, "기기 설정을 먼저 시작해 주세요."))?;
+        return sqlx::query_scalar("SELECT s.user_id FROM sessions s WHERE s.token_hash=$1 AND s.expires_at>now() AND NOT EXISTS(SELECT 1 FROM identities i WHERE i.user_id=s.user_id)")
+            .bind(hash(&token)).fetch_optional(app.pool()?).await?
+            .ok_or(Failure(StatusCode::UNAUTHORIZED, "기기 설정이 만료되었습니다."));
+    }
     let token = cookie(headers, "maple_session")
         .ok_or(Failure(StatusCode::UNAUTHORIZED, "로그인이 필요합니다."))?;
     sqlx::query_scalar("SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>now()")
@@ -234,6 +241,7 @@ fn router(app: Arc<App>) -> Router {
     Router::new()
         .route("/api/status", get(routes::status))
         .route("/api/me", get(routes::me))
+        .route("/api/device", post(auth::device))
         .route("/api/activity", post(routes::activity))
         .route("/api/profile", post(routes::profile))
         .route("/api/dashboard", get(routes::dashboard))

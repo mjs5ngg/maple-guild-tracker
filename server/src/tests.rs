@@ -5,6 +5,32 @@ use tower::ServiceExt;
 
 #[sqlx::test(migrations = "./migrations")]
 #[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
+async fn device_settings_are_isolated_and_survive_account_logout(pool: PgPool) {
+    let app = Arc::new(App { db:Some(pool.clone()), http:reqwest::Client::new(), origin:"http://localhost".into(), operator_key:None, nexon_origin:"http://localhost".into() });
+    let response = auth::device(State(app.clone()), HeaderMap::new()).await.unwrap_or_else(|_| panic!("device creation failed"));
+    let value = response.headers()["set-cookie"].to_str().unwrap();
+    assert!(value.contains("HttpOnly"));
+    assert!(value.contains("SameSite=Lax"));
+    let device_cookie = value.split(';').next().unwrap().to_owned();
+    let mut headers = HeaderMap::new();
+    headers.insert("cookie", device_cookie.parse().unwrap());
+    let guest = user(&app,&headers).await.unwrap_or_else(|_| panic!("device access failed"));
+    sqlx::query("UPDATE users SET primary_name='기기대표' WHERE id=$1").bind(&guest).execute(&pool).await.unwrap();
+    let repeated = auth::device(State(app.clone()), headers.clone()).await.unwrap_or_else(|_| panic!("reuse failed"));
+    assert!(!repeated.headers().contains_key("set-cookie"));
+    sqlx::query("INSERT INTO users(id,primary_name) VALUES('account','계정대표')").execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO sessions VALUES($1,'account',now()+interval '1 day')").bind(hash("account-token")).execute(&pool).await.unwrap();
+    headers.insert("cookie", format!("{device_cookie}; maple_session=account-token").parse().unwrap());
+    assert_eq!(user(&app,&headers).await.ok().as_deref(),Some("account"));
+    auth::logout(State(app.clone()),headers.clone()).await.unwrap_or_else(|_| panic!("logout failed"));
+    headers.insert("cookie",device_cookie.parse().unwrap());
+    assert_eq!(user(&app,&headers).await.ok(),Some(guest));
+    assert_eq!(routes::me(State(app.clone()),headers).await.unwrap_or_else(|_| panic!("profile failed")).0["primary"],"기기대표");
+    assert!(user(&app,&HeaderMap::new()).await.is_err());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[ignore = "로컬 PostgreSQL DATABASE_URL 설정 후 실행합니다."]
 async fn dated_guild_history_keeps_current_roster_and_retries(pool: PgPool) {
     use axum::extract::Query;
     use std::collections::HashMap;

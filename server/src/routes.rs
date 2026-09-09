@@ -47,7 +47,8 @@ pub async fn me(State(app): State<Arc<App>>, headers: HeaderMap) -> ApiResult<se
             .bind(&id)
             .fetch_all(app.pool()?)
             .await?;
-    Ok(Json(json!({"primary":primary,"favorites":favorites})))
+    let signed_in = cookie(&headers, "maple_session").is_some();
+    Ok(Json(json!({"primary":primary,"favorites":favorites,"signedIn":signed_in})))
 }
 pub async fn activity(
     State(app): State<Arc<App>>,
