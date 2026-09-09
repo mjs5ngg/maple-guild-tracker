@@ -159,7 +159,7 @@ async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
             sqlx::query("INSERT INTO daily_snapshots VALUES($1,$2,$3)")
                 .bind(name)
                 .bind(today - Duration::days(offset))
-                .bind(json!({"name":name,"offset":offset,"character_name":if name=="대표"&&offset==2 {"옛대표"} else {name}}))
+                .bind(json!({"name":name,"offset":offset,"character_exp":offset,"character_name":if name=="대표"&&offset==2 {"옛대표"} else {name}}))
                 .execute(&pool)
                 .await
                 .unwrap();
@@ -169,7 +169,7 @@ async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
             sqlx::query("INSERT INTO observations VALUES($1,$2,$3)")
                 .bind(name)
                 .bind(midnight + Duration::minutes(offset))
-                .bind(json!({"name":name,"offset":offset}))
+                .bind(json!({"name":name,"offset":offset,"character_name":name,"character_exp":100+offset}))
                 .execute(&pool)
                 .await
                 .unwrap();
@@ -250,12 +250,12 @@ async fn dashboard_batch_preserves_scope_dates_and_baselines(pool: PgPool) {
             assert_eq!(
                 history
                     .iter()
-                    .map(|h| h["basic"]["offset"].as_i64().unwrap())
+                    .map(|h| h["basic"]["character_exp"].as_i64().unwrap())
                     .collect::<Vec<_>>(),
                 vec![30, 2, 1]
             );
-            assert!(history.iter().all(|h| h["basic"]["name"] == name));
-            assert_eq!(row["todayBaseline"], json!({"name":name,"offset":-5}));
+            assert!(history.iter().all(|h| h["basic"].get("offset").is_none()));
+            assert_eq!(row["todayBaseline"], json!({"character_name":name,"character_exp":95}));
             assert_eq!(row["estimated"], false);
         }
     }
