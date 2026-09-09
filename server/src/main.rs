@@ -7,6 +7,7 @@ mod collector;
 mod exp;
 mod guild_history;
 mod operator_key;
+mod operations;
 mod policy;
 mod records;
 mod routes;
@@ -209,9 +210,17 @@ async fn main() {
         }
         return;
     }
+    if std::env::args().any(|arg| arg == "--operations-only") {
+        let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST,3103)).await.expect("operations loopback port unavailable");
+        axum::serve(listener, operations::router(app)).await.unwrap();
+        return;
+    }
     if app.db.is_some() && app.operator_key.is_some() {
         tokio::spawn(collector::run(app.clone()));
     }
+    let operations_listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 3103)).await.expect("operations loopback port unavailable");
+    let operations_router = operations::router(app.clone());
+    tokio::spawn(async move { axum::serve(operations_listener, operations_router).await.unwrap(); });
     let router = router(app);
     let direct=Router::new()
         .fallback_service(tower_http::services::ServeDir::new("web-dist/direct"))
