@@ -3,6 +3,34 @@ use crate::*;
 use serde::Deserialize;
 use sqlx::Row;
 
+// 저장 원본은 유지하고 웹에서 사용하는 필드만 응답에 포함합니다.
+fn web_basic(source: &serde_json::Value) -> serde_json::Value {
+    let fields = ["character_name", "world_name", "character_class", "character_level",
+        "character_exp", "character_exp_rate", "character_guild_name", "character_image"];
+    let mut result = serde_json::Map::new();
+    for field in fields {
+        if let Some(value) = source.get(field) {
+            result.insert(field.to_owned(), value.clone());
+        }
+    }
+    serde_json::Value::Object(result)
+}
+
+#[test]
+fn web_projection_preserves_exact_experience_and_source() {
+    let source = json!({"character_name":"대표", "character_level":282,
+        "character_exp":99999999999999999u64, "character_exp_rate":"21.482",
+        "character_guild_name":null, "character_image":"image", "unused":"large raw field"});
+    let projected = web_basic(&source);
+    assert_eq!(projected["character_exp"], source["character_exp"]);
+    assert_eq!(projected["character_exp_rate"], "21.482");
+    assert_eq!(projected["character_image"], "image");
+    assert!(projected.get("character_guild_name").unwrap().is_null());
+    assert!(projected.get("unused").is_none());
+    assert_eq!(source["unused"], "large raw field");
+    assert!(projected.get("world_name").is_none());
+}
+
 pub async fn status(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
     Json(
         json!({"database":app.db.is_some(),"collector":app.db.is_some()&&app.operator_key.is_some(),"providers":auth::available(),"intervalMinutes":15,"favoriteLimit":policy::FAVORITE_LIMIT}),
@@ -165,7 +193,9 @@ pub async fn dashboard(
             }
             dates
         });
-        characters.push(json!({"ocid":ocid,"basic":basic,"observedAt":observed,"history":history,"todayBaseline":baseline,"estimated":estimated,"isGuildMember":current_member,"guildMembership":membership}));
+        let history: Vec<_> = history.into_iter().map(|entry| json!({"date":entry["date"],"basic":web_basic(&entry["basic"])})).collect();
+        let baseline = baseline.as_ref().map(web_basic);
+        characters.push(json!({"ocid":ocid,"basic":web_basic(&basic),"observedAt":observed,"history":history,"todayBaseline":baseline,"estimated":estimated,"isGuildMember":current_member,"guildMembership":membership}));
     }
     let last = sqlx::query(
         "SELECT started_at,finished_at,succeeded,failed,status FROM sync_runs ORDER BY id DESC LIMIT 1",
