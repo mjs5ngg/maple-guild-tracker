@@ -88,6 +88,7 @@ pub async fn profile(
             "대표캐릭터와 즐겨찾기 30명 이내의 닉네임을 확인하세요.",
         ));
     }
+    request_budget::take(app.pool()?, &format!("profile:{id}"), 10).await?;
     let mut tx = app.pool()?.begin().await?;
     sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
         .bind(&id)

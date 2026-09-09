@@ -73,6 +73,7 @@ pub async fn device(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<R
     if cookie(&headers, "maple_session").is_some() {
         return Err(Failure(StatusCode::UNAUTHORIZED, "로그인이 만료되었습니다. 로그아웃 후 다시 시도하세요."));
     }
+    request_budget::take(app.pool()?, "new-device", 100).await?;
     let id = Uuid::new_v4().to_string();
     let token = Uuid::new_v4().to_string() + &Uuid::new_v4().to_string();
     let mut tx = app.pool()?.begin().await?;

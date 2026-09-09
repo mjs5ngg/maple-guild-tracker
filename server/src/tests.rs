@@ -18,6 +18,18 @@ async fn device_settings_are_isolated_and_survive_account_logout(pool: PgPool) {
     sqlx::query("UPDATE users SET primary_name='기기대표' WHERE id=$1").bind(&guest).execute(&pool).await.unwrap();
     let repeated = auth::device(State(app.clone()), headers.clone()).await.unwrap_or_else(|_| panic!("reuse failed"));
     assert!(!repeated.headers().contains_key("set-cookie"));
+    sqlx::query("UPDATE request_budgets SET used=100 WHERE bucket='new-device'").execute(&pool).await.unwrap();
+    assert!(auth::device(State(app.clone()),headers.clone()).await.is_ok());
+    let blocked = auth::device(State(app.clone()),HeaderMap::new()).await.err().unwrap();
+    assert_eq!(blocked.0,StatusCode::TOO_MANY_REQUESTS);
+    let service = router(app.clone());
+    for attempt in 0..11 {
+        let response = service.clone().oneshot(Request::builder().method("POST")
+            .uri("/api/profile").header("origin","http://localhost")
+            .header("cookie",&device_cookie).header("content-type","application/json")
+            .body(Body::from(r#"{"primary":"기기대표","favorites":[]}"#)).unwrap()).await.unwrap();
+        assert_eq!(response.status(),if attempt<10 {StatusCode::OK} else {StatusCode::TOO_MANY_REQUESTS});
+    }
     sqlx::query("INSERT INTO users(id,primary_name) VALUES('account','계정대표')").execute(&pool).await.unwrap();
     sqlx::query("INSERT INTO sessions VALUES($1,'account',now()+interval '1 day')").bind(hash("account-token")).execute(&pool).await.unwrap();
     headers.insert("cookie", format!("{device_cookie}; maple_session=account-token").parse().unwrap());
