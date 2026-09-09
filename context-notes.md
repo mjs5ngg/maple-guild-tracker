@@ -361,6 +361,10 @@
 - Linux 테스트 서버는 종료하고 Windows 서버를 기존 자격 증명 사용 방식으로 다시 실행했다. Linux 운영 전환·DB 이전·비밀 키 전달은 아직 수행하지 않았다. 소셜 제공자 등록 정보도 별도 연결이 필요하다.
 # 2026-09-09 비로그인 서비스 및 무료 주소 검토 시작
 
+- ngrok 실제 연결 완료. /etc/maple-exp/ngrok.env root600, 일회용 입력 서버 저장 후 종료. maple-exp-ngrok active/enabled. https://antirust-chair-grove.ngrok-free.dev/ 화면200 및 /api/status JSON200 database/collector=true 확인(ngrok 공식 skip-browser-warning 헤더 사용). 일반 첫방문에는 ngrok 안내가 표시된다. PUBLIC_ORIGIN/웹 개인출처/OAuth는 아직localhost이므로 연결시험 성공이지 전체 서비스 배포 완료가 아니다. 운영 대시보드의 고정 검증대기 표기는 다음 상태연동 작업 필요.
+
+- 사용자가 ngrok 인증 토큰 Linux 저장과 연결을 승인함. 인증 페이지 로그인 유지 확인. 토큰은 출력하지 않고 일회용 로컬 입력을 통해 전달한다.
+
 - 재개 확인. main 3e474ae, 메인/운영 서비스 active, ngrok inactive 및 /etc/maple-exp/ngrok.env 없음. 중단 지점은 터널 인증 연결 전이다. 운영 화면 임시 서비스를 정식 systemd 파일로 교체해 재시작 복구를 준비한다. 다음 release 서버 배포에서는 main의 자동3103 바인딩과 별도 운영 서비스가 충돌하지 않도록 리스너 중복을 제거해야 한다.
 
 - 운영 대시보드 http://127.0.0.1:3103/ 실행. maple-exp-operations 임시 systemd 서비스에서 debug 바이너리 --operations-only 사용, 기존 release 수집 서버 재시작 없음. HTTP200, database=true, 최근수집completed,20회 응답 확인. ngrok 인증/외부배포 미완료, 운영화면 재부팅 자동시작 미설정. 사용량은 실시간 미연동이며 계정확인값을 날짜와 함께 표시한다.
