@@ -2,6 +2,7 @@
 
 - [x] 새 서버/웹을 20260910-public 릴리스로 배포·공개 출처 연결. 외부 device/me/dashboard200·Secure쿠키·공개웹번들·운영/status404 확인. 실제 캐릭터 설정 및 키 조회 UI는 미검증.
 - [ ] Google 기존 localhost callback을 보존하고 공개 ngrok callback 추가 승인·저장·실제 로그인 검증.
+  - [x] 사용자 승인 후 공개 callback 저장 완료 알림 및 두 주소 재조회 확인. 실제 로그인 완료는 미검증.
 
 - [ ] Cloudflare Pages 개인 조회 전용 무료 출처 생성·보안 헤더·공개 빌드·외부 응답 확인.
   - [x] maple-exp-personal 프로젝트와 pages.dev 주소 생성, CSP 헤더 포함 공개 빌드 및 테스트51개 통과.
