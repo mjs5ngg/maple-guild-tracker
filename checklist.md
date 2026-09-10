@@ -2,7 +2,7 @@
 
 - [ ] Cloudflare Pages 개인 조회 전용 무료 출처 생성·보안 헤더·공개 빌드·외부 응답 확인.
   - [x] maple-exp-personal 프로젝트와 pages.dev 주소 생성, CSP 헤더 포함 공개 빌드 및 테스트51개 통과.
-  - [ ] 정적 ZIP 업로드·최종 공개 배포 및 응답 헤더 검증.
+  - [x] Wrangler 기기 인증 후 정적 파일 공개 배포. maple-exp-personal.pages.dev HTML/JS200, CSP·no-store·no-referrer·nosniff 확인. 메인 공개 주소 연결/실제 키 조회는 별도 미완료.
 
 - [x] 기기 신규 생성 전체100회/시간·사용자 설정 저장10회/시간의 DB 원자 제한 및 PostgreSQL 회귀 검증. Linux 전체23개 통과. 운영 마이그레이션·바이너리 교체 미실행.
 
