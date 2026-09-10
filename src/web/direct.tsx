@@ -2,9 +2,10 @@
 import {useEffect,useRef,useState} from "react";
 import {createRoot} from "react-dom/client";
 import {parseNexon} from "./experience";
-import type {Basic,Snapshot} from "./types";
+import type {Snapshot} from "./types";
 import "./web.css";
 import {readPersonal,writePersonal} from "./personalStorage";
+import {personalCharacter} from "./personalCharacter";
 const KEY="maple-personal-key",KIND="maple-personal-kind";
 function App(){
  const [key,setKey]=useState(()=>readPersonal(KEY)||""),[remember,setRemember]=useState(()=>!!readPersonal(KEY));
@@ -46,10 +47,10 @@ function App(){
  const saved=writePersonal(KEY,remember?key.trim():null);
  setStorageWarning(saved?"":"브라우저 저장 또는 삭제가 차단됐습니다. 이번 조회는 가능하지만, 기존 저장 키 삭제는 브라우저 사이트 데이터 설정에서 확인하세요.");
  writePersonal(KIND,kind);
+ const readCharacter=personalCharacter(request);
  let targets=kind==="development"?[primary]:[...new Set([primary,...names])];
  if(kind==="service"){
- const id=await request("id",{character_name:primary});
- const basic:Basic=await request("character/basic",{ocid:id.ocid});
+ const {basic}=await readCharacter(primary);
  if(basic.character_guild_name){
  const guild=await request("guild/id",{guild_name:basic.character_guild_name,world_name:basic.world_name});
  const list=await request("guild/basic",{oguild_id:guild.oguild_id});
@@ -59,7 +60,7 @@ function App(){
  }
  const rows:Snapshot[]=[];let failed=0;
  for(const name of targets){
- try{const id=await request("id",{character_name:name});const basic:Basic=await request("character/basic",{ocid:id.ocid});rows.push({ocid:id.ocid,basic,observedAt:new Date().toISOString(),history:[]});}
+ try{rows.push(await readCharacter(name));}
  catch{failed++;}
  setCount(rows.length+failed);await new Promise(r=>setTimeout(r,500));
  }

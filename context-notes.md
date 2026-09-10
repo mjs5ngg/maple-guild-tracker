@@ -361,6 +361,8 @@
 - Linux 테스트 서버는 종료하고 Windows 서버를 기존 자격 증명 사용 방식으로 다시 실행했다. Linux 운영 전환·DB 이전·비밀 키 전달은 아직 수행하지 않았다. 소셜 제공자 등록 정보도 별도 연결이 필요하다.
 # 2026-09-09 비로그인 서비스 및 무료 주소 검토 시작
 
+- 2026-09-10 중단 재개. 개인 실행 단위 캐시로 대표 id/basic 중복호출 제거(실패는 캐시안함, 다음 실행 재조회). 테스트53개·TypeScript 통과 및 Pages b4568fb1 배포. 정식주소 HTML 최신 index-DvtXd3s0.js 참조200 및 CSP 유지 확인. 내장브라우저에서 개인조회 버튼 클릭 후 팝업 탭이 나타나지 않았으며 실제 키는 입력/조회하지 않았다. 실제 브라우저 키/CORS/공용기록불변 시험은 남음. Google 실제 공개로그인은 앞선 사용자 조작 후 계정설정·로그아웃·기존대표와길드목록 표시로 확인됐음.
+
 - Google 공개callback 추가 사용자 승인 후 저장. 콘솔 저장완료 알림, 재진입해 localhost3100 및 https://antirust-chair-grove.ngrok-free.dev/auth/google/callback 두 주소 유지 확인. 공개 /auth/google/start를 사용자 사이드창에 열어 실로그인 확인 진행. 클라이언트/비밀키 변경 없음.
 
 - 메인 공개 전환 완료. /home/mapledev/maple-releases/20260910-public 바이너리+web-dist, /etc/systemd/system/maple-exp.service.d/public-release.conf로 WorkingDirectory/ExecStart 지정. root600 기존env는 미변경. cargo release가 기존경로 바이너리를 교체했으므로 재시작 전 /proc/MainPID/exe에서 실제 이전실행본을 before-public-20260910/maple-exp-server에 보존하고 이전web-dist도 복사함. 롤백은 단순override제거가 아니라 이전릴리스 WorkingDirectory/ExecStart로 override 교체 필요. 0005는 추가테이블이므로 이전앱과 호환. 서비스/ngrok active, 외부device/me/dashboard200 Secure쿠키·새bundle·status DB/collector설정true·운영/status404 확인. 빈대표 시험기기1개 생성(수집대상없음). Google콘솔 callback은 localhost 하나만 등록돼있음을 확인, 공개callback추가 전 승인 대기.
