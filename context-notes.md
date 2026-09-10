@@ -361,6 +361,8 @@
 - Linux 테스트 서버는 종료하고 Windows 서버를 기존 자격 증명 사용 방식으로 다시 실행했다. Linux 운영 전환·DB 이전·비밀 키 전달은 아직 수행하지 않았다. 소셜 제공자 등록 정보도 별도 연결이 필요하다.
 # 2026-09-09 비로그인 서비스 및 무료 주소 검토 시작
 
+- Pages 업로드/공개 승인을 받았으나 IAB 파일 선택 클릭 후 native 파일창이 나타나지 않음. Wrangler4.130.0 공식 CLI로 전환. Windows keyring용 @napi-rs/keyring1.3.0 글로벌 설치. login --browser=false --scopes account:read user:read pages:write --use-keyring 실행(세션66117), IAB탭6 Wrangler OAuth 승인 화면 대기. 추가 지속권한은 사용자 확인 필요. 아직 인증/업로드/배포 안 됨. 다음에는 CLI세션 유효 여부 확인 후 승인 완료시 pages deploy web-dist/direct --project-name maple-exp-personal 사용. 요청 scope에 offline_access가 CLI에서 자동추가됨.
+
 - Cloudflare 기존 로그인 확인. Workers/Pages 프로젝트는 아직0개. 개인 조회 정적 파일만 Pages에 배포하는 절차로 진행하며 기존 Linux/ngrok 메인 호스팅은 유지한다.
 - maple-exp-personal Pages 프로젝트 생성 완료. 할당주소 maple-exp-personal.pages.dev. web-dist/maple-exp-personal-20260910.zip(66166바이트) 준비. 공개 ngrok/Pages 출처로 웹 빌드 및51테스트 통과. _headers에 CSP/NEXON만 connect-src/no-store/nosniff/no-referrer 포함. 아직 업로드·사이트 배포 버튼은 실행하지 않음. Windows 업로드 조작 스킬의 공개 게시 직전 확인 요건으로 사용자 승인 후 계속한다. 메인 운영 주소와 바이너리는 미변경.
 
