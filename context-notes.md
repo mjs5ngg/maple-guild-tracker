@@ -361,6 +361,10 @@
 - Linux 테스트 서버는 종료하고 Windows 서버를 기존 자격 증명 사용 방식으로 다시 실행했다. Linux 운영 전환·DB 이전·비밀 키 전달은 아직 수행하지 않았다. 소셜 제공자 등록 정보도 별도 연결이 필요하다.
 # 2026-09-09 비로그인 서비스 및 무료 주소 검토 시작
 
+- 메인 공개 전환 완료. /home/mapledev/maple-releases/20260910-public 바이너리+web-dist, /etc/systemd/system/maple-exp.service.d/public-release.conf로 WorkingDirectory/ExecStart 지정. root600 기존env는 미변경. cargo release가 기존경로 바이너리를 교체했으므로 재시작 전 /proc/MainPID/exe에서 실제 이전실행본을 before-public-20260910/maple-exp-server에 보존하고 이전web-dist도 복사함. 롤백은 단순override제거가 아니라 이전릴리스 WorkingDirectory/ExecStart로 override 교체 필요. 0005는 추가테이블이므로 이전앱과 호환. 서비스/ngrok active, 외부device/me/dashboard200 Secure쿠키·새bundle·status DB/collector설정true·운영/status404 확인. 빈대표 시험기기1개 생성(수집대상없음). Google콘솔 callback은 localhost 하나만 등록돼있음을 확인, 공개callback추가 전 승인 대기.
+
+- 메인 공개 배포는 기존 운영 경로를 덮지 않고 릴리스 디렉터리와 systemd drop-in으로 전환한다. root600 비밀 파일은 보존하며 PUBLIC_ORIGIN만 ExecStart env로 덮는다. 기존 Linux dirty파일은 앞서 Windows에서 복사한 시험소스다.
+
 - 2026-09-10 기기 인증 성공. Wrangler 인증은 암호화 파일+Windows Credential Manager 키로 저장 확인. pages:write/account:read/user:read/offline_access만 부여. 기본 다른scope부족 경고는 의도적이며 추가권한 요청하지 않음. `pages deploy web-dist/direct --project-name maple-exp-personal --branch main` 성공, 배포 f6ad54b8.maple-exp-personal.pages.dev, 정식 maple-exp-personal.pages.dev HTML/JS200 및 CSP/no-store/no-referrer/nosniff 확인. JS에 공개 ngrok원점 존재·localhost3100 없음. 메인 운영 서버와 OAuth callback은 아직 연결 전이며 전체실증 미완료.
 
 - Pages 업로드/공개 승인을 받았으나 IAB 파일 선택 클릭 후 native 파일창이 나타나지 않음. Wrangler4.130.0 공식 CLI로 전환. Windows keyring용 @napi-rs/keyring1.3.0 글로벌 설치. login --browser=false --scopes account:read user:read pages:write --use-keyring 실행(세션66117), IAB탭6 Wrangler OAuth 승인 화면 대기. 추가 지속권한은 사용자 확인 필요. 아직 인증/업로드/배포 안 됨. 다음에는 CLI세션 유효 여부 확인 후 승인 완료시 pages deploy web-dist/direct --project-name maple-exp-personal 사용. 요청 scope에 offline_access가 CLI에서 자동추가됨.
