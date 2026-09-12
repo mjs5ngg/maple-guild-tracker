@@ -340,40 +340,65 @@ async fn flush(app: &App, config: &EdgeConfig) -> Result<(), sqlx::Error> {
     };
     let batch: String = row.get("batch_id");
     let mut body: Value = row.get("body");
-    let now = Utc::now();
-    body["sentAt"] = json!(now.to_rfc3339());
-    sqlx::query(
-        "UPDATE edge_outbox SET body=$1,last_attempt_at=$2,attempts=attempts+1 WHERE slot=1",
-    )
-    .bind(&body)
-    .bind(now)
-    .execute(pool)
-    .await?;
-    let raw = serde_json::to_string(&body).unwrap_or_default();
-    let timestamp = now.timestamp_millis().to_string();
-    let response = app
-        .http
-        .post(format!("{}/internal/v1/ingest", config.origin))
-        .header("content-type", "application/json")
-        .header("x-maple-timestamp", &timestamp)
-        .header("x-maple-batch-id", &batch)
-        .header(
-            "x-maple-signature",
-            signature(&config.secret, &timestamp, &batch, &raw),
-        )
-        .body(raw)
-        .send()
-        .await;
-    if response
-        .as_ref()
-        .is_ok_and(|value| value.status().is_success() || value.status() == StatusCode::CONFLICT)
-    {
-        sqlx::query("DELETE FROM edge_outbox WHERE slot=1 AND batch_id=$1")
-            .bind(batch)
+    for _ in 0..64 {
+        let now = Utc::now();
+        let mut chunk = ingest_chunk(&body);
+        let fingerprint = crate::hash(&serde_json::to_string(&chunk).unwrap_or_default());
+        let chunk_batch = format!("{batch}-{}", &fingerprint[..12]);
+        chunk["sentAt"] = json!(now.to_rfc3339());
+        chunk["batchId"] = json!(chunk_batch);
+        let raw = serde_json::to_string(&chunk).unwrap_or_default();
+        let timestamp = now.timestamp_millis().to_string();
+        sqlx::query("UPDATE edge_outbox SET last_attempt_at=$1,attempts=attempts+1,last_error=NULL WHERE slot=1")
+            .bind(now)
             .execute(pool)
             .await?;
+        let response = app.http.post(format!("{}/internal/v1/ingest", config.origin))
+            .header("content-type", "application/json")
+            .header("x-maple-timestamp", &timestamp)
+            .header("x-maple-batch-id", &chunk_batch)
+            .header("x-maple-signature", signature(&config.secret, &timestamp, &chunk_batch, &raw))
+            .body(raw).send().await;
+        let delivered = response.as_ref().is_ok_and(|value| value.status().is_success() || value.status() == StatusCode::CONFLICT);
+        if !delivered {
+            let reason = match response {Ok(value)=>format!("HTTP {}",value.status().as_u16()),Err(value) if value.is_timeout()=>"timeout".into(),Err(value) if value.is_connect()=>"connect".into(),Err(_)=>"request".into()};
+            sqlx::query("UPDATE edge_outbox SET last_error=$1 WHERE slot=1").bind(reason).execute(pool).await?;
+            break;
+        }
+        remove_chunk(&mut body, &chunk);
+        if ingest_empty(&body) {
+            sqlx::query("DELETE FROM edge_outbox WHERE slot=1 AND batch_id=$1").bind(&batch).execute(pool).await?;
+            break;
+        }
+        body["sentAt"] = json!(now.to_rfc3339());
+        sqlx::query("UPDATE edge_outbox SET body=$1,updated_at=now() WHERE slot=1 AND batch_id=$2").bind(&body).bind(&batch).execute(pool).await?;
     }
     Ok(())
+}
+
+fn ingest_chunk(body: &Value) -> Value {
+    let take = |key: &str, limit: usize| body[key].as_array().map(|values| values.iter().take(limit).cloned().collect::<Vec<_>>()).unwrap_or_default();
+    json!({"batchId":body["batchId"],"sentAt":body["sentAt"],"current":take("current",400),"dailySnapshots":take("dailySnapshots",500),"todayBaselines":take("todayBaselines",400),"guilds":take("guilds",2),"sync":body["sync"]})
+}
+
+fn remove_chunk(body: &mut Value, chunk: &Value) {
+    for key in ["current", "dailySnapshots", "todayBaselines", "guilds"] {
+        let count = chunk[key].as_array().map(Vec::len).unwrap_or(0);
+        if let Some(values) = body[key].as_array_mut() {
+            values.drain(..count.min(values.len()));
+        }
+    }
+}
+
+fn ingest_empty(body: &Value) -> bool {
+    ["current", "dailySnapshots", "todayBaselines", "guilds"].iter().all(|key| body[*key].as_array().is_none_or(Vec::is_empty))
+}
+
+pub(crate) async fn flush_pending(app: &App) -> Result<(), sqlx::Error> {
+    let Some(config) = config() else {
+        return Ok(());
+    };
+    flush(app, &config).await
 }
 
 pub(crate) async fn enqueue_and_flush(
@@ -392,7 +417,7 @@ pub(crate) async fn enqueue_and_flush(
     let merged = merge_ingest(previous, current);
     let batch = merged["batchId"].as_str().unwrap_or("");
     let mut tx = pool.begin().await?;
-    sqlx::query("INSERT INTO edge_outbox(slot,batch_id,body) VALUES(1,$1,$2) ON CONFLICT(slot) DO UPDATE SET batch_id=excluded.batch_id,body=excluded.body,attempts=0,updated_at=now(),last_attempt_at=NULL").bind(batch).bind(&merged).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO edge_outbox(slot,batch_id,body) VALUES(1,$1,$2) ON CONFLICT(slot) DO UPDATE SET batch_id=excluded.batch_id,body=excluded.body,attempts=0,updated_at=now(),last_attempt_at=NULL,last_error=NULL").bind(batch).bind(&merged).execute(&mut *tx).await?;
     for (kind, key, checksum) in states {
         sqlx::query("INSERT INTO edge_export_state(kind,item_key,checksum) VALUES($1,$2,$3) ON CONFLICT(kind,item_key) DO UPDATE SET checksum=excluded.checksum,queued_at=now()").bind(kind).bind(key).bind(checksum).execute(&mut *tx).await?;
     }
@@ -418,5 +443,17 @@ mod tests {
             signature("secret", "123", "batch", "{}"),
             "400aec3b7383b34d5809d4639c23818fe5e6b081a83e18e2c36c00d226dd8e44"
         );
+    }
+    #[test]
+    fn large_ingest_is_split_without_losing_remainder() {
+        let mut body=json!({"batchId":"batch","sentAt":"now","current":[1,2,3],"dailySnapshots":(0..1200).collect::<Vec<_>>(),"todayBaselines":[],"guilds":[],"sync":{}});
+        let first=ingest_chunk(&body);
+        assert_eq!(first["dailySnapshots"].as_array().unwrap().len(),500);
+        remove_chunk(&mut body,&first);
+        assert_eq!(body["dailySnapshots"].as_array().unwrap().len(),700);
+        assert!(!ingest_empty(&body));
+        let second=ingest_chunk(&body);remove_chunk(&mut body,&second);
+        let third=ingest_chunk(&body);remove_chunk(&mut body,&third);
+        assert!(ingest_empty(&body));
     }
 }

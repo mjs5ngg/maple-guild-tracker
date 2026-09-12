@@ -29,11 +29,11 @@ async fn status(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
                 "status":r.get::<String,_>("status"),"succeeded":r.get::<i32,_>("succeeded"),"failed":r.get::<i32,_>("failed")
             })).collect::<Vec<_>>());
         }
-        if let Ok(outbox) = sqlx::query("SELECT batch_id,attempts,created_at,updated_at,last_attempt_at FROM edge_outbox WHERE slot=1").fetch_optional(pool).await {
+        if let Ok(outbox) = sqlx::query("SELECT batch_id,attempts,created_at,updated_at,last_attempt_at,last_error FROM edge_outbox WHERE slot=1").fetch_optional(pool).await {
             result["edgeOutbox"] = outbox.map(|row| json!({
                 "batchId":row.get::<String,_>("batch_id"),"attempts":row.get::<i32,_>("attempts"),
                 "createdAt":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updatedAt":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at"),
-                "lastAttemptAt":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_attempt_at")
+                "lastAttemptAt":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_attempt_at"),"lastError":row.get::<Option<String>,_>("last_error")
             })).into();
         }
     }

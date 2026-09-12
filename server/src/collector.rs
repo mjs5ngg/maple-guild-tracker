@@ -289,6 +289,9 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     Ok(())
 }
 pub async fn run(app: Arc<App>) {
+    if crate::edge_sync::flush_pending(&app).await.is_err() {
+        eprintln!("Cloudflare 미전송 기록 재시도 실패. 다음 수집 후 다시 시도합니다.");
+    }
     let mut timer = tokio::time::interval(Duration::from_secs(policy::INTERVAL_SECONDS));
     timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
