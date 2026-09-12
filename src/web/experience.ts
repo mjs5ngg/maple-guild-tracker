@@ -34,6 +34,21 @@ export function dailyPoints(s:Snapshot,days:number,table:string[]) {
  }
  return result;
 }
+export function progressPoints(s:Snapshot,days:number,table:string[]){
+ const today=kstDate();
+ return dailyPoints(s,days,table).map(point=>{
+  const current=point.date===today&&kstDate(new Date(s.observedAt))===today?s.basic:s.history.find(item=>item.date===point.date)?.basic;
+  const previous=s.history.find(item=>item.date===dayBefore(point.date))?.basic||((point.date===today)?s.todayBaseline:undefined);
+  const rate=current?Number(current.character_exp_rate):NaN;
+  return {date:point.date,percent:Number.isFinite(rate)?rate:null,gained:point.value,levelUp:Boolean(current&&previous&&current.character_level>previous.character_level)};
+ });
+}
+export function mergeActivity(previous:Snapshot|undefined,current:Snapshot,table:string[]):Snapshot{
+ if(!previous)return current;
+ const value=gain(previous.basic,current.basic,table);
+ if(value!==null&&value>1_000_000_000n&&value<1_000_000_000_000n)return {...current,isHunting:true,huntingDetectedAt:current.observedAt};
+ return {...current,isHunting:previous.isHunting,huntingDetectedAt:previous.huntingDetectedAt};
+}
 export function periodGain(s:Snapshot,days:number,table:string[]){
  const points=dailyPoints(s,days,table);
  const valid=points.filter(p=>p.value!==null);

@@ -1,12 +1,19 @@
-// 선택한 캐릭터의 기간별 획득 경험치를 지연 로딩 차트로 표시합니다.
+// 선택한 캐릭터의 날짜별 경험치율과 레벨업 및 획득량 상세를 표시합니다.
 import {CartesianGrid,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import type {Snapshot} from "./types";
-import {dailyPoints} from "./experience";
+import {compact,progressPoints} from "./experience";
+
+function GrowthTooltip({active,payload,label}:any){
+ const point=payload?.[0]?.payload;
+ if(!active||!point)return null;
+ return <div className="chart-tooltip"><b>{label}</b><span>경험치율 <strong>{point.percent===null?"자료 없음":`${point.percent.toLocaleString("ko-KR",{maximumFractionDigits:3})}%`}</strong></span><span>획득 경험치 <strong>{point.gained===null?"자료 없음":`+${compact(point.gained)}`}</strong></span>{point.levelUp&&<em>↑ 레벨업</em>}</div>;
+}
+function LevelDot({cx,cy,payload}:any){if(cx===undefined||cy===undefined)return null;return <g><circle cx={cx} cy={cy} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2"/>{payload.levelUp&&<text x={cx} y={cy-12} className="level-up-marker" textAnchor="middle">↑</text>}</g>;}
 
 export default function GrowthPanel({character,days}:{character?:Snapshot;days:number}){
- const points=character?dailyPoints(character,days,__EXP_TABLE__).map(point=>({date:point.date.slice(5),xp:point.value===null?null:Number(point.value)/1e12})):[];
+ const points=character?progressPoints(character,days,__EXP_TABLE__).map(point=>({...point,date:point.date.slice(5)})):[];
  return <section className="surface growth-panel" id="growth" aria-labelledby="growth-title">
-  <div className="section-heading"><div><span className="section-kicker">GROWTH FLOW</span><h2 id="growth-title">성장 흐름</h2></div>{character&&<span className="section-meta">{character.basic.character_name} · 오늘 포함 {days}일</span>}</div>
-  {character?<div className="chart-area"><ResponsiveContainer width="100%" height="100%"><LineChart data={points} margin={{top:12,right:8,bottom:0,left:-14}}><CartesianGrid stroke="var(--border)" vertical={false}/><XAxis dataKey="date" tick={{fill:"var(--text-muted)",fontSize:12}} axisLine={false} tickLine={false}/><YAxis unit="조" tick={{fill:"var(--text-muted)",fontSize:12}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12}} formatter={(value)=>[`${Number(value).toLocaleString("ko-KR",{maximumFractionDigits:2})}조`,"획득 경험치"]}/><Line type="monotone" dataKey="xp" stroke="var(--accent)" strokeWidth={3} connectNulls={false} dot={{r:3,fill:"var(--surface)",strokeWidth:2}} activeDot={{r:5}}/></LineChart></ResponsiveContainer></div>:<div className="empty-state"><b>성장 기록을 기다리고 있어요.</b><span>대표캐릭터를 저장하고 첫 수집이 끝나면 표시됩니다.</span></div>}
+  <div className="section-heading"><div><span className="section-kicker">EXP PROGRESS</span><h2 id="growth-title">경험치율 흐름</h2></div>{character&&<span className="section-meta">{character.basic.character_name} · 오늘 포함 {days}일</span>}</div>
+  {character?<div className="chart-area"><ResponsiveContainer width="100%" height="100%"><LineChart data={points} margin={{top:24,right:8,bottom:0,left:-14}}><CartesianGrid stroke="var(--border)" vertical={false}/><XAxis dataKey="date" tick={{fill:"var(--text-muted)",fontSize:12}} axisLine={false} tickLine={false}/><YAxis domain={[0,100]} ticks={[0,25,50,75,100]} unit="%" tick={{fill:"var(--text-muted)",fontSize:12}} axisLine={false} tickLine={false}/><Tooltip content={<GrowthTooltip/>}/><Line type="monotone" dataKey="percent" stroke="var(--accent)" strokeWidth={3} connectNulls={false} dot={<LevelDot/>} activeDot={{r:6}}/></LineChart></ResponsiveContainer></div>:<div className="empty-state"><b>성장 기록을 기다리고 있어요.</b><span>대표캐릭터를 저장하고 첫 수집이 끝나면 표시됩니다.</span></div>}
  </section>;
 }

@@ -1,6 +1,6 @@
 // 웹 정수 보존과 날짜 및 동점 정렬 회귀를 검증합니다.
 import {describe,it,expect} from "vitest";
-import {parseNexon,gain,dayBefore,sortRows,dailyPoints,periodGain,kstDate} from "./experience";
+import {parseNexon,gain,dayBefore,sortRows,dailyPoints,periodGain,kstDate,mergeActivity,progressPoints} from "./experience";
 import type {Basic,Snapshot} from "./types";
 const basic=(level:number,xp:string):Basic=>({character_name:"A",world_name:"스카니아",character_class:"은월",character_level:level,character_exp:xp,character_exp_rate:"1"});
 describe("웹 경험치",()=>{
@@ -26,4 +26,15 @@ describe("웹 경험치",()=>{
  it("누락과 역행을 0으로 바꾸지 않음",()=>{expect(gain(undefined,basic(200,"0"),[])).toBe(null);expect(gain(basic(200,"5"),basic(200,"3"),[])).toBe(null);});
  it("연도 경계 전일",()=>expect(dayBefore("2026-01-01")).toBe("2025-12-31"));
  it("레벨 현재 경험치 닉네임 정렬",()=>{const rows=["나","가"].map(name=>({ocid:name,basic:{...basic(200,"5"),character_name:name},observedAt:"2026-01-01",history:[]} as Snapshot));expect(sortRows(rows,false,[])[0].ocid).toBe("가");});
+ it("그래프는 경험치율과 레벨업 지점을 함께 제공",()=>{
+  const today=kstDate(),yesterday=dayBefore(today),before=dayBefore(yesterday),snapshot:Snapshot={ocid:"A",basic:{...basic(201,"3"),character_exp_rate:"30"},observedAt:new Date().toISOString(),history:[{date:before,basic:{...basic(200,"2"),character_exp_rate:"20"}},{date:yesterday,basic:{...basic(200,"8"),character_exp_rate:"80"}}]};
+  expect(progressPoints(snapshot,2,["10"])).toEqual([{date:yesterday,percent:80,gained:6n,levelUp:false},{date:today,percent:30,gained:5n,levelUp:true}]);
+ });
+ it("개인 조회 활동은 경계값을 제외하고 정상 구간에서만 갱신",()=>{
+  const previous:Snapshot={ocid:"A",basic:basic(281,"0"),observedAt:"2026-09-12T00:00:00Z",history:[],isHunting:false};
+  const next=(gain:string):Snapshot=>({ocid:"A",basic:basic(281,gain),observedAt:"2026-09-12T00:15:00Z",history:[]});
+  expect(mergeActivity(previous,next("1000000001"),[]).isHunting).toBe(true);
+  expect(mergeActivity({...previous,isHunting:true},next("1000000000"),[]).isHunting).toBe(true);
+  expect(mergeActivity(previous,next("1000000000000"),[]).isHunting).toBe(false);
+ });
 });
