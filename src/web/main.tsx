@@ -2,18 +2,14 @@
 import {useEffect,useState} from "react";
 import {createRoot} from "react-dom/client";
 import type {Snapshot} from "./types";
-import {compact,parseNexon,sortRows,todayGain,dailyPoints,periodGain as calculatePeriodGain} from "./experience";
+import {compact,sortRows,todayGain,dailyPoints,periodGain as calculatePeriodGain} from "./experience";
 import {ResponsiveContainer,LineChart,Line,XAxis,YAxis,Tooltip,CartesianGrid} from "recharts";
 import "./web.css";
 import {registerStatusTool} from "./webmcp";
 import {syncStatusText} from "./syncStatus";
 import {loadDashboard} from "./loadDashboard";
 import {startSession} from "./startSession";
-async function api(path:string,body?:unknown){
- const response=await fetch(path,{method:body===undefined?"GET":"POST",headers:body===undefined?{}:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
- const data= parseNexon(await response.text()) as Record<string,any>;
- if(!response.ok)throw new Error(data.error||"요청 실패");return data;
-}
+import {dashboardApi as api} from "./dashboardApi";
 function App(){
  useEffect(registerStatusTool,[]);
  const [status,setStatus]=useState<any>(null),[me,setMe]=useState<any>(null),[error,setError]=useState("");
