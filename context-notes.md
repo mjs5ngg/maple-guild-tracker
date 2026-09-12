@@ -425,3 +425,7 @@
 - 1440px 실제 로컬 서버 데이터와 연결해 새 레이아웃을 확인했다. 새 익명 브라우저에서 대표 미지정·최근 동기화·빈 기록 상태가 무너지지 않았고, 네 가지 고정 시안은 Chrome 스크린샷 회귀 시험을 통과했다. Vitest와 Playwright 수집 경로는 분리했다.
 - 2026-09-12 새 웹 번들을 `/home/mapledev/maple-releases/20260912-web-redesign`로 배포하고 공개·운영 서비스를 함께 전환했다. 공개 ngrok의 새 JS/CSS와 `/api/status`, 운영 `/status` 200 및 양쪽 systemd 활성 상태를 확인했다. 재시작 시 실행 중 수집 539는 interrupted로 보존되고 540으로 즉시 재개됐다.
 - 개인 조회 새 디자인은 Cloudflare Pages 배포 `59d2b8c6.maple-exp-personal.pages.dev`를 거쳐 정식 `maple-exp-personal.pages.dev`에 반영했다. 정식 주소 HTML·CSP·no-store·no-referrer·nosniff를 확인했다. Wrangler 자격 증명은 여전히 Pages 쓰기만 있어 Worker·D1 배포에는 재승인이 필요하다.
+- Cloudflare 권한 재승인 후 APAC D1 `maple-exp-public`을 만들고 원격 마이그레이션과 Worker 비밀 3종을 적용했다. 비밀은 출력하지 않고 Windows 환경과 Linux root 전용 설정에만 전달했다. 공개 주소는 `https://maple-exp-public.mjs5ng.workers.dev`이며 `/api/status`, 익명 기기와 설정 API를 확인했다.
+- 첫 실제 outbox는 현재 413명·일별 10,843건으로 단일 요청 한도를 넘어 거부됐다. 수집기를 현재 400·일별 500·기준점 400·길드 2 단위의 결정적 서브배치로 바꾸고 시작 시 미전송분을 먼저 재개하도록 수정했다. 22개 배치가 D1에 모두 반영됐고 outbox는 비워졌다. 오류 내용은 URL이나 비밀 없이 상태 코드만 보존한다.
+- 원격 익명 프로필의 첫 대시보드 조회는 413개 OCID를 SQL 변수로 펼쳐 D1 변수 한도를 넘겼다. OCID 목록을 단일 JSON 매개변수와 `json_each` 조인으로 바꿔 HTTP 200을 복구했다. 일별 행에서는 반복되는 장문 이미지 URL을 반환하지 않으며, 브라우저 압축 전송량은 약 417KB다.
+- 공개 웹과 개인 키 Pages를 Worker/Pages 정식 제공 주소 기준으로 다시 빌드했다. Worker 버전 `4933e640-2312-4ae4-8b3d-35705e6b379f`, 개인 Pages 배포 `9f7503cf.maple-exp-personal.pages.dev` 이후 정식 `maple-exp-personal.pages.dev`에 반영됐다. Google OAuth Worker callback은 입력까지 완료했으나 외부 설정 저장 확인이 남았다.
