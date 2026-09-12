@@ -5,7 +5,8 @@
     "windows": [
       {
         "label": "dashboard",
-        "title": "길드원 따라가기"
+        "title": "길드원 따라가기",
+        "url": "https://maple-exp-public.mjs5ng.workers.dev/"
       }
     ]
   },
