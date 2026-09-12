@@ -25,7 +25,6 @@ function App(){
  },[]);
  async function request(path:string,params:Record<string,string>):Promise<any>{
  for(let attempt=0;attempt<4;attempt++){
- await new Promise(r=>setTimeout(r,250));
  const url=new URL("https://open.api.nexon.com/maplestory/v1/"+path);url.search=new URLSearchParams(params).toString();
  const response=await fetch(url,{headers:{"x-nxopen-api-key":key.trim()},credentials:"omit",referrerPolicy:"no-referrer",signal:AbortSignal.timeout(20000)});
  if(response.ok)return parseNexon(await response.text());
@@ -58,12 +57,9 @@ function App(){
  targets=[...new Set([...targets,...list.guild_member.filter((v:unknown)=>typeof v==="string")])] as string[];
  }
  }
- const rows:Snapshot[]=[];let failed=0;
- for(const name of targets){
- try{rows.push(await readCharacter(name));}
- catch{failed++;}
- setCount(rows.length+failed);await new Promise(r=>setTimeout(r,500));
- }
+ const rows:Snapshot[]=[];let failed=0,next=0;
+ const worker=async()=>{while(true){const index=next++;if(index>=targets.length)return;try{rows.push(await readCharacter(targets[index]));}catch{failed++;}setCount(value=>value+1);}};
+ await Promise.all(Array.from({length:Math.min(5,targets.length)},worker));
  window.opener?.postMessage({type:"maple-results",rows},__DASHBOARD_ORIGIN__);
  setMessage("조회 완료 "+rows.length+"명 · 실패 "+failed+"명. 결과는 개인 화면에만 반영됩니다.");
  }catch{setMessage("저장 또는 조회에 실패했습니다. 브라우저 저장 권한과 네트워크를 확인하세요.");}
