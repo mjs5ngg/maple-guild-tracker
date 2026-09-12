@@ -17,6 +17,7 @@ hmac = "0.12"
 uuid = { version = "1", features = ["v4"] }
 tower-http = { version = "0.6", features = ["fs"] }
 dotenvy = "0.15"
+futures = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

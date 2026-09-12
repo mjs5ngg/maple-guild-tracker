@@ -13,7 +13,8 @@ export function validProfile(value:unknown):value is {primary:string;favorites:s
  return record.favorites.every(validName)&&new Set(record.favorites).size===record.favorites.length;
 }
 
-export type NormalizedCharacter={ocid:string;name:string;worldName?:string|null;characterClass?:string|null;level:number;exp:string;expRate:number;guildName?:string|null;guildKey?:string|null;imageUrl?:string|null;observedAt:string;huntingDetectedAt?:string|null};
+export type ActivityDecision="active"|"inactive"|null;
+export type NormalizedCharacter={ocid:string;name:string;worldName?:string|null;characterClass?:string|null;level:number;exp:string;expRate:number;guildName?:string|null;guildKey?:string|null;imageUrl?:string|null;observedAt:string;activityDecision?:ActivityDecision;activityDecisionAt?:string|null};
 export type DailySnapshot=Omit<NormalizedCharacter,"guildKey"|"observedAt">&{date:string};
 export type TodayBaseline=Pick<NormalizedCharacter,"ocid"|"name"|"level"|"exp"|"expRate">&{date:string};
 export type GuildInput={guildKey:string;worldName:string;name:string;observedAt:string;members:string[];daily?:{date:string;members:string[]}[]};
@@ -31,10 +32,24 @@ function numberFields(row:Record<string,unknown>){
 function normalized(value:unknown):value is NormalizedCharacter{
  if(!value||typeof value!=="object")return false;
  const row=value as Record<string,unknown>;
- return exactKeys(row,["ocid","name","worldName","characterClass","level","exp","expRate","guildName","guildKey","imageUrl","observedAt","huntingDetectedAt"])
+ return exactKeys(row,["ocid","name","worldName","characterClass","level","exp","expRate","guildName","guildKey","imageUrl","observedAt","activityDecision","activityDecisionAt"])
   &&typeof row.ocid==="string"&&row.ocid.length>0&&row.ocid.length<=100&&validName(row.name)&&numberFields(row)&&iso(row.observedAt)
   &&nullableString(row.worldName)&&nullableString(row.characterClass)&&nullableString(row.guildName)&&nullableString(row.guildKey)&&nullableString(row.imageUrl)
-  &&(row.huntingDetectedAt===undefined||row.huntingDetectedAt===null||iso(row.huntingDetectedAt));
+  &&(row.activityDecision===undefined||row.activityDecision===null
+   ? row.activityDecisionAt===undefined||row.activityDecisionAt===null
+   : (row.activityDecision==="active"||row.activityDecision==="inactive")&&iso(row.activityDecisionAt));
+}
+
+export type ChasePresetInput={id:string;name:string;periodDays:7|30;ocids:string[];sortKey:"today"|"period"|"average"|"catchup";sortDirection:"asc"|"desc"};
+export function validChasePreset(value:unknown):value is ChasePresetInput{
+ if(!value||typeof value!=="object")return false;
+ const row=value as Record<string,unknown>;
+ return exactKeys(row,["id","name","periodDays","ocids","sortKey","sortDirection"])
+  &&typeof row.id==="string"&&/^[a-zA-Z0-9_-]{8,80}$/.test(row.id)
+  &&typeof row.name==="string"&&row.name.trim().length>0&&[...row.name].length<=40
+  &&(row.periodDays===7||row.periodDays===30)&&Array.isArray(row.ocids)&&row.ocids.length>=1&&row.ocids.length<=10
+  &&row.ocids.every(value=>typeof value==="string"&&value.length>0&&value.length<=100)&&new Set(row.ocids).size===row.ocids.length
+  &&["today","period","average","catchup"].includes(String(row.sortKey))&&["asc","desc"].includes(String(row.sortDirection));
 }
 function daily(value:unknown):value is DailySnapshot{
  if(!value||typeof value!=="object")return false;

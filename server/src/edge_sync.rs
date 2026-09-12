@@ -183,26 +183,39 @@ fn state_checksum(value: &Value, volatile: &[&str]) -> String {
 const HUNTING_GAIN_MIN_EXCLUSIVE: i64 = 1_000_000_000;
 const HUNTING_GAIN_MAX_EXCLUSIVE: i64 = 1_000_000_000_000;
 
-fn activity_detected_at(samples: &[(Value, chrono::DateTime<Utc>)]) -> Option<String> {
+fn activity_decision(
+    samples: &[(Value, chrono::DateTime<Utc>)],
+) -> (Option<&'static str>, Option<String>) {
     let [(latest, latest_at), (previous, _)] = samples else {
-        return None;
+        return (None, None);
     };
     let number = |value: &Value, key: &str| {
-        value.get(key)?.as_i64().or_else(|| value.get(key)?.as_str()?.parse().ok())
+        value
+            .get(key)?
+            .as_i64()
+            .or_else(|| value.get(key)?.as_str()?.parse().ok())
     };
-    let gain = crate::exp::calculate_gain(
-        number(previous, "character_level")?,
-        number(previous, "character_exp")?,
-        number(latest, "character_level")?,
-        number(latest, "character_exp")?,
-    );
+    let Some(previous_level) = number(previous, "character_level") else {
+        return (None, None);
+    };
+    let Some(previous_exp) = number(previous, "character_exp") else {
+        return (None, None);
+    };
+    let Some(latest_level) = number(latest, "character_level") else {
+        return (None, None);
+    };
+    let Some(latest_exp) = number(latest, "character_exp") else {
+        return (None, None);
+    };
+    let gain = crate::exp::calculate_gain(previous_level, previous_exp, latest_level, latest_exp);
     match gain {
+        crate::exp::ExpCalculation::Ok(0) => (Some("inactive"), Some(latest_at.to_rfc3339())),
         crate::exp::ExpCalculation::Ok(value)
             if value > HUNTING_GAIN_MIN_EXCLUSIVE && value < HUNTING_GAIN_MAX_EXCLUSIVE =>
         {
-            Some(latest_at.to_rfc3339())
+            (Some("active"), Some(latest_at.to_rfc3339()))
         }
-        _ => None,
+        _ => (None, None),
     }
 }
 
@@ -241,9 +254,15 @@ async fn build_changes(
         if let Some(key) = &guild_key {
             guild_keys.insert(key.clone());
         }
-        if let Some(mut value) = normalized(&ocid, guild_key.as_deref(), &basic, &observed.to_rfc3339())
+        if let Some(mut value) =
+            normalized(&ocid, guild_key.as_deref(), &basic, &observed.to_rfc3339())
         {
-            value["huntingDetectedAt"] = activity_samples.get(&ocid).and_then(|samples| activity_detected_at(samples)).into();
+            let (decision, decided_at) = activity_samples
+                .get(&ocid)
+                .map(|samples| activity_decision(samples))
+                .unwrap_or((None, None));
+            value["activityDecision"] = decision.into();
+            value["activityDecisionAt"] = decided_at.into();
             let checksum = state_checksum(&value, &["observedAt"]);
             let key = ("current".to_owned(), ocid.clone());
             if existing.get(&key) != Some(&checksum) {
@@ -385,31 +404,60 @@ async fn flush(app: &App, config: &EdgeConfig) -> Result<(), sqlx::Error> {
             .bind(now)
             .execute(pool)
             .await?;
-        let response = app.http.post(format!("{}/internal/v1/ingest", config.origin))
+        let response = app
+            .http
+            .post(format!("{}/internal/v1/ingest", config.origin))
             .header("content-type", "application/json")
             .header("x-maple-timestamp", &timestamp)
             .header("x-maple-batch-id", &chunk_batch)
-            .header("x-maple-signature", signature(&config.secret, &timestamp, &chunk_batch, &raw))
-            .body(raw).send().await;
-        let delivered = response.as_ref().is_ok_and(|value| value.status().is_success() || value.status() == StatusCode::CONFLICT);
+            .header(
+                "x-maple-signature",
+                signature(&config.secret, &timestamp, &chunk_batch, &raw),
+            )
+            .body(raw)
+            .send()
+            .await;
+        let delivered = response.as_ref().is_ok_and(|value| {
+            value.status().is_success() || value.status() == StatusCode::CONFLICT
+        });
         if !delivered {
-            let reason = match response {Ok(value)=>format!("HTTP {}",value.status().as_u16()),Err(value) if value.is_timeout()=>"timeout".into(),Err(value) if value.is_connect()=>"connect".into(),Err(_)=>"request".into()};
-            sqlx::query("UPDATE edge_outbox SET last_error=$1 WHERE slot=1").bind(reason).execute(pool).await?;
+            let reason = match response {
+                Ok(value) => format!("HTTP {}", value.status().as_u16()),
+                Err(value) if value.is_timeout() => "timeout".into(),
+                Err(value) if value.is_connect() => "connect".into(),
+                Err(_) => "request".into(),
+            };
+            sqlx::query("UPDATE edge_outbox SET last_error=$1 WHERE slot=1")
+                .bind(reason)
+                .execute(pool)
+                .await?;
             break;
         }
         remove_chunk(&mut body, &chunk);
         if ingest_empty(&body) {
-            sqlx::query("DELETE FROM edge_outbox WHERE slot=1 AND batch_id=$1").bind(&batch).execute(pool).await?;
+            sqlx::query("DELETE FROM edge_outbox WHERE slot=1 AND batch_id=$1")
+                .bind(&batch)
+                .execute(pool)
+                .await?;
             break;
         }
         body["sentAt"] = json!(now.to_rfc3339());
-        sqlx::query("UPDATE edge_outbox SET body=$1,updated_at=now() WHERE slot=1 AND batch_id=$2").bind(&body).bind(&batch).execute(pool).await?;
+        sqlx::query("UPDATE edge_outbox SET body=$1,updated_at=now() WHERE slot=1 AND batch_id=$2")
+            .bind(&body)
+            .bind(&batch)
+            .execute(pool)
+            .await?;
     }
     Ok(())
 }
 
 fn ingest_chunk(body: &Value) -> Value {
-    let take = |key: &str, limit: usize| body[key].as_array().map(|values| values.iter().take(limit).cloned().collect::<Vec<_>>()).unwrap_or_default();
+    let take = |key: &str, limit: usize| {
+        body[key]
+            .as_array()
+            .map(|values| values.iter().take(limit).cloned().collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
     json!({"batchId":body["batchId"],"sentAt":body["sentAt"],"current":take("current",400),"dailySnapshots":take("dailySnapshots",500),"todayBaselines":take("todayBaselines",400),"guilds":take("guilds",2),"sync":body["sync"]})
 }
 
@@ -423,7 +471,9 @@ fn remove_chunk(body: &mut Value, chunk: &Value) {
 }
 
 fn ingest_empty(body: &Value) -> bool {
-    ["current", "dailySnapshots", "todayBaselines", "guilds"].iter().all(|key| body[*key].as_array().is_none_or(Vec::is_empty))
+    ["current", "dailySnapshots", "todayBaselines", "guilds"]
+        .iter()
+        .all(|key| body[*key].as_array().is_none_or(Vec::is_empty))
 }
 
 pub(crate) async fn flush_pending(app: &App) -> Result<(), sqlx::Error> {
@@ -478,25 +528,40 @@ mod tests {
     }
     #[test]
     fn large_ingest_is_split_without_losing_remainder() {
-        let mut body=json!({"batchId":"batch","sentAt":"now","current":[1,2,3],"dailySnapshots":(0..1200).collect::<Vec<_>>(),"todayBaselines":[],"guilds":[],"sync":{}});
-        let first=ingest_chunk(&body);
-        assert_eq!(first["dailySnapshots"].as_array().unwrap().len(),500);
-        remove_chunk(&mut body,&first);
-        assert_eq!(body["dailySnapshots"].as_array().unwrap().len(),700);
+        let mut body = json!({"batchId":"batch","sentAt":"now","current":[1,2,3],"dailySnapshots":(0..1200).collect::<Vec<_>>(),"todayBaselines":[],"guilds":[],"sync":{}});
+        let first = ingest_chunk(&body);
+        assert_eq!(first["dailySnapshots"].as_array().unwrap().len(), 500);
+        remove_chunk(&mut body, &first);
+        assert_eq!(body["dailySnapshots"].as_array().unwrap().len(), 700);
         assert!(!ingest_empty(&body));
-        let second=ingest_chunk(&body);remove_chunk(&mut body,&second);
-        let third=ingest_chunk(&body);remove_chunk(&mut body,&third);
+        let second = ingest_chunk(&body);
+        remove_chunk(&mut body, &second);
+        let third = ingest_chunk(&body);
+        remove_chunk(&mut body, &third);
         assert!(ingest_empty(&body));
     }
 
     #[test]
-    fn hunting_detection_only_accepts_middle_gain_band() {
-        let at=Utc::now();
-        let samples=|gain:i64| vec![(json!({"character_level":281,"character_exp":gain}),at),(json!({"character_level":281,"character_exp":0}),at-chrono::Duration::minutes(15))];
-        assert!(activity_detected_at(&samples(1_000_000_001)).is_some());
-        assert!(activity_detected_at(&samples(999_999_999_999)).is_some());
-        assert!(activity_detected_at(&samples(1_000_000_000)).is_none());
-        assert!(activity_detected_at(&samples(1_000_000_000_000)).is_none());
-        assert!(activity_detected_at(&samples(0)).is_none());
+    fn hunting_state_changes_only_for_zero_and_middle_gain_band() {
+        let at = Utc::now();
+        let samples = |gain: i64| {
+            vec![
+                (json!({"character_level":281,"character_exp":gain}), at),
+                (
+                    json!({"character_level":281,"character_exp":0}),
+                    at - chrono::Duration::minutes(15),
+                ),
+            ]
+        };
+        assert_eq!(activity_decision(&samples(0)).0, Some("inactive"));
+        assert_eq!(activity_decision(&samples(1_000_000_001)).0, Some("active"));
+        assert_eq!(
+            activity_decision(&samples(999_999_999_999)).0,
+            Some("active")
+        );
+        assert_eq!(activity_decision(&samples(1)).0, None);
+        assert_eq!(activity_decision(&samples(1_000_000_000)).0, None);
+        assert_eq!(activity_decision(&samples(1_000_000_000_000)).0, None);
+        assert_eq!(activity_decision(&samples(1_000_000_000_001)).0, None);
     }
 }

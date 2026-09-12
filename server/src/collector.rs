@@ -1,6 +1,7 @@
 // 운영자 키로 활성 사용자의 중복 제거 대상을 수집하고 과거 누락일을 보충합니다.
 use crate::*;
 use chrono::{Duration as Days, Timelike, Utc};
+use futures::{stream, StreamExt};
 use serde_json::Value;
 use sqlx::{Connection, Row};
 use std::collections::HashMap;
@@ -169,7 +170,9 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     )
     .fetch_all(pool)
     .await?;
-    let edge_subscriptions = crate::edge_sync::subscriptions(app).await.unwrap_or_default();
+    let edge_subscriptions = crate::edge_sync::subscriptions(app)
+        .await
+        .unwrap_or_default();
     primaries.extend(edge_subscriptions.primaries.iter().cloned());
     primaries.sort();
     primaries.dedup();
@@ -239,12 +242,18 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     }
     let export_targets: Vec<String> = targets.iter().cloned().collect();
     let mut collected = Vec::new();
-    for name in targets {
+    let results = stream::iter(targets.into_iter().map(|name| async {
         let result = if let Some(value) = basics.get(&name) {
             value.clone()
         } else {
             current(app, &name).await
         };
+        (name, result)
+    }))
+    .buffer_unordered(8)
+    .collect::<Vec<_>>()
+    .await;
+    for (_name, result) in results {
         match result {
             Ok((ocid, _)) => {
                 succeeded += 1;
@@ -253,6 +262,8 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
             Err(_) => failed += 1,
         }
     }
+    // 과거 보충이 오래 걸려도 최신 상태는 먼저 공개합니다.
+    crate::edge_sync::enqueue_and_flush(app, &export_targets, run).await?;
     // 최신 수집을 먼저 끝내고, 과거 보충은 한 주기당 제한하여 신규 길드가 최신화를 막지 않게 합니다.
     let now = Utc::now().with_timezone(&chrono_tz::Asia::Seoul);
     let end = now.date_naive() - Days::days(if now.hour() >= 2 { 1 } else { 2 });

@@ -1,6 +1,6 @@
 // Cloudflare Workers에서 익명 설정·Google 로그인·공개 순위와 서명 수집 API를 제공합니다.
 import {sha256,signatureMatches,timestampMilliseconds} from "./security";
-import {FAVORITE_LIMIT,type IngestBody,validIngest,validProfile} from "./validation";
+import {FAVORITE_LIMIT,type IngestBody,validChasePreset,validIngest,validProfile} from "./validation";
 
 interface Env{
  DB:D1Database;
@@ -32,6 +32,7 @@ function addSecurity(response:Response,api=false){
 }
 function kstDate(date=new Date()){return new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);}
 function addDays(date:string,days:number){const value=new Date(`${date}T00:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
+function googleUrl(request:Request,env:Env,state:string){const origin=new URL(request.url).origin,url=new URL("https://accounts.google.com/o/oauth2/v2/auth");url.search=new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID!,response_type:"code",redirect_uri:`${origin}/auth/google/callback`,scope:"openid",state}).toString();return url.toString();}
 
 async function userId(request:Request,env:Env){
  const values=cookies(request);
@@ -42,6 +43,11 @@ async function userId(request:Request,env:Env){
  }
  throw new ApiError(401,"기기 설정을 먼저 시작해 주세요.");
 }
+async function accountUserId(request:Request,env:Env){
+ const token=cookies(request).maple_session;if(!token)throw new ApiError(401,"로그인 후 프리셋을 동기화할 수 있습니다.");
+ const row=await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND kind='account' AND expires_at>?").bind(await sha256(token),nowSeconds()).first<{user_id:string}>();
+ if(!row)throw new ApiError(401,"로그인 세션이 만료되었습니다.");return row.user_id;
+}
 async function takeBudget(env:Env,bucket:string,limit:number){
  const now=nowSeconds(),row=await env.DB.prepare("SELECT started_at,used FROM request_budgets WHERE bucket=?").bind(bucket).first<{started_at:number;used:number}>();
  if(row&&now-row.started_at<3600&&row.used>=limit)throw new ApiError(429,"잠시 후 다시 시도해 주세요.");
@@ -49,6 +55,7 @@ async function takeBudget(env:Env,bucket:string,limit:number){
  else await env.DB.prepare("UPDATE request_budgets SET used=used+1 WHERE bucket=?").bind(bucket).run();
 }
 async function bodyJson(request:Request){try{return await request.json();}catch{throw new ApiError(400,"요청 내용을 확인하세요.");}}
+export async function pkceChallenge(verifier:string){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier));return btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+","-").replaceAll("/","_").replace(/=+$/g,"");}
 function basic(row:Row){return {character_name:row.name,world_name:row.world_name,character_class:row.character_class,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate),character_guild_name:row.guild_name,character_image:row.image_url};}
 function historyBasic(row:Row){return {character_name:row.name,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate)};}
 
@@ -75,6 +82,25 @@ async function profile(request:Request,env:Env){
  await env.DB.batch(statements); return json({ok:true});
 }
 async function activity(request:Request,env:Env){const id=await userId(request,env);await env.DB.prepare("UPDATE users SET last_active=? WHERE id=?").bind(nowSeconds(),id).run();return json({ok:true});}
+async function chasePresets(request:Request,env:Env){
+ const id=await accountUserId(request,env),method=request.method,url=new URL(request.url),presetId=url.pathname.split("/").filter(Boolean)[2];
+ if(method==="GET"){
+  const rows=await env.DB.prepare("SELECT id,name,period_days AS periodDays,ocids_json AS ocidsJson,sort_key AS sortKey,sort_direction AS sortDirection,updated_at AS updatedAt FROM chase_presets WHERE user_id=? ORDER BY updated_at DESC").bind(id).all<Record<string,unknown>>();
+  return json({presets:rows.results.map(row=>({...row,ocids:JSON.parse(String(row.ocidsJson)),ocidsJson:undefined}))});
+ }
+ if(method==="DELETE"){
+  if(!presetId)throw new ApiError(400,"삭제할 프리셋을 확인하세요.");
+  await env.DB.prepare("DELETE FROM chase_presets WHERE id=? AND user_id=?").bind(presetId,id).run();return json({ok:true});
+ }
+ if(method==="PUT"||method==="POST"){
+  const input=await bodyJson(request);if(!validChasePreset(input)||presetId&&presetId!==input.id)throw new ApiError(400,"따라잡기 프리셋을 확인하세요.");
+  const count=await env.DB.prepare("SELECT count(*) AS count FROM chase_presets WHERE user_id=? AND id<>?").bind(id,input.id).first<{count:number}>();
+  if(Number(count?.count||0)>=20)throw new ApiError(400,"프리셋은 최대 20개까지 저장할 수 있습니다.");
+  const now=nowSeconds();await env.DB.prepare("INSERT INTO chase_presets(id,user_id,name,period_days,ocids_json,sort_key,sort_direction,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,period_days=excluded.period_days,ocids_json=excluded.ocids_json,sort_key=excluded.sort_key,sort_direction=excluded.sort_direction,updated_at=excluded.updated_at WHERE chase_presets.user_id=excluded.user_id").bind(input.id,id,input.name.trim(),input.periodDays,JSON.stringify(input.ocids),input.sortKey,input.sortDirection,now,now).run();
+  return json({ok:true,updatedAt:now});
+ }
+ throw new ApiError(405,"지원하지 않는 요청 방식입니다.");
+}
 
 async function dashboard(request:Request,env:Env){
  const id=await userId(request,env),today=kstDate(),start=addDays(today,-30),yesterday=addDays(today,-1);
@@ -97,8 +123,7 @@ async function dashboard(request:Request,env:Env){
  const characters=rows.results.map(row=>{
   const ocid=String(row.ocid),historyRows=historyBy.get(ocid)||[],membership:Record<string,boolean>={[today]:currentMembers.has(String(row.name))};
   for(const snapshot of historyRows)membership[String(snapshot.date)]=dailyMembers.has(`${snapshot.date}\0${snapshot.name}`);
-  const detected=typeof row.hunting_detected_at==="string"?Date.parse(row.hunting_detected_at):NaN,isHunting=Number.isFinite(detected)&&Date.now()>=detected&&Date.now()-detected<=20*60*1000;
-  return {ocid,basic:basic(row),observedAt:row.observed_at,history:historyRows.map(snapshot=>({date:snapshot.date,basic:historyBasic(snapshot)})),todayBaseline:baselineBy.has(ocid)?historyBasic(baselineBy.get(ocid)!):null,estimated:!historyRows.some(snapshot=>snapshot.date===yesterday),isGuildMember:currentMembers.has(String(row.name)),guildMembership:primary?.guild_key?membership:null,isHunting,huntingDetectedAt:row.hunting_detected_at};
+  return {ocid,basic:basic(row),observedAt:row.observed_at,history:historyRows.map(snapshot=>({date:snapshot.date,basic:historyBasic(snapshot)})),todayBaseline:baselineBy.has(ocid)?historyBasic(baselineBy.get(ocid)!):null,estimated:!historyRows.some(snapshot=>snapshot.date===yesterday),isGuildMember:currentMembers.has(String(row.name)),guildMembership:primary?.guild_key?membership:null,isHunting:Number(row.is_hunting)===1,activityDecidedAt:row.activity_decided_at};
  });
  const sync=await env.DB.prepare("SELECT status,started_at AS startedAt,finished_at AS finishedAt,succeeded,failed FROM sync_state WHERE id=1").first();
  return json({characters,sync,today});
@@ -107,17 +132,22 @@ async function dashboard(request:Request,env:Env){
 async function googleStart(request:Request,env:Env){
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  let linkUser:string|null=null; try{linkUser=await userId(request,env);}catch{/* 새 계정으로 계속합니다. */}
- const state=randomToken(),browser=randomToken(),expires=nowSeconds()+600,origin=new URL(request.url).origin;
+ const state=randomToken(),browser=randomToken(),expires=nowSeconds()+600;
  await env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user) VALUES(?,?,?,?)").bind(await sha256(state),await sha256(browser),expires,linkUser).run();
- const url=new URL("https://accounts.google.com/o/oauth2/v2/auth");
- url.search=new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,response_type:"code",redirect_uri:`${origin}/auth/google/callback`,scope:"openid",state}).toString();
- return new Response(null,{status:302,headers:{location:url.toString(),"set-cookie":sessionCookie(request,"maple_login",browser,600)}});
+ return new Response(null,{status:302,headers:{location:googleUrl(request,env,state),"set-cookie":sessionCookie(request,"maple_login",browser,600)}});
+}
+async function androidStart(request:Request,env:Env){
+ if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
+ const input=await bodyJson(request) as {challenge?:unknown};if(typeof input.challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(input.challenge))throw new ApiError(400,"Android 로그인 요청을 확인하세요.");
+ const id=await userId(request,env),state=randomToken();
+ await env.DB.batch([env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(nowSeconds()),env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user,client_kind,pkce_challenge) VALUES(?,?,?,?,'android',?)").bind(await sha256(state),"",nowSeconds()+600,id,input.challenge)]);
+ return json({url:googleUrl(request,env,state)});
 }
 async function googleCallback(request:Request,env:Env){
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
- const url=new URL(request.url),code=url.searchParams.get("code"),state=url.searchParams.get("state"),browser=cookies(request).maple_login;
- if(!code||!state||!browser)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
- const attempt=await env.DB.prepare("DELETE FROM login_attempts WHERE state_hash=? AND browser_hash=? AND expires_at>? RETURNING link_user").bind(await sha256(state),await sha256(browser),nowSeconds()).first<{link_user:string|null}>();
+ const url=new URL(request.url),code=url.searchParams.get("code"),state=url.searchParams.get("state"),browser=cookies(request).maple_login||"";
+ if(!code||!state)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
+ const attempt=await env.DB.prepare("DELETE FROM login_attempts WHERE state_hash=? AND expires_at>? AND (client_kind='android' OR browser_hash=?) RETURNING link_user,client_kind,pkce_challenge").bind(await sha256(state),nowSeconds(),await sha256(browser)).first<{link_user:string|null;client_kind:string;pkce_challenge:string|null}>();
  if(!attempt)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
  const origin=url.origin,tokenResponse=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"authorization_code",client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,code,redirect_uri:`${origin}/auth/google/callback`})});
  if(!tokenResponse.ok)throw new ApiError(400,"Google 로그인을 확인하지 못했습니다.");
@@ -128,9 +158,23 @@ async function googleCallback(request:Request,env:Env){
  const id=existing?.user_id||attempt.link_user||crypto.randomUUID(),session=randomToken(),now=nowSeconds(),statements:D1PreparedStatement[]=[];
  if(!existing&&!attempt.link_user)statements.push(env.DB.prepare("INSERT INTO users(id,last_active) VALUES(?,?)").bind(id,now));
  if(!existing)statements.push(env.DB.prepare("INSERT INTO identities(provider,subject,user_id) VALUES('google',?,?)").bind(google.sub,id));
- statements.push(env.DB.prepare("UPDATE users SET last_active=? WHERE id=?").bind(now,id),env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),id,now+30*86400));
+ statements.push(env.DB.prepare("UPDATE users SET last_active=? WHERE id=?").bind(now,id));
+ if(attempt.client_kind==="android"){
+  if(!attempt.pkce_challenge)throw new ApiError(400,"Android 로그인 요청이 만료되었습니다.");const exchange=randomToken();
+  statements.push(env.DB.prepare("INSERT INTO android_exchange_codes(code_hash,user_id,pkce_challenge,expires_at) VALUES(?,?,?,?)").bind(await sha256(exchange),id,attempt.pkce_challenge,now+120));await env.DB.batch(statements);
+  return new Response(null,{status:302,headers:{location:`guildmatefollow://auth?code=${encodeURIComponent(exchange)}`}});
+ }
+ statements.push(env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),id,now+30*86400));
  await env.DB.batch(statements);
  const headers=new Headers({location:`${origin}/`});headers.append("set-cookie",sessionCookie(request,"maple_session",session,30*86400));headers.append("set-cookie",sessionCookie(request,"maple_login","",0));return new Response(null,{status:302,headers});
+}
+async function androidExchange(request:Request,env:Env){
+ const input=await bodyJson(request) as {code?:unknown;verifier?:unknown};
+ if(typeof input.code!=="string"||typeof input.verifier!=="string"||!/^[A-Za-z0-9_-]{43,128}$/.test(input.verifier))throw new ApiError(400,"Android 로그인 교환 요청을 확인하세요.");
+ const challenge=await pkceChallenge(input.verifier);
+ const row=await env.DB.prepare("DELETE FROM android_exchange_codes WHERE code_hash=? AND pkce_challenge=? AND expires_at>? RETURNING user_id").bind(await sha256(input.code),challenge,nowSeconds()).first<{user_id:string}>();
+ if(!row)throw new ApiError(400,"Android 로그인 코드가 만료되었거나 이미 사용되었습니다.");
+ const session=randomToken();await env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),row.user_id,nowSeconds()+30*86400).run();return json({session});
 }
 async function logout(request:Request,env:Env){const token=cookies(request).maple_session;if(token)await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha256(token)).run();const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
 async function deleteAccount(request:Request,env:Env){
@@ -159,7 +203,7 @@ async function ingest(request:Request,env:Env){
  if(await env.DB.prepare("SELECT 1 FROM ingest_batches WHERE batch_id=?").bind(auth.batch).first())throw new ApiError(409,"이미 처리한 수집 배치입니다.");
  const body=parsed as IngestBody,now=nowSeconds(),guildMembers=body.guilds.flatMap(guild=>guild.members.map(name=>({guildKey:guild.guildKey,name}))),dailyMembers=body.guilds.flatMap(guild=>(guild.daily||[]).flatMap(day=>day.members.map(name=>({guildKey:guild.guildKey,date:day.date,name}))));
  const statements:D1PreparedStatement[]=[env.DB.prepare("INSERT INTO ingest_batches(batch_id,sent_at,accepted_at) VALUES(?,?,?)").bind(auth.batch,Math.floor(Date.parse(body.sentAt)/1000),now)];
- if(body.current.length)statements.push(env.DB.prepare(`INSERT INTO characters(ocid,name,world_name,character_class,level,exp,exp_rate,guild_name,guild_key,image_url,observed_at,hunting_detected_at) SELECT json_extract(value,'$.ocid'),json_extract(value,'$.name'),json_extract(value,'$.worldName'),json_extract(value,'$.characterClass'),json_extract(value,'$.level'),CAST(json_extract(value,'$.exp') AS TEXT),json_extract(value,'$.expRate'),json_extract(value,'$.guildName'),json_extract(value,'$.guildKey'),json_extract(value,'$.imageUrl'),json_extract(value,'$.observedAt'),json_extract(value,'$.huntingDetectedAt') FROM json_each(?) WHERE true ON CONFLICT(ocid) DO UPDATE SET name=excluded.name,world_name=excluded.world_name,character_class=excluded.character_class,level=excluded.level,exp=excluded.exp,exp_rate=excluded.exp_rate,guild_name=excluded.guild_name,guild_key=excluded.guild_key,image_url=excluded.image_url,observed_at=excluded.observed_at,hunting_detected_at=COALESCE(excluded.hunting_detected_at,characters.hunting_detected_at) WHERE excluded.observed_at>=characters.observed_at`).bind(JSON.stringify(body.current)));
+ if(body.current.length)statements.push(env.DB.prepare(`INSERT INTO characters(ocid,name,world_name,character_class,level,exp,exp_rate,guild_name,guild_key,image_url,observed_at,is_hunting,activity_decided_at) SELECT json_extract(value,'$.ocid'),json_extract(value,'$.name'),json_extract(value,'$.worldName'),json_extract(value,'$.characterClass'),json_extract(value,'$.level'),CAST(json_extract(value,'$.exp') AS TEXT),json_extract(value,'$.expRate'),json_extract(value,'$.guildName'),json_extract(value,'$.guildKey'),json_extract(value,'$.imageUrl'),json_extract(value,'$.observedAt'),CASE json_extract(value,'$.activityDecision') WHEN 'active' THEN 1 ELSE 0 END,json_extract(value,'$.activityDecisionAt') FROM json_each(?) WHERE true ON CONFLICT(ocid) DO UPDATE SET name=excluded.name,world_name=excluded.world_name,character_class=excluded.character_class,level=excluded.level,exp=excluded.exp,exp_rate=excluded.exp_rate,guild_name=excluded.guild_name,guild_key=excluded.guild_key,image_url=excluded.image_url,observed_at=excluded.observed_at,is_hunting=CASE WHEN excluded.activity_decided_at IS NULL THEN characters.is_hunting ELSE excluded.is_hunting END,activity_decided_at=COALESCE(excluded.activity_decided_at,characters.activity_decided_at) WHERE excluded.observed_at>=characters.observed_at`).bind(JSON.stringify(body.current)));
  if(body.dailySnapshots.length)statements.push(env.DB.prepare(`INSERT INTO daily_snapshots SELECT json_extract(value,'$.ocid'),json_extract(value,'$.date'),json_extract(value,'$.name'),json_extract(value,'$.worldName'),json_extract(value,'$.characterClass'),json_extract(value,'$.level'),CAST(json_extract(value,'$.exp') AS TEXT),json_extract(value,'$.expRate'),json_extract(value,'$.guildName'),json_extract(value,'$.imageUrl') FROM json_each(?) WHERE true ON CONFLICT(ocid,date) DO UPDATE SET name=excluded.name,world_name=excluded.world_name,character_class=excluded.character_class,level=excluded.level,exp=excluded.exp,exp_rate=excluded.exp_rate,guild_name=excluded.guild_name,image_url=excluded.image_url`).bind(JSON.stringify(body.dailySnapshots)));
  if(body.todayBaselines.length)statements.push(env.DB.prepare(`INSERT INTO today_baselines SELECT json_extract(value,'$.ocid'),json_extract(value,'$.date'),json_extract(value,'$.name'),json_extract(value,'$.level'),CAST(json_extract(value,'$.exp') AS TEXT),json_extract(value,'$.expRate') FROM json_each(?) WHERE true ON CONFLICT(ocid,date) DO UPDATE SET name=excluded.name,level=excluded.level,exp=excluded.exp,exp_rate=excluded.exp_rate`).bind(JSON.stringify(body.todayBaselines)));
  if(body.guilds.length){const guildJson=JSON.stringify(body.guilds);statements.push(env.DB.prepare("INSERT INTO guilds SELECT json_extract(value,'$.guildKey'),json_extract(value,'$.worldName'),json_extract(value,'$.name'),json_extract(value,'$.observedAt') FROM json_each(?) WHERE true ON CONFLICT(guild_key) DO UPDATE SET world_name=excluded.world_name,name=excluded.name,observed_at=excluded.observed_at").bind(guildJson),env.DB.prepare("DELETE FROM guild_members WHERE guild_key IN (SELECT json_extract(value,'$.guildKey') FROM json_each(?))").bind(guildJson));}
@@ -178,8 +222,11 @@ async function route(request:Request,env:Env){
  if(path==="/api/profile"&&method==="POST")return profile(request,env);
  if(path==="/api/activity"&&method==="POST")return activity(request,env);
  if(path==="/api/dashboard"&&method==="GET")return dashboard(request,env);
+ if((path==="/api/chase-presets"||path.startsWith("/api/chase-presets/")))return chasePresets(request,env);
  if(path==="/auth/google/start"&&method==="GET")return googleStart(request,env);
  if(path==="/auth/google/callback"&&method==="GET")return googleCallback(request,env);
+ if(path==="/auth/android/start"&&method==="POST")return androidStart(request,env);
+ if(path==="/auth/android/exchange"&&method==="POST")return androidExchange(request,env);
  if(path==="/api/logout"&&method==="POST")return logout(request,env);
  if(path==="/api/account/delete"&&method==="POST")return deleteAccount(request,env);
  if(path==="/internal/v1/subscriptions"&&method==="GET")return subscriptions(request,env);
@@ -189,6 +236,6 @@ async function route(request:Request,env:Env){
 }
 
 export default {async fetch(request:Request,env:Env){
-  try{return addSecurity(await route(request,env),new URL(request.url).pathname.startsWith("/api/")||new URL(request.url).pathname.startsWith("/internal/"));}
+  try{const path=new URL(request.url).pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
   catch(error){if(error instanceof ApiError)return addSecurity(json({error:error.message},error.status),true);console.error("edge request failed",error instanceof Error?error.message:"unknown");return addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true);}
  }} satisfies ExportedHandler<Env>;
