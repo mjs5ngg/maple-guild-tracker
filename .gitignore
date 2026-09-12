@@ -12,3 +12,5 @@ __pycache__/
 web-dist/
 edge/.wrangler/
 .local-runtime/
+test-results/
+playwright-report/

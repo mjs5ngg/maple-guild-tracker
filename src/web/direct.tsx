@@ -69,7 +69,7 @@ function App(){
  }catch{setMessage("저장 또는 조회에 실패했습니다. 브라우저 저장 권한과 네트워크를 확인하세요.");}
  finally{nextRefresh.current=Date.now()+60000;writePersonal("maple-next-refresh",String(nextRefresh.current));setBusy(false);}
  }
- return <main><header><h1>개인 새로고침</h1></header><section className="panel"><p>대표캐릭터 <strong>{primary||"연결 대기"}</strong></p><form onSubmit={e=>{e.preventDefault();void refresh();}}>
+ return <main className="personal-page"><header><span className="section-kicker">PRIVATE REFRESH</span><h1>개인 새로고침</h1><p>사용자의 API 키는 이 창에서 NEXON으로만 전송됩니다.</p></header><section className="panel"><p>대표캐릭터 <strong>{primary||"연결 대기"}</strong></p><form onSubmit={e=>{e.preventDefault();void refresh();}}>
  <label>넥슨 API 키<input name="password" type="password" autoComplete="current-password" value={key} onChange={e=>setKey(e.target.value)}/></label>
  <label>발급받은 키 종류<select value={kind} onChange={e=>setKind(e.target.value)}><option value="development">개발키 · 대표캐릭터만</option><option value="service">서비스키 · 모든 등록 캐릭터</option></select></label>
  <p className="muted">개발키는 초당 5건·하루 1,000건, 서비스키는 초당 500건·하루 2,000만 건입니다. 한도는 애플리케이션별 합산이며, 대표만 조회하는 것은 이 서비스의 정책입니다.</p>

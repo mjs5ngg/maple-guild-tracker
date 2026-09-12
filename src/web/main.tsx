@@ -1,93 +1,93 @@
-// 공용 수집 기록과 개인 조회 결과를 분리하여 표시하는 웹 대시보드입니다.
-import {useEffect,useRef,useState} from "react";
+// 공용 기록과 개인 조회를 대표 요약·순위·성장 패널 중심으로 제공하는 웹 대시보드입니다.
+import {lazy,Suspense,useEffect,useMemo,useRef,useState} from "react";
 import {createRoot} from "react-dom/client";
+import {QueryClient,QueryClientProvider,useMutation,useQuery,useQueryClient} from "@tanstack/react-query";
+import * as Tabs from "@radix-ui/react-tabs";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import {Crown,KeyRound,LayoutDashboard,Moon,Settings,Star,Sun,Users} from "lucide-react";
 import type {Snapshot} from "./types";
-import {compact,sortRows,todayGain,dailyPoints,periodGain as calculatePeriodGain} from "./experience";
-import {ResponsiveContainer,LineChart,Line,XAxis,YAxis,Tooltip,CartesianGrid} from "recharts";
-import "./web.css";
+import {compact,periodGain,sortRows,todayGain} from "./experience";
+import SettingsDialog from "./SettingsDialog";
 import {registerStatusTool} from "./webmcp";
 import {syncStatusText} from "./syncStatus";
-import {loadDashboard} from "./loadDashboard";
 import {startSession} from "./startSession";
 import {dashboardApi as api} from "./dashboardApi";
 import {ACTIVITY_REFRESH_MS,DASHBOARD_REFRESH_MS,refreshDue} from "./refreshPolicy";
+import "./web.css";
+
+const GrowthPanel=lazy(()=>import("./GrowthPanel"));
+const queryClient=new QueryClient({defaultOptions:{queries:{staleTime:DASHBOARD_REFRESH_MS,retry:1,refetchOnWindowFocus:true,refetchOnReconnect:true}}});
+
+function gainLabel(value:bigint|null){return value===null?"자료 없음":`+${compact(value)}`;}
+function rankRows(rows:Snapshot[],period:boolean,days:number){
+ const sorted=sortRows(rows,false,__EXP_TABLE__);
+ if(period)sorted.sort((left,right)=>{const a=periodGain(left,days,__EXP_TABLE__).value,b=periodGain(right,days,__EXP_TABLE__).value;return a===b?0:a===null?1:b===null?-1:a>b?-1:1;});
+ return sorted;
+}
+
+function Avatar({character}:{character:Snapshot}){
+ return <div className="character-avatar">{character.basic.character_image?<img src={character.basic.character_image} alt=""/>:<span>{character.basic.character_name.slice(0,1)}</span>}</div>;
+}
+
 function App(){
  useEffect(registerStatusTool,[]);
- const [status,setStatus]=useState<any>(null),[me,setMe]=useState<any>(null),[error,setError]=useState("");
- const [loadError,setLoadError]=useState("");
- const [primary,setPrimary]=useState(""),[favorites,setFavorites]=useState(""),[rows,setRows]=useState<Snapshot[]>([]);
- const [personal,setPersonal]=useState<Snapshot[]>([]),[period,setPeriod]=useState(localStorage.getItem("web-ranking")!=="total");
- const [scope,setScope]=useState("guild"),[sync,setSync]=useState<any>(null);
+ const cache=useQueryClient();
+ const [message,setMessage]=useState(""),[settingsOpen,setSettingsOpen]=useState(false);
+ const [primary,setPrimary]=useState(""),[favorites,setFavorites]=useState("");
+ const [personal,setPersonal]=useState<Snapshot[]>([]),[selected,setSelected]=useState("");
+ const [scope,setScope]=useState<"guild"|"favorites">("guild"),[period,setPeriod]=useState(localStorage.getItem("web-ranking")!=="total");
  const [days,setDays]=useState(Number(localStorage.getItem("web-days"))===7?7:Number(localStorage.getItem("web-days"))===30?30:1);
- const lastDashboardAt=useRef(0),lastActivityAt=useRef(0),loading=useRef<Promise<void>|null>(null);
- async function load(force=true){
-  if(!force&&!refreshDue(lastDashboardAt.current))return;
-  if(loading.current)return loading.current;
-  const request=loadDashboard(()=>api("/api/dashboard"),data=>{lastDashboardAt.current=Date.now();setRows(data.characters);setSync(data.sync);},setLoadError);
-  loading.current=request;
-  try{await request;}finally{if(loading.current===request)loading.current=null;}
+ const [theme,setTheme]=useState(localStorage.getItem("web-theme")==="light"?"light":"dark"),[online,setOnline]=useState(navigator.onLine);
+ const lastActivityAt=useRef(0);
+ const statusQuery=useQuery({queryKey:["status"],queryFn:()=>api("/api/status")});
+ const sessionQuery=useQuery({queryKey:["session"],queryFn:()=>startSession(api),staleTime:Infinity,retry:1});
+ const me=sessionQuery.data;
+ const dashboardQuery=useQuery({queryKey:["dashboard"],queryFn:()=>api("/api/dashboard"),enabled:Boolean(me),refetchInterval:DASHBOARD_REFRESH_MS,refetchIntervalInBackground:false});
+ const rows=(dashboardQuery.data?.characters||[]) as Snapshot[],sync=dashboardQuery.data?.sync;
+
+ useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("web-theme",theme);},[theme]);
+ useEffect(()=>{const up=()=>setOnline(true),down=()=>setOnline(false);window.addEventListener("online",up);window.addEventListener("offline",down);return()=>{window.removeEventListener("online",up);window.removeEventListener("offline",down);};},[]);
+ useEffect(()=>{if(me){setPrimary(me.primary);setFavorites(me.favorites.join("\n"));}},[me]);
+ useEffect(()=>{if(!selected&&me?.primary)setSelected(me.primary);},[selected,me?.primary]);
+ function recordActivity(){const now=Date.now();if(!me||!refreshDue(lastActivityAt.current,now,ACTIVITY_REFRESH_MS))return;lastActivityAt.current=now;void api("/api/activity",{}).catch(()=>{});}
+ useEffect(()=>{if(!me)return;recordActivity();const action=()=>recordActivity();document.addEventListener("pointerdown",action);document.addEventListener("keydown",action);return()=>{document.removeEventListener("pointerdown",action);document.removeEventListener("keydown",action);};},[Boolean(me)]);
+
+ const saveMutation=useMutation({mutationFn:async()=>{const names=[...new Set(favorites.split(/[\n,]/).map(value=>value.trim()).filter(Boolean))];await api("/api/profile",{primary:primary.trim(),favorites:names});return {primary:primary.trim(),favorites:names,signedIn:me?.signedIn};},onSuccess:data=>{cache.setQueryData(["session"],data);void cache.invalidateQueries({queryKey:["dashboard"]});setSettingsOpen(false);setMessage("설정을 저장했습니다. 다음 공용 수집에 반영됩니다.");},onError:error=>setMessage(String(error))});
+ async function logout(){try{await api("/api/logout",{});location.reload();}catch(error){setMessage(String(error));}}
+ async function deleteAccount(){const confirmation=window.prompt("계속하려면 ‘탈퇴’를 입력하세요. 공용 캐릭터 기록은 유지됩니다.");if(confirmation!=="탈퇴")return;try{await api("/api/account/delete",{confirmation});location.reload();}catch(error){setMessage(String(error));}}
+ function personalRefresh(){
+  if(!me?.primary){setSettingsOpen(true);setMessage("대표캐릭터를 먼저 저장하세요.");return;}
+  const popup=window.open(__DIRECT_ORIGIN__,"maple-personal","width=620,height=800");if(!popup){setMessage("개인 조회 창의 팝업을 허용해 주세요.");return;}
+  const names=[...new Set([me.primary,...me.favorites,...rows.map(row=>row.basic.character_name)])];
+  const receive=(event:MessageEvent)=>{if(event.origin!==__DIRECT_ORIGIN__||event.source!==popup)return;if(event.data?.type==="maple-ready")popup.postMessage({type:"maple-targets",primary:me.primary,names},__DIRECT_ORIGIN__);if(event.data?.type==="maple-results"&&Array.isArray(event.data.rows)){const valid=event.data.rows.slice(0,1000).filter((row:any)=>row&&typeof row.basic?.character_name==="string"&&typeof row.ocid==="string"&&Number.isInteger(row.basic.character_level)&&/^\d+$/.test(String(row.basic.character_exp))&&Number.isFinite(Date.parse(row.observedAt)));setPersonal(valid.map((row:Snapshot)=>{const old=rows.find(item=>item.ocid===row.ocid);return {...row,history:old?.history||[],todayBaseline:old?.todayBaseline,estimated:old?.estimated,isGuildMember:old?.isGuildMember,guildMembership:old?.guildMembership};}));recordActivity();window.removeEventListener("message",receive);}};
+  window.addEventListener("message",receive);setTimeout(()=>window.removeEventListener("message",receive),15*60*1000);
  }
- function recordActivity(){
-  const now=Date.now();if(!refreshDue(lastActivityAt.current,now,ACTIVITY_REFRESH_MS))return;
-  lastActivityAt.current=now;void api("/api/activity",{}).catch(()=>{});
- }
- useEffect(()=>{
- let ready=false;
- void api("/api/status").then(setStatus).catch(e=>setError(String(e)));
- void startSession(api).then(data=>{ready=true;setMe(data);setPrimary(data.primary);setFavorites(data.favorites.join("\n"));recordActivity();void load();}).catch(e=>setError(String(e)));
- const timer=setInterval(()=>{if(ready&&document.visibilityState==="visible")void load(false);},DASHBOARD_REFRESH_MS);
- const active=()=>{if(ready&&document.visibilityState==="visible"){recordActivity();void load(false);}};
- const action=()=>{if(ready)recordActivity();};
- document.addEventListener("pointerdown",action);document.addEventListener("keydown",action);
- document.addEventListener("visibilitychange",active);
- return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",active);document.removeEventListener("pointerdown",action);document.removeEventListener("keydown",action);};
- },[]);
- async function save(){try{setError("");const names=favorites.split(/[\n,]/).map(v=>v.trim()).filter(Boolean);await api("/api/profile",{primary:primary.trim(),favorites:names});setMe({...me,primary:primary.trim(),favorites:names});await load();}catch(e){setError(String(e));}}
- async function deleteAccount(){
-  const confirmation=window.prompt("대표·즐겨찾기 설정, 소셜 연결과 모든 기기의 로그인이 삭제됩니다. 공용 캐릭터 기록은 유지됩니다. 개인 키는 개인 새로고침 화면에서 별도로 삭제하세요. 계속하려면 ‘탈퇴’를 입력하세요.");
-  if(confirmation!=="탈퇴")return;
-  try{await api("/api/account/delete",{confirmation});location.reload();}catch(e){setError(String(e));}
- }
- function refresh(){
- if(!me?.primary){setError("대표캐릭터를 먼저 저장하세요.");return;}
- const popup=window.open(__DIRECT_ORIGIN__,"maple-personal","width=620,height=800");
- if(!popup){setError("개인 조회 창의 팝업을 허용해 주세요.");return;}
- const names=[...new Set([me.primary,...me.favorites,...rows.map(r=>r.basic.character_name)])];
- const receive=(event:MessageEvent)=>{
- if(event.origin!==__DIRECT_ORIGIN__||event.source!==popup)return;
- if(event.data?.type==="maple-ready")popup.postMessage({type:"maple-targets",primary:me.primary,names},__DIRECT_ORIGIN__);
- if(event.data?.type==="maple-results"&&Array.isArray(event.data.rows)){
- const valid=event.data.rows.slice(0,1000).filter((r:any)=>r&&typeof r.basic?.character_name==="string"&&typeof r.ocid==="string"&&Number.isInteger(r.basic.character_level)&&/^\d+$/.test(String(r.basic.character_exp))&&Number.isFinite(Date.parse(r.observedAt)));
- setPersonal(valid.map((r:Snapshot)=>{const old=rows.find(s=>s.ocid===r.ocid);return {...r,history:old?.history||[],todayBaseline:old?.todayBaseline,estimated:old?.estimated,isGuildMember:old?.isGuildMember,guildMembership:old?.guildMembership};}));
- recordActivity();window.removeEventListener("message",receive);
- }
- };
- window.addEventListener("message",receive);
- setTimeout(()=>window.removeEventListener("message",receive),15*60*1000);
- }
- const merged=rows.map(row=>personal.find(p=>p.ocid===row.ocid&&p.observedAt>row.observedAt)||row);
- for(const row of personal)if(!merged.some(r=>r.ocid===row.ocid))merged.push(row);
- const primaryRow=merged.find(r=>r.basic.character_name===me?.primary);
- const visible=sortRows(merged.filter(r=>scope==="favorites"?(r.basic.character_name===me?.primary||me?.favorites.includes(r.basic.character_name)):(r.basic.character_name===me?.primary||(r.isGuildMember??(!!primaryRow?.basic.character_guild_name&&r.basic.character_guild_name===primaryRow.basic.character_guild_name&&r.basic.world_name===primaryRow.basic.world_name)))),false,__EXP_TABLE__);
- const periodGain=calculatePeriodGain;
- if(period)visible.sort((a,b)=>{const x=periodGain(a,days,__EXP_TABLE__).value,y=periodGain(b,days,__EXP_TABLE__).value;return x===y?0:x===null?1:y===null?-1:x>y?-1:1;});
- const points=primaryRow?dailyPoints(primaryRow,days,__EXP_TABLE__).map(p=>({date:p.date.slice(5),xp:p.value===null?null:Number(p.value)/1e12})):[];
- return <main>
- <header><div><span className="eyebrow">길드원 따라가기 · 비공식 서비스</span><h1>메이플 EXP 트래커</h1></div><span className="badge">15분 자동 수집</span><select aria-label="기간" value={days} onChange={e=>{setDays(Number(e.target.value));localStorage.setItem("web-days",e.target.value);}}><option value="1">오늘</option><option value="7">오늘 포함 7일</option><option value="30">오늘 포함 30일</option></select></header>
- {error&&<p role="alert" className="error">{error}</p>}
- {loadError&&<p role="alert" className="error">{loadError}</p>}
- {!status?<p>서버 연결 중…</p>:<section className="status">저장소 {status.database?"연결됨":"설정 필요"} · 자동 수집 {status.collector?"설정됨":"설정 필요"}</section>}
- {!me?<section className="panel"><h2>이 기기의 설정 준비 중</h2><p>로그인 없이 대표캐릭터와 즐겨찾기를 사용할 수 있습니다.</p>{error&&<div className="actions"><button onClick={()=>location.reload()}>다시 시도</button><button onClick={()=>void api("/api/logout",{}).then(()=>location.reload()).catch(e=>setError(String(e)))}>만료된 로그인 해제</button></div>}</section>:<>
- <section className="panel"><div className="actions"><h2>캐릭터 설정</h2><span className="badge">{me.signedIn?"계정 설정":"이 브라우저의 설정"}</span>{me.signedIn&&<button onClick={()=>void api("/api/logout",{}).then(()=>location.reload()).catch(e=>setError(String(e)))}>로그아웃</button>}</div><label>대표캐릭터<input value={primary} onChange={e=>setPrimary(e.target.value)} maxLength={20}/></label><label>즐겨찾기 · 최대 30명<textarea value={favorites} onChange={e=>setFavorites(e.target.value)} placeholder="한 줄에 한 캐릭터"/></label><button onClick={()=>void save()}>설정 저장</button><p className="muted">마지막 이용 후 168시간이 지나면 필요 대상 수집이 중단됩니다. 다른 활성 사용자가 필요한 캐릭터는 계속 수집합니다.</p>
- {!me.signedIn&&<><p className="muted">로그인은 기기 간 설정 동기화에만 필요합니다. 로그인하면 계정에 저장된 설정을 사용하며, 이 브라우저의 설정을 자동으로 덮어쓰지 않습니다. 로그아웃하면 이 브라우저의 설정으로 돌아옵니다.</p><p className="muted">비로그인 설정은 브라우저 쿠키로 연결됩니다. 쿠키를 지우거나 30일 후 기기 세션이 만료되면 다시 지정해야 합니다.</p></>}
- <div className="actions">{status?.providers.map((p:any)=><button key={p.name} disabled={!p.configured} onClick={()=>location.href="/auth/"+p.name+"/start"+(me.signedIn?"?link=1":"")}>{p.name} {me.signedIn?"계정 연결":"로그인"}{!p.configured?" · 준비 중":""}</button>)}</div></section>
- <section className="panel"><div className="actions"><h2>{scope==="guild"?"캐릭터":"즐겨찾기"} 순위</h2><button onClick={()=>setScope(scope==="guild"?"favorites":"guild")}>{scope==="guild"?"즐겨찾기 보기":"전체 보기"}</button><button onClick={()=>{setPeriod(!period);localStorage.setItem("web-ranking",period?"total":"today");}}>{period?"기간별 경험치":"전체 경험치"}</button><button onClick={refresh}>개인 키로 새로고침 ↗</button></div>
- <p className="muted">서버 {syncStatusText(sync)} · 개인 조회는 공용 기록에 반영되지 않습니다.</p>
- {scope==="guild"&&period&&<p className="muted">현재 길드원의 선택 기간 전체 획득량입니다. 길드 가입 전 획득량도 포함합니다.</p>}
- {visible.length===0?<p className="empty">아직 수집된 자료가 없습니다. 대표캐릭터를 저장하면 다음 수집 주기에 조회합니다.</p>:<div className="tablewrap"><table><thead><tr><th>순위</th><th>캐릭터</th><th>레벨</th><th>현재 경험치</th><th>{period?days+"일 동안 획득":"오늘 획득"}</th><th>조회 기준</th></tr></thead><tbody>{visible.map((r,i)=><tr key={r.ocid}><td>{i+1}</td><td>{r.basic.character_name===me.primary?"♛ ":""}{r.basic.character_name}<small>{r.basic.character_class}</small></td><td>{r.basic.character_level}</td><td>{r.basic.character_exp_rate}%</td><td>{compact(period?periodGain(r,days,__EXP_TABLE__).value:todayGain(r,__EXP_TABLE__))}{period&&!periodGain(r,days,__EXP_TABLE__).complete?<small>일부 수집</small>:r.estimated?<small>추정</small>:null}</td><td>{personal.includes(r)?"개인":"서버"} {new Date(r.observedAt).toLocaleTimeString("ko-KR",{hour12:false})}</td></tr>)}</tbody></table></div>}
- </section><section className="panel"><h2>대표캐릭터 성장 흐름 · {days}일</h2>{primaryRow?<ResponsiveContainer width="100%" height={250}><LineChart data={points}><CartesianGrid stroke="#303947"/><XAxis dataKey="date"/><YAxis unit="조"/><Tooltip/><Line dataKey="xp" name="획득 경험치(조)" stroke="#ffac67" connectNulls={false} dot type="linear"/></LineChart></ResponsiveContainer>:<p>자료 수집 후 표시됩니다.</p>}</section></>}
- <details className="panel"><summary>데이터 및 이용 안내</summary><p>자정 근처 획득량은 API 제공 시점에 따라 날짜 경계에 오차가 생길 수 있으며, 오전 2시 이후 공식 기록을 확보하면 보정될 수 있습니다. 기준 자료가 없는 값은 0이 아니라 자료 없음으로 표시합니다.</p><p>개인 조회는 최신 정보만 조회하며 완료 후 1분간 재호출을 제한합니다. 웹·앱 이용 또는 수동 갱신으로 이용 기간을 연장합니다. 자동 요청만으로는 연장되지 않습니다.</p></details>
- {me?.signedIn&&<section className="panel"><h2>계정 관리</h2><p>탈퇴하면 내 설정과 소셜 연결, 모든 기기의 로그인이 삭제됩니다. 공용 성장 기록은 유지됩니다.</p><button onClick={()=>void deleteAccount()}>계정 탈퇴</button></section>}
- <footer>Data based on NEXON Open API</footer></main>;
+
+ const merged=useMemo(()=>{const values=rows.map(row=>personal.find(item=>item.ocid===row.ocid&&item.observedAt>row.observedAt)||row);for(const row of personal)if(!values.some(item=>item.ocid===row.ocid))values.push(row);return values;},[rows,personal]);
+ const primaryRow=merged.find(row=>row.basic.character_name===me?.primary);
+ const guildRows=useMemo(()=>rankRows(merged.filter(row=>row.basic.character_name===me?.primary||(row.isGuildMember??(Boolean(primaryRow?.basic.character_guild_name)&&row.basic.character_guild_name===primaryRow?.basic.character_guild_name&&row.basic.world_name===primaryRow?.basic.world_name))),period,days),[merged,me?.primary,primaryRow?.basic.character_guild_name,primaryRow?.basic.world_name,period,days]);
+ const favoriteRows=useMemo(()=>rankRows(merged.filter(row=>row.basic.character_name===me?.primary||me?.favorites.includes(row.basic.character_name)),period,days),[merged,me?.primary,me?.favorites,period,days]);
+ const visible=scope==="guild"?guildRows:favoriteRows;
+ const selectedRow=merged.find(row=>row.ocid===selected||row.basic.character_name===selected)||primaryRow;
+ const primaryRank=primaryRow?guildRows.findIndex(row=>row.ocid===primaryRow.ocid)+1:0;
+ const primaryToday=primaryRow?todayGain(primaryRow,__EXP_TABLE__):null,primaryPeriod=primaryRow?periodGain(primaryRow,days,__EXP_TABLE__).value:null;
+ const topGain=guildRows[0]?(period?periodGain(guildRows[0],days,__EXP_TABLE__).value:todayGain(guildRows[0],__EXP_TABLE__)):null,ownGain=primaryRow?(period?primaryPeriod:primaryToday):null;
+ const gap=topGain!==null&&ownGain!==null&&topGain>ownGain?topGain-ownGain:0n;
+ const error=message||String(statusQuery.error||sessionQuery.error||dashboardQuery.error||"");
+ const newest=merged.reduce((latest,row)=>Math.max(latest,Date.parse(row.observedAt)),0),delayed=newest>0&&Date.now()-newest>30*60*1000;
+
+ return <Tooltip.Provider delayDuration={300}><div className="app-shell"><aside className="sidebar"><button className="brand" onClick={()=>scrollTo({top:0,behavior:"smooth"})}><span>🍁</span><b>길드원 따라가기</b></button><nav><button className="active" onClick={()=>scrollTo({top:0,behavior:"smooth"})}><LayoutDashboard/>개요</button><button onClick={()=>document.getElementById("ranking")?.scrollIntoView({behavior:"smooth"})}><Users/>길드 순위</button><button onClick={()=>{setScope("favorites");document.getElementById("ranking")?.scrollIntoView({behavior:"smooth"});}}><Star/>즐겨찾기</button><button onClick={()=>setSettingsOpen(true)}><Settings/>설정</button></nav><span className="source">Data based on NEXON Open API</span></aside>
+ <main className="dashboard"><header className="topbar"><div><span className="section-kicker">{primaryRow?`${primaryRow.basic.world_name} · ${primaryRow.basic.character_class}`:"MAPLESTORY EXP TRACKER"}</span><h1>{me?.primary?`${me.primary}님의 성장 기록`:"매일의 성장을 한눈에."}</h1></div><div className="top-actions"><div className="period-control" aria-label="조회 기간">{[1,7,30].map(value=><button key={value} aria-pressed={days===value} onClick={()=>{setDays(value);localStorage.setItem("web-days",String(value));}}>{value===1?"오늘":`${value}일`}</button>)}</div><Tooltip.Root><Tooltip.Trigger asChild><button className="icon-button" aria-label="테마 전환" onClick={()=>setTheme(theme==="dark"?"light":"dark")}>{theme==="dark"?<Sun/>:<Moon/>}</button></Tooltip.Trigger><Tooltip.Portal><Tooltip.Content className="tooltip-content" sideOffset={7}>{theme==="dark"?"라이트 테마":"다크 테마"}</Tooltip.Content></Tooltip.Portal></Tooltip.Root><button className="icon-button mobile-settings" aria-label="설정" onClick={()=>setSettingsOpen(true)}><Settings/></button></div></header>
+ {!online&&<div className="state-banner offline">오프라인입니다. 마지막으로 저장된 기록을 표시합니다.</div>}{delayed&&online&&<div className="state-banner warning">공용 수집이 지연되고 있습니다. 마지막 저장 기록을 계속 표시합니다.</div>}{error&&<div role="alert" className="state-banner error">{error}</div>}
+ {!me?<section className="surface loading-card"><span className="spinner"/><div><b>이 브라우저의 설정을 준비하고 있어요.</b><p>로그인 없이 바로 사용할 수 있습니다.</p></div></section>:<>
+ <section className="hero-card">{primaryRow?<><Avatar character={primaryRow}/><div className="hero-info"><span className="section-kicker"><Crown/> 대표캐릭터</span><h2>{primaryRow.basic.character_name}<small>Lv.{primaryRow.basic.character_level}</small></h2><strong>{primaryRow.basic.character_exp_rate}%</strong><p>오늘 <b>{gainLabel(primaryToday)}</b>{days>1&&<> · {days}일 <b>{gainLabel(primaryPeriod)}</b></>}</p></div><div className="hero-rank"><span>길드 순위</span><strong>{primaryRank||"—"}{primaryRank>0&&"위"}</strong><small>{gap>0n?`1위까지 ${compact(gap)}`:"현재 선두권"}</small></div></>:<div className="hero-empty"><KeyRound/><div><h2>대표캐릭터를 지정해 주세요.</h2><p>설정 후 다음 15분 수집부터 길드와 성장 기록을 확인합니다.</p></div><button className="primary-button" onClick={()=>setSettingsOpen(true)}>설정 열기</button></div>}</section>
+ <div className="dashboard-grid"><Tabs.Root value={scope} onValueChange={value=>setScope(value as "guild"|"favorites")} className="surface ranking-panel" id="ranking"><div className="section-heading"><div><span className="section-kicker">{scope==="guild"?"GUILD RANKING":"FAVORITE RANKING"}</span><h2>{scope==="guild"?"길드 순위":"즐겨찾기 순위"}</h2></div><Tabs.List className="tab-list" aria-label="순위 범위"><Tabs.Trigger value="guild">길드</Tabs.Trigger><Tabs.Trigger value="favorites">즐겨찾기</Tabs.Trigger></Tabs.List></div><div className="ranking-tools"><div className="mode-control"><button aria-pressed={period} onClick={()=>{setPeriod(true);localStorage.setItem("web-ranking","period");}}>기간별 경험치</button><button aria-pressed={!period} onClick={()=>{setPeriod(false);localStorage.setItem("web-ranking","total");}}>전체 경험치</button></div><button className="quiet-button" onClick={personalRefresh}><KeyRound/>개인 키로 새로고침</button></div><p className="sync-line">서버 {syncStatusText(sync)} · {period?`오늘 포함 ${days}일 획득량`:"레벨과 현재 경험치"} 기준</p>
+ {visible.length?<div className="ranking-list" role="table"><div className="ranking-head" role="row"><span>순위</span><span>캐릭터</span><span>레벨 · 현재 경험치</span><span>{period?`${days}일 획득`:"오늘 획득"}</span><span>조회</span></div>{visible.map((row,index)=>{const result=period?periodGain(row,days,__EXP_TABLE__):null;const gain=period?result!.value:todayGain(row,__EXP_TABLE__);return <button className={`ranking-row ${row.ocid===selectedRow?.ocid?"selected":""}`} key={row.ocid} onClick={()=>setSelected(row.ocid)} role="row"><i>{String(index+1).padStart(2,"0")}</i><Avatar character={row}/><span className="identity"><b>{row.basic.character_name===me.primary&&<Crown/>}{row.basic.character_name}</b><small>{row.basic.character_class}</small></span><span className="level">Lv.{row.basic.character_level}<small>{row.basic.character_exp_rate}%</small></span><strong>{gainLabel(gain)}{period&&!result!.complete?<small>일부 수집</small>:row.estimated?<small>추정</small>:null}</strong><span className="observed">{personal.some(item=>item.ocid===row.ocid&&item.observedAt===row.observedAt)?"개인":"서버"}<small>{new Date(row.observedAt).toLocaleTimeString("ko-KR",{hour12:false,hour:"2-digit",minute:"2-digit"})}</small></span></button>;})}</div>:<div className="empty-state"><b>아직 표시할 기록이 없습니다.</b><span>대표캐릭터 저장 후 첫 수집 진행 상황을 확인해 주세요.</span></div>}
+ </Tabs.Root><Suspense fallback={<section className="surface growth-panel"><span className="spinner"/></section>}><GrowthPanel character={selectedRow} days={days}/></Suspense></div>
+ <section className="data-note"><b>기록 안내</b><p>자정 근처 또는 오전 2시 근처의 획득량은 NEXON API 제공 시점상 날짜 경계가 불확실할 수 있으며, 공식 일별 기록이 준비되면 재정렬될 수 있습니다. 기준 자료가 없는 값은 0이 아닌 자료 없음으로 표시합니다.</p></section></>}
+ <footer className="mobile-source">Data based on NEXON Open API</footer></main>
+ <nav className="mobile-nav"><button onClick={()=>scrollTo({top:0,behavior:"smooth"})}><LayoutDashboard/><span>개요</span></button><button onClick={()=>{setScope("guild");document.getElementById("ranking")?.scrollIntoView({behavior:"smooth"});}}><Users/><span>순위</span></button><button onClick={()=>{setScope("favorites");document.getElementById("ranking")?.scrollIntoView({behavior:"smooth"});}}><Star/><span>즐겨찾기</span></button><button onClick={()=>setSettingsOpen(true)}><Settings/><span>설정</span></button></nav>
+ {me&&<SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} primary={primary} setPrimary={setPrimary} favorites={favorites} setFavorites={setFavorites} signedIn={Boolean(me.signedIn)} providers={statusQuery.data?.providers||[]} onSave={()=>saveMutation.mutate()} onLogout={()=>void logout()} onDelete={()=>void deleteAccount()}/>}</div></Tooltip.Provider>;
 }
-createRoot(document.getElementById("root")!).render(<App/>);
+
+createRoot(document.getElementById("root")!).render(<QueryClientProvider client={queryClient}><App/></QueryClientProvider>);

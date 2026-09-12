@@ -1,0 +1,20 @@
+/* 공개 웹과 앱 및 위젯이 공유할 절제된 메이플풍 디자인 토큰입니다. */
+:root{
+ --font-sans:"Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif;
+ --font-size-xs:.75rem;--font-size-sm:.875rem;--font-size-md:1rem;--font-size-lg:1.125rem;--font-size-xl:1.375rem;--font-size-2xl:1.875rem;
+ --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;
+ --radius-sm:.625rem;--radius-md:1rem;--radius-lg:1.5rem;
+ --navy-950:#0b111b;--navy-900:#111a27;--navy-850:#172231;--navy-800:#1d2a3a;--navy-700:#304158;
+ --cream-50:#fffaf1;--cream-100:#f7efdf;--cream-300:#d8cdbb;--slate-300:#aebbd0;--slate-500:#718198;
+ --maple-400:#ff9955;--maple-500:#ed793a;--teal-400:#58d6bd;--amber-400:#f2bd59;--red-400:#ff747b;
+ --page:var(--navy-950);--surface:var(--navy-900);--surface-raised:var(--navy-850);--surface-soft:var(--navy-800);--border:#2a394e;
+ --text:var(--cream-50);--text-muted:var(--slate-300);--accent:var(--maple-400);--positive:var(--teal-400);--warning:var(--amber-400);--danger:var(--red-400);
+ color-scheme:dark;
+}
+[data-theme="light"]{
+ --page:#f4eee3;--surface:#fffdf8;--surface-raised:#fff9ee;--surface-soft:#f3eadc;--border:#ded2c0;
+ --text:#172231;--text-muted:#5f6d7e;--accent:#c95f28;--positive:#087f72;--warning:#986411;--danger:#c53743;
+ color-scheme:light;
+}
+*{box-sizing:border-box}
+body{font-family:var(--font-sans);font-variant-numeric:tabular-nums;background:var(--page);color:var(--text)}
