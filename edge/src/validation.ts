@@ -13,7 +13,7 @@ export function validProfile(value:unknown):value is {primary:string;favorites:s
  return record.favorites.every(validName)&&new Set(record.favorites).size===record.favorites.length;
 }
 
-export type NormalizedCharacter={ocid:string;name:string;worldName?:string|null;characterClass?:string|null;level:number;exp:string;expRate:number;guildName?:string|null;guildKey?:string|null;imageUrl?:string|null;observedAt:string};
+export type NormalizedCharacter={ocid:string;name:string;worldName?:string|null;characterClass?:string|null;level:number;exp:string;expRate:number;guildName?:string|null;guildKey?:string|null;imageUrl?:string|null;observedAt:string;huntingDetectedAt?:string|null};
 export type DailySnapshot=Omit<NormalizedCharacter,"guildKey"|"observedAt">&{date:string};
 export type TodayBaseline=Pick<NormalizedCharacter,"ocid"|"name"|"level"|"exp"|"expRate">&{date:string};
 export type GuildInput={guildKey:string;worldName:string;name:string;observedAt:string;members:string[];daily?:{date:string;members:string[]}[]};
@@ -31,9 +31,10 @@ function numberFields(row:Record<string,unknown>){
 function normalized(value:unknown):value is NormalizedCharacter{
  if(!value||typeof value!=="object")return false;
  const row=value as Record<string,unknown>;
- return exactKeys(row,["ocid","name","worldName","characterClass","level","exp","expRate","guildName","guildKey","imageUrl","observedAt"])
+ return exactKeys(row,["ocid","name","worldName","characterClass","level","exp","expRate","guildName","guildKey","imageUrl","observedAt","huntingDetectedAt"])
   &&typeof row.ocid==="string"&&row.ocid.length>0&&row.ocid.length<=100&&validName(row.name)&&numberFields(row)&&iso(row.observedAt)
-  &&nullableString(row.worldName)&&nullableString(row.characterClass)&&nullableString(row.guildName)&&nullableString(row.guildKey)&&nullableString(row.imageUrl);
+  &&nullableString(row.worldName)&&nullableString(row.characterClass)&&nullableString(row.guildName)&&nullableString(row.guildKey)&&nullableString(row.imageUrl)
+  &&(row.huntingDetectedAt===undefined||row.huntingDetectedAt===null||iso(row.huntingDetectedAt));
 }
 function daily(value:unknown):value is DailySnapshot{
  if(!value||typeof value!=="object")return false;

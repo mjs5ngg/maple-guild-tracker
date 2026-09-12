@@ -180,6 +180,32 @@ fn state_checksum(value: &Value, volatile: &[&str]) -> String {
     crate::hash(&serde_json::to_string(&stable).unwrap_or_default())
 }
 
+const HUNTING_GAIN_MIN_EXCLUSIVE: i64 = 1_000_000_000;
+const HUNTING_GAIN_MAX_EXCLUSIVE: i64 = 1_000_000_000_000;
+
+fn activity_detected_at(samples: &[(Value, chrono::DateTime<Utc>)]) -> Option<String> {
+    let [(latest, latest_at), (previous, _)] = samples else {
+        return None;
+    };
+    let number = |value: &Value, key: &str| {
+        value.get(key)?.as_i64().or_else(|| value.get(key)?.as_str()?.parse().ok())
+    };
+    let gain = crate::exp::calculate_gain(
+        number(previous, "character_level")?,
+        number(previous, "character_exp")?,
+        number(latest, "character_level")?,
+        number(latest, "character_exp")?,
+    );
+    match gain {
+        crate::exp::ExpCalculation::Ok(value)
+            if value > HUNTING_GAIN_MIN_EXCLUSIVE && value < HUNTING_GAIN_MAX_EXCLUSIVE =>
+        {
+            Some(latest_at.to_rfc3339())
+        }
+        _ => None,
+    }
+}
+
 async fn build_changes(
     pool: &PgPool,
     names: &[String],
@@ -199,19 +225,25 @@ async fn build_changes(
             .bind(names)
             .fetch_all(pool)
             .await?;
-    let mut ocids = Vec::new();
+    let ocids: Vec<String> = rows.iter().map(|row| row.get("ocid")).collect();
+    let mut activity_samples: HashMap<String, Vec<(Value, chrono::DateTime<Utc>)>> = HashMap::new();
+    for row in sqlx::query("SELECT ocid,basic,observed_at FROM (SELECT ocid,basic,observed_at,row_number() OVER(PARTITION BY ocid ORDER BY observed_at DESC) AS sample_number FROM observations WHERE ocid=ANY($1)) samples WHERE sample_number<=2 ORDER BY ocid,sample_number")
+        .bind(&ocids).fetch_all(pool).await?
+    {
+        activity_samples.entry(row.get("ocid")).or_default().push((row.get("basic"),row.get("observed_at")));
+    }
     let mut guild_keys = BTreeSet::new();
     for row in rows {
         let ocid: String = row.get("ocid");
         let guild_key: Option<String> = row.get("guild_key");
         let basic: Value = row.get("basic");
         let observed: chrono::DateTime<Utc> = row.get("observed_at");
-        ocids.push(ocid.clone());
         if let Some(key) = &guild_key {
             guild_keys.insert(key.clone());
         }
-        if let Some(value) = normalized(&ocid, guild_key.as_deref(), &basic, &observed.to_rfc3339())
+        if let Some(mut value) = normalized(&ocid, guild_key.as_deref(), &basic, &observed.to_rfc3339())
         {
+            value["huntingDetectedAt"] = activity_samples.get(&ocid).and_then(|samples| activity_detected_at(samples)).into();
             let checksum = state_checksum(&value, &["observedAt"]);
             let key = ("current".to_owned(), ocid.clone());
             if existing.get(&key) != Some(&checksum) {
@@ -455,5 +487,16 @@ mod tests {
         let second=ingest_chunk(&body);remove_chunk(&mut body,&second);
         let third=ingest_chunk(&body);remove_chunk(&mut body,&third);
         assert!(ingest_empty(&body));
+    }
+
+    #[test]
+    fn hunting_detection_only_accepts_middle_gain_band() {
+        let at=Utc::now();
+        let samples=|gain:i64| vec![(json!({"character_level":281,"character_exp":gain}),at),(json!({"character_level":281,"character_exp":0}),at-chrono::Duration::minutes(15))];
+        assert!(activity_detected_at(&samples(1_000_000_001)).is_some());
+        assert!(activity_detected_at(&samples(999_999_999_999)).is_some());
+        assert!(activity_detected_at(&samples(1_000_000_000)).is_none());
+        assert!(activity_detected_at(&samples(1_000_000_000_000)).is_none());
+        assert!(activity_detected_at(&samples(0)).is_none());
     }
 }
