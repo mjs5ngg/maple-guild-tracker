@@ -164,11 +164,15 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let run: i64 = sqlx::query_scalar("INSERT INTO sync_runs DEFAULT VALUES RETURNING id")
         .fetch_one(pool)
         .await?;
-    let primaries: Vec<String> = sqlx::query_scalar(
+    let mut primaries: Vec<String> = sqlx::query_scalar(
         "SELECT DISTINCT primary_name FROM users WHERE last_active>now()-interval '168 hours'",
     )
     .fetch_all(pool)
     .await?;
+    let edge_subscriptions = crate::edge_sync::subscriptions(app).await.unwrap_or_default();
+    primaries.extend(edge_subscriptions.primaries.iter().cloned());
+    primaries.sort();
+    primaries.dedup();
     let mut basics = HashMap::new();
     let mut guild_cache = HashMap::new();
     let mut failed = 0i32;
@@ -225,7 +229,15 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
             .or_default()
             .push(row.get("name"));
     }
-    let targets = policy::targets(&users, &guild_of, &members, Utc::now());
+    let mut targets = policy::targets(&users, &guild_of, &members, Utc::now());
+    targets.extend(edge_subscriptions.targets);
+    for primary in edge_subscriptions.primaries {
+        targets.insert(primary.clone());
+        if let Some(names) = guild_of.get(&primary).and_then(|guild| members.get(guild)) {
+            targets.extend(names.iter().cloned());
+        }
+    }
+    let export_targets: Vec<String> = targets.iter().cloned().collect();
     let mut collected = Vec::new();
     for name in targets {
         let result = if let Some(value) = basics.get(&name) {
@@ -273,6 +285,7 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
         .bind(run)
         .execute(pool)
         .await?;
+    crate::edge_sync::enqueue_and_flush(app, &export_targets, run).await?;
     Ok(())
 }
 pub async fn run(app: Arc<App>) {

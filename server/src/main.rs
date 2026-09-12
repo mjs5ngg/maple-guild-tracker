@@ -2,6 +2,7 @@
 mod auth;
 mod backfill;
 mod collector;
+mod edge_sync;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/exp.rs"]
 mod exp;

@@ -146,8 +146,10 @@ async function internalAuth(request:Request,env:Env,body:string){
 async function subscriptions(request:Request,env:Env){
  await internalAuth(request,env,"");
  const active=nowSeconds()-168*3600;
+ const primaries=(await env.DB.prepare("SELECT DISTINCT primary_name AS name FROM users WHERE last_active>=? AND primary_name<>'' ORDER BY name").bind(active).all<{name:string}>()).results.map(row=>row.name);
+ const favorites=(await env.DB.prepare("SELECT DISTINCT f.name FROM favorites f JOIN users u ON u.id=f.user_id WHERE u.last_active>=? ORDER BY f.name").bind(active).all<{name:string}>()).results.map(row=>row.name);
  const rows=await env.DB.prepare(`WITH active AS (SELECT id,primary_name FROM users WHERE last_active>=?), targets AS (SELECT primary_name AS name FROM active WHERE primary_name<>'' UNION SELECT f.name FROM favorites f JOIN active a ON a.id=f.user_id UNION SELECT gm.name FROM active a JOIN characters p ON p.name=a.primary_name JOIN guild_members gm ON gm.guild_key=p.guild_key) SELECT name FROM targets ORDER BY name`).bind(active).all<{name:string}>();
- return json({activeSince:new Date(active*1000).toISOString(),targets:rows.results.map(row=>row.name)});
+ return json({activeSince:new Date(active*1000).toISOString(),primaries,favorites,targets:rows.results.map(row=>row.name)});
 }
 async function ingest(request:Request,env:Env){
  const raw=await request.text(),auth=await internalAuth(request,env,raw),parsed:unknown=(()=>{try{return JSON.parse(raw);}catch{return null;}})();

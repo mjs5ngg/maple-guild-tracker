@@ -117,6 +117,8 @@ sudo systemctl enable --now maple-exp
 
 현재 서비스 설정은 로컬 Linux DB만 지정합니다. 운영자 키·OAuth 설정이 없으면 수집·로그인은 비활성화됩니다. WSL의 systemd 서비스 활성화는 Windows 부팅 시 WSL 자체의 자동 기동까지 보장하지 않습니다. 외부 공개·Windows 부팅 연동은 별도 단계입니다.
 
+Cloudflare 공개부가 준비된 뒤 root 전용 `/etc/maple-exp/server.env`에 `EDGE_PUBLIC_ORIGIN`과 32자 이상의 `EDGE_INGEST_HMAC_SECRET`을 추가하면 다음 수집 주기부터 활성 구독 합집합을 받아옵니다. 로컬 변경분은 정규화해 `edge_outbox` 한 슬롯에 병합하고 HMAC-SHA256으로 전송합니다. 실패한 본문은 다음 주기에 최신 변경과 합쳐 재시도하며, 운영자 NEXON 키와 원본 응답은 포함하지 않습니다.
+
 Linux 작업본에서 `bash scripts/backup-linux.sh`로 `.local-runtime/backups`에 PostgreSQL custom-format 백업을 만듭니다. Unix 소켓과 현재 사용자 인증을 사용하고, 파일 권한은 600입니다. 비밀이 담길 수 있으므로 Git에 포함하지 않습니다. 백업 실패 파일은 `.partial`로 남고, 정상 백업은 자동 삭제하지 않습니다. 다른 DB를 대상으로 할 때는 libpq의 `PGHOST`, `PGDATABASE`, `PGUSER` 설정을 사용합니다.
 
 `bash scripts/test-linux-backup.sh`는 신규 임시 DB 두 개로 한글과 큰 정수를 실제 복원하고 파일 권한, 기존 대상과 잘못된 백업 거부를 검사합니다. 이 테스트에서 생성한 DB만 정리하며 표본 백업 파일은 남깁니다. 정기 백업 구성은 준비했지만 아직 활성화하지 않았고 다른 디스크 보관과 보관 기간 정책도 미적용입니다.
