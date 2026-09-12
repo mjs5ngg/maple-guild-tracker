@@ -10,4 +10,5 @@ server/target/
 .google-*
 __pycache__/
 web-dist/
+edge/.wrangler/
 .local-runtime/
