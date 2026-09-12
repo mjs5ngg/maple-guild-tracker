@@ -50,6 +50,7 @@ async function takeBudget(env:Env,bucket:string,limit:number){
 }
 async function bodyJson(request:Request){try{return await request.json();}catch{throw new ApiError(400,"요청 내용을 확인하세요.");}}
 function basic(row:Row){return {character_name:row.name,world_name:row.world_name,character_class:row.character_class,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate),character_guild_name:row.guild_name,character_image:row.image_url};}
+function historyBasic(row:Row){return {character_name:row.name,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate)};}
 
 async function device(request:Request,env:Env){
  try{return json({ok:true,userId:await userId(request,env)});}catch(error){if(!(error instanceof ApiError)||error.status!==401)throw error;}
@@ -81,9 +82,9 @@ async function dashboard(request:Request,env:Env){
  const ocids=rows.results.map(row=>String(row.ocid));
  let histories:Row[]=[],baselines:Row[]=[];
  if(ocids.length){
-  const placeholders=ocids.map(()=>"?").join(",");
-  histories=(await env.DB.prepare(`SELECT * FROM daily_snapshots WHERE ocid IN (${placeholders}) AND date>=? AND date<=? ORDER BY ocid,date`).bind(...ocids,start,today).all<Row>()).results;
-  baselines=(await env.DB.prepare(`SELECT * FROM today_baselines WHERE ocid IN (${placeholders}) AND date=?`).bind(...ocids,today).all<Row>()).results;
+  const ocidJson=JSON.stringify(ocids);
+  histories=(await env.DB.prepare("SELECT snapshot.ocid,snapshot.date,snapshot.name,snapshot.level,snapshot.exp,snapshot.exp_rate FROM daily_snapshots snapshot JOIN json_each(?) selected ON snapshot.ocid=selected.value WHERE snapshot.date>=? AND snapshot.date<=? ORDER BY snapshot.ocid,snapshot.date").bind(ocidJson,start,today).all<Row>()).results;
+  baselines=(await env.DB.prepare("SELECT baseline.ocid,baseline.name,baseline.level,baseline.exp,baseline.exp_rate FROM today_baselines baseline JOIN json_each(?) selected ON baseline.ocid=selected.value WHERE baseline.date=?").bind(ocidJson,today).all<Row>()).results;
  }
  const historyBy=new Map<string,Row[]>(),baselineBy=new Map(baselines.map(row=>[String(row.ocid),row]));
  for(const row of histories){const key=String(row.ocid),list=historyBy.get(key)||[];list.push(row);historyBy.set(key,list);}
@@ -96,7 +97,7 @@ async function dashboard(request:Request,env:Env){
  const characters=rows.results.map(row=>{
   const ocid=String(row.ocid),historyRows=historyBy.get(ocid)||[],membership:Record<string,boolean>={[today]:currentMembers.has(String(row.name))};
   for(const snapshot of historyRows)membership[String(snapshot.date)]=dailyMembers.has(`${snapshot.date}\0${snapshot.name}`);
-  return {ocid,basic:basic(row),observedAt:row.observed_at,history:historyRows.map(snapshot=>({date:snapshot.date,basic:basic(snapshot)})),todayBaseline:baselineBy.has(ocid)?basic(baselineBy.get(ocid)!):null,estimated:!historyRows.some(snapshot=>snapshot.date===yesterday),isGuildMember:currentMembers.has(String(row.name)),guildMembership:primary?.guild_key?membership:null};
+  return {ocid,basic:basic(row),observedAt:row.observed_at,history:historyRows.map(snapshot=>({date:snapshot.date,basic:historyBasic(snapshot)})),todayBaseline:baselineBy.has(ocid)?historyBasic(baselineBy.get(ocid)!):null,estimated:!historyRows.some(snapshot=>snapshot.date===yesterday),isGuildMember:currentMembers.has(String(row.name)),guildMembership:primary?.guild_key?membership:null};
  });
  const sync=await env.DB.prepare("SELECT status,started_at AS startedAt,finished_at AS finishedAt,succeeded,failed FROM sync_state WHERE id=1").first();
  return json({characters,sync,today});

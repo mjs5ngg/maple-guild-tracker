@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "maple-exp-public",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "3f0cc224-2fc1-4625-9e40-b6e08395bf42",
       "migrations_dir": "migrations"
     }
   ],
