@@ -79,6 +79,16 @@ Linux 전환 후 실제 수집217은 369명 성공·실패0으로 완료했습�
 
 서비스는 `/var/lib/maple-exp-backups`만 쓰기 가능한 상태 디렉터리로 사용하며 디렉터리 700·백업 파일 600 권한을 사용합니다. DB 설정은 root 소유 600 권한의 `/etc/maple-exp/backup.env`에서 PGHOST/PGDATABASE/PGUSER/PGPASSFILE로 전달합니다. 비밀을 명령 인수에 넣지 않습니다. 성공한 백업도 실제 복원 시험을 정기적으로 해야 하며, 다른 디스크 보관·용량 경보는 추가 작업입니다. 자동 백업 삭제는 수행하지 않습니다.
 
+15분 관측 원본은 `scripts/archive-observations-linux.sh`와 `maple-exp-observation-retention.timer`가 매일 05:15 KST에 정리합니다. 48시간이 지난 완결 KST 날짜만 `/var/lib/maple-exp-observation-archive`의 날짜별 NDJSON gzip으로 내보내고, gzip 무결성과 행 수가 원본과 일치한 뒤에만 `observations` 행을 삭제합니다. 압축본은 90일 뒤 삭제하며 `daily_snapshots`는 계속 보존합니다. 같은 날 파일이 이미 있으면 무결성과 건수를 다시 확인하므로 실패 후 재실행할 수 있습니다.
+
+```bash
+sudo install -d -m 755 /usr/local/lib/maple-exp
+sudo install -m 755 scripts/archive-observations-linux.sh /usr/local/lib/maple-exp/
+sudo install -m 644 server/deploy/maple-exp-observation-retention.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now maple-exp-observation-retention.timer
+```
+
 ### Linux 서비스와 백업
 
 `scripts/test-linux-service.sh`는 root로 실행하는 개발용 복구 시험입니다. 비밀번호 없는 검증 DB의 Unix 소켓 DATABASE_URL을 인수로 받으며, 기존 `maple-exp-rehearsal` 서비스가 있으면 거부합니다. 3200/3201의 키 없는 임시 서비스를 실행해 주 프로세스를 강제 종료하고 새 PID와 DB 연결 복구를 확인한 뒤 시험 서비스를 중지합니다. 해당 이름과 포트가 비어 있고 Linux 작업본에 운영 키를 저장하지 않은 환경에서만 실행하세요. 2026-09-08 복원 DB에서 통과했으며 Windows 부팅 연동·운영 서비스 활성화·실제 로그인 검증과는 별개입니다.
@@ -150,7 +160,7 @@ cargo test --manifest-path server/Cargo.toml -- --ignored
 - 실제 개인 키로 브라우저 CORS 조회·저장·새로고침 결과 검증. 현재는 HTTP 사전 요청만 검증한 상태입니다.
 - 보충 작업은 DB 큐에 보관하고 캐릭터별로 공정하게 배분합니다. 실패는 30분~6시간 지연 재시도합니다. 실제 대규모 처리량 측정은 남아 있습니다.
 - 동일 OCID 닉네임 변경은 이름 이력·원본을 보존하며 대표·즐겨찾기를 추적합니다. 다른 OCID 이름 충돌은 자동 병합하지 않습니다. 날짜별 길드 가입·탈퇴 순위 이관은 남아 있습니다.
-- 원본 장기 보관량 측정 및 승인된 보관 정책 결정. 현재 자동 원본 삭제는 없습니다.
+- 압축 원본의 실제 90일 증가량과 백업 디스크 여유를 운영 화면에서 경보로 제공하는 작업.
 - Android/PC의 서버 연결 전환, 위젯 활동 연결은 후속 단계입니다.
 - 광고 네트워크 등록 정보 연결과 도메인·HTTPS·백업/복구 공개 환경 설정.
 - WebMCP 서버 상태 조회는 기능 감지 방식으로 추가했으나 지원 브라우저 실행 검증은 하지 않았습니다.

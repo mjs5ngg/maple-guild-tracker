@@ -1,0 +1,11 @@
+# 매일 백업이 끝난 뒤 관측 원본 보존 작업을 실행합니다.
+[Unit]
+Description=Daily Maple EXP observation retention
+
+[Timer]
+OnCalendar=*-*-* 20:15:00 UTC
+Persistent=true
+Unit=maple-exp-observation-retention.service
+
+[Install]
+WantedBy=timers.target
