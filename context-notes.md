@@ -423,3 +423,5 @@
 - 프런트 재설계는 Tailwind 4, Radix Dialog·Tabs·Tooltip, TanStack Query와 자체 호스팅 Pretendard를 사용한다. 실제 화면 교체 전에 네 가지 고정 크기 시안을 만들고 이를 브라우저 스크린샷 회귀 기준으로 사용한다.
 - 공개 웹 실제 화면을 대표 요약, 공용 길드·즐겨찾기 순위, 지연 로딩 성장 패널, 독립 설정 대화상자로 교체했다. 오늘·7일·30일과 순위 기준·테마는 브라우저에 보존하며 대표 순위·격차는 즐겨찾기 탭에서도 길드 기준을 유지한다. null 획득량에는 양수 기호를 붙이지 않고 `자료 없음`으로 표시한다.
 - 1440px 실제 로컬 서버 데이터와 연결해 새 레이아웃을 확인했다. 새 익명 브라우저에서 대표 미지정·최근 동기화·빈 기록 상태가 무너지지 않았고, 네 가지 고정 시안은 Chrome 스크린샷 회귀 시험을 통과했다. Vitest와 Playwright 수집 경로는 분리했다.
+- 2026-09-12 새 웹 번들을 `/home/mapledev/maple-releases/20260912-web-redesign`로 배포하고 공개·운영 서비스를 함께 전환했다. 공개 ngrok의 새 JS/CSS와 `/api/status`, 운영 `/status` 200 및 양쪽 systemd 활성 상태를 확인했다. 재시작 시 실행 중 수집 539는 interrupted로 보존되고 540으로 즉시 재개됐다.
+- 개인 조회 새 디자인은 Cloudflare Pages 배포 `59d2b8c6.maple-exp-personal.pages.dev`를 거쳐 정식 `maple-exp-personal.pages.dev`에 반영했다. 정식 주소 HTML·CSP·no-store·no-referrer·nosniff를 확인했다. Wrangler 자격 증명은 여전히 Pages 쓰기만 있어 Worker·D1 배포에는 재승인이 필요하다.
