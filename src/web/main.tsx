@@ -1,5 +1,5 @@
 // 공용 수집 기록과 개인 조회 결과를 분리하여 표시하는 웹 대시보드입니다.
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {createRoot} from "react-dom/client";
 import type {Snapshot} from "./types";
 import {compact,sortRows,todayGain,dailyPoints,periodGain as calculatePeriodGain} from "./experience";
@@ -10,6 +10,7 @@ import {syncStatusText} from "./syncStatus";
 import {loadDashboard} from "./loadDashboard";
 import {startSession} from "./startSession";
 import {dashboardApi as api} from "./dashboardApi";
+import {ACTIVITY_REFRESH_MS,DASHBOARD_REFRESH_MS,refreshDue} from "./refreshPolicy";
 function App(){
  useEffect(registerStatusTool,[]);
  const [status,setStatus]=useState<any>(null),[me,setMe]=useState<any>(null),[error,setError]=useState("");
@@ -18,14 +19,25 @@ function App(){
  const [personal,setPersonal]=useState<Snapshot[]>([]),[period,setPeriod]=useState(localStorage.getItem("web-ranking")!=="total");
  const [scope,setScope]=useState("guild"),[sync,setSync]=useState<any>(null);
  const [days,setDays]=useState(Number(localStorage.getItem("web-days"))===7?7:Number(localStorage.getItem("web-days"))===30?30:1);
- async function load(){await loadDashboard(()=>api("/api/dashboard"),data=>{setRows(data.characters);setSync(data.sync);},setLoadError);}
+ const lastDashboardAt=useRef(0),lastActivityAt=useRef(0),loading=useRef<Promise<void>|null>(null);
+ async function load(force=true){
+  if(!force&&!refreshDue(lastDashboardAt.current))return;
+  if(loading.current)return loading.current;
+  const request=loadDashboard(()=>api("/api/dashboard"),data=>{lastDashboardAt.current=Date.now();setRows(data.characters);setSync(data.sync);},setLoadError);
+  loading.current=request;
+  try{await request;}finally{if(loading.current===request)loading.current=null;}
+ }
+ function recordActivity(){
+  const now=Date.now();if(!refreshDue(lastActivityAt.current,now,ACTIVITY_REFRESH_MS))return;
+  lastActivityAt.current=now;void api("/api/activity",{}).catch(()=>{});
+ }
  useEffect(()=>{
- let loggedIn=false;
+ let ready=false;
  void api("/api/status").then(setStatus).catch(e=>setError(String(e)));
- void startSession(api).then(data=>{loggedIn=true;setMe(data);setPrimary(data.primary);setFavorites(data.favorites.join("\n"));void api("/api/activity",{}).catch(()=>{});void load();}).catch(e=>setError(String(e)));
- const timer=setInterval(()=>{if(loggedIn&&document.visibilityState==="visible")void load();},60000);
- const active=()=>{if(loggedIn&&document.visibilityState==="visible"){void api("/api/activity",{}).catch(()=>{});void load();}};
- let lastAction=0;const action=()=>{if(loggedIn&&Date.now()-lastAction>60000){lastAction=Date.now();void api("/api/activity",{}).catch(()=>{});}};
+ void startSession(api).then(data=>{ready=true;setMe(data);setPrimary(data.primary);setFavorites(data.favorites.join("\n"));recordActivity();void load();}).catch(e=>setError(String(e)));
+ const timer=setInterval(()=>{if(ready&&document.visibilityState==="visible")void load(false);},DASHBOARD_REFRESH_MS);
+ const active=()=>{if(ready&&document.visibilityState==="visible"){recordActivity();void load(false);}};
+ const action=()=>{if(ready)recordActivity();};
  document.addEventListener("pointerdown",action);document.addEventListener("keydown",action);
  document.addEventListener("visibilitychange",active);
  return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",active);document.removeEventListener("pointerdown",action);document.removeEventListener("keydown",action);};
@@ -47,7 +59,7 @@ function App(){
  if(event.data?.type==="maple-results"&&Array.isArray(event.data.rows)){
  const valid=event.data.rows.slice(0,1000).filter((r:any)=>r&&typeof r.basic?.character_name==="string"&&typeof r.ocid==="string"&&Number.isInteger(r.basic.character_level)&&/^\d+$/.test(String(r.basic.character_exp))&&Number.isFinite(Date.parse(r.observedAt)));
  setPersonal(valid.map((r:Snapshot)=>{const old=rows.find(s=>s.ocid===r.ocid);return {...r,history:old?.history||[],todayBaseline:old?.todayBaseline,estimated:old?.estimated,isGuildMember:old?.isGuildMember,guildMembership:old?.guildMembership};}));
- void api("/api/activity",{}).catch(()=>{});window.removeEventListener("message",receive);
+ recordActivity();window.removeEventListener("message",receive);
  }
  };
  window.addEventListener("message",receive);

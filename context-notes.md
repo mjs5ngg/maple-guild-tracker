@@ -407,3 +407,8 @@
 - 대시보드와 브라우저 상태 도구의 API 요청에 `ngrok-skip-browser-warning: 1`을 적용하고 HTML 응답을 사용자용 연결 오류로 분류했다. 전체56개 테스트·TypeScript·공개 환경 웹 빌드 통과. `/home/mapledev/maple-releases/20260912-dashboard-api-v2`로 전환하고 공개 번들에 헤더 포함, `/api/status` JSON200을 확인했다.
 - 운영 화면은 예전 debug 바이너리가 이미 적용된 0005 마이그레이션을 몰라 `VersionMissing(5)`로 재시작 중이었다. 검증된 공개 릴리스 바이너리의 `--operations-only`로 교체하여 로컬 `/status` JSON200을 복구했다.
 - Windows 예약 작업 `Maple EXP Linux Runtime`이 재부팅 뒤 Ready 상태여서 WSL 명령 종료마다 서버와 수집이 중단됐다. 작업을 다시 실행하고 누락 실행 보완을 위해 StartWhenAvailable을 켰다. 이후 한 완전 주기가 406성공·0실패로 끝났으며, 화면의 30실패는 직전 한 주기의 과거 보충 요청 실패였고 영구 실패가 아니었다.
+- 2026-09-12 새 기준은 Cloudflare 혼합형이다. 사용자 웹·API는 workers.dev 동일 출처, 개인 키 직접 조회는 기존 Pages, 수집기·NEXON 원본·운영 화면은 로컬에 둔다. 공개부에는 정규화 변경분만 보낸다. 플랫폼 자동 유료 전환과 도메인 구매는 하지 않는다.
+- 운영 DB 실측285MB 중 observations가251MB이며 2026-09-08~12 약4일간148,110건이다. 0.5GB 외부 PostgreSQL 무료 한도에 그대로 이관할 수 없으므로 D1 5GB와 변화 기반 쓰기를 사용하고, 로컬 고빈도 원본에도 보존 기한을 적용한다.
+- 시각 방향은 절제된 메이플풍, 재설계 범위는 공개 웹·PC·Android·모든 위젯으로 확정했다. 초기 수익화는 외부 광고 스크립트가 아닌 쿠팡/링크프라이스 제휴 카드이며 승인 링크 전에는 숨긴다.
+- 공개 웹은 대시보드 성공 시각을 ref로 기록하고 15분이 지나야 자동 재조회한다. 진행 중 Promise를 공유해 interval·탭 복귀 요청을 합친다. activity는 최초·탭 복귀·사용자 조작 모두 공통 1시간 gate를 통한다. 개인 새로고침 완료도 같은 gate를 사용한다.
+- 2026-09-12 13:09 KST에 요청 절감 빌드를 `/home/mapledev/maple-releases/20260912-request-budget`로 배포했다. 공개 `/api/status`와 로컬 운영 `/status`가 JSON 200을 반환하고 두 systemd 서비스가 새 릴리스에서 실행되는 것을 확인했다.
