@@ -451,3 +451,4 @@
 - Linux는 GitHub `2179acf`를 깨끗한 `/home/mapledev/maple-build-20260913-edge-chase`에서 시험·빌드하고 `/home/mapledev/maple-releases/20260913-edge-chase`로 전환했다. 이전 `/home/mapledev/maple-releases/20260912-web-activity`는 롤백용으로 보존한다. 첫 수집 630은 424명 성공·실패 0으로 끝났고, 이전 HTTP 400 outbox를 새 형식으로 병합 전송한 뒤 outbox가 비었다.
 - 최종 검증은 Vitest 76개, Rust 18개 통과와 DB 의존 9개 제외, Android JVM 24개, Playwright 고정 시안 4개 및 실제 운영 주소 데스크톱·모바일 해시 탐색 통과다. ARM64 APK는 버전명 `0.4.0`, 버전코드 `4000`, `guildmatefollow://auth` 딥링크, v2·v3 서명을 확인했다. SHA-256은 `D5A8DCB7BA6393421CDACC444162BDE4A5C518F96867815053799F2ED1644229`다.
 - 검증 시 ADB 연결 기기가 없어 S24+ 설치와 실제 Google 왕복·위젯 갱신은 수행하지 못했다. APK는 `release/guildmate-follow-android-arm64-v0.4.0.apk`에 보존한다.
+- 최종 원격 D1 확인에서 현재 캐릭터 424명, 일별 기록 11,265건, 사냥 상태 1명과 수집 완료 시각 `2026-09-13T01:25:58.704876Z`가 확인됐다. Windows 휴대용 장치에도 S24+나 Samsung MTP는 없고 이동식 USB `E:`만 보여 기기 전송은 생략했다. 기존 ngrok 서비스는 실패 상태지만 새 공개 입구가 Cloudflare Worker이므로 사용자 경로에는 영향이 없으며, 계획대로 안정화 기간 뒤 정리한다.
