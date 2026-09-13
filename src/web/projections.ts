@@ -24,6 +24,11 @@ export function absoluteProgress(basic:Basic,table:string[]):bigint|null{
  }catch{return null;}
 }
 
+export function absoluteGap(primary:Basic,target:Basic,table:string[]):bigint|null{
+ const own=absoluteProgress(primary,table),other=absoluteProgress(target,table);
+ return own===null||other===null?null:other-own;
+}
+
 export function levelUpProjection(snapshot:Snapshot,table:string[],today=kstDate()):Projection{
  const level=snapshot.basic.character_level;
  if(level>=300)return {label:"최고 레벨",days:null,date:null,status:"complete"};
@@ -39,14 +44,14 @@ export function levelUpProjection(snapshot:Snapshot,table:string[],today=kstDate
 }
 
 export function catchupProjection(primary:Snapshot,target:Snapshot,table:string[],today=kstDate()):Projection{
- const own=absoluteProgress(primary.basic,table),other=absoluteProgress(target.basic,table);
- if(own===null||other===null)return {label:"계산표 갱신 필요",days:null,date:null,status:"unsupported"};
- if(own>=other)return {label:"이미 추월",days:0,date:today,status:"complete"};
+ const gap=absoluteGap(primary.basic,target.basic,table);
+ if(gap===null)return {label:"계산표 갱신 필요",days:null,date:null,status:"unsupported"};
+ if(gap<=0n)return {label:"이미 추월",days:0,date:today,status:"complete"};
  const ownAverage=sevenDayAverage(primary,table),otherAverage=sevenDayAverage(target,table);
  if(ownAverage===null||otherAverage===null)return {label:"7일 기록 부족",days:null,date:null,status:"insufficient"};
  const closing=ownAverage-otherAverage;
  if(closing<=0n)return {label:"현재 추세로 추월 어려움",days:null,date:null,status:"impossible"};
- const exactDays=ceilingDivide(other-own,closing);
+ const exactDays=ceilingDivide(gap,closing);
  if(exactDays>3650n)return {label:"10년 이상",days:3651,date:null,status:"impossible"};
  const days=Number(exactDays);
  const date=addDays(today,days);return {label:dateLabel(date),days,date,status:"ready"};
