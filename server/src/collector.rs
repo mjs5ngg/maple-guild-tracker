@@ -4,7 +4,18 @@ use chrono::{Duration as Days, Timelike, Utc};
 use futures::{stream, StreamExt};
 use serde_json::Value;
 use sqlx::{Connection, Row};
-use std::collections::HashMap;
+use std::{collections::HashMap,sync::OnceLock};
+
+const API_MIN_INTERVAL: Duration = Duration::from_millis(25);
+static API_GATE: OnceLock<tokio::sync::Mutex<tokio::time::Instant>> = OnceLock::new();
+
+async fn wait_for_api_slot() {
+    if cfg!(test) { return; }
+    let gate = API_GATE.get_or_init(|| tokio::sync::Mutex::new(tokio::time::Instant::now()));
+    let mut next = gate.lock().await;
+    tokio::time::sleep_until(*next).await;
+    *next = tokio::time::Instant::now() + API_MIN_INTERVAL;
+}
 
 pub(crate) async fn api(app: &App, path: &str, params: &[(&str, &str)]) -> Result<Value, ()> {
     #[cfg(test)]
@@ -12,8 +23,8 @@ pub(crate) async fn api(app: &App, path: &str, params: &[(&str, &str)]) -> Resul
     #[cfg(not(test))]
     let base = "https://open.api.nexon.com";
     for attempt in 0..4 {
-        // 직렬 수집과 호출 간격으로 동시 실행·순간 호출량을 제한합니다.
-        tokio::time::sleep(Duration::from_millis(if cfg!(test) { 1 } else { 220 })).await;
+        // 병렬 작업 전체가 하나의 게이트를 통과해 순간 호출이 한꺼번에 몰리지 않게 합니다.
+        wait_for_api_slot().await;
         let response = app
             .http
             .get(format!("{base}/maplestory/v1/{path}"))
@@ -179,6 +190,7 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let mut basics = HashMap::new();
     let mut guild_cache = HashMap::new();
     let mut failed = 0i32;
+    let mut backfill_failed = 0i32;
     let mut succeeded = 0i32;
     for primary in primaries {
         if primary.is_empty() || basics.contains_key(&primary) {
@@ -271,7 +283,7 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
     let mut active_guilds: Vec<String> = guild_cache.values().cloned().collect();
     active_guilds.sort();
     active_guilds.dedup();
-    failed += crate::guild_history::collect(app, &active_guilds, start, end).await?;
+    backfill_failed += crate::guild_history::collect(app, &active_guilds, start, end).await?;
     backfill::enqueue(pool, &collected, start, end).await?;
     let jobs = backfill::due(pool, &collected, start, Utc::now(), 300).await?;
     for (ocid, date, attempts) in jobs {
@@ -285,7 +297,7 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
         {
             Ok(basic) => backfill::complete(pool, &ocid, date, &basic).await?,
             Err(_) => {
-                failed += 1;
+                backfill_failed += 1;
                 backfill::failed(pool, &ocid, date, attempts, Utc::now()).await?;
             }
         }
@@ -297,6 +309,9 @@ async fn cycle_locked(app: &App) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
     crate::edge_sync::enqueue_and_flush(app, &export_targets, run).await?;
+    if backfill_failed > 0 {
+        eprintln!("과거 기록 보충 {backfill_failed}건은 다음 주기에 재시도합니다. 최신 상태 수집 결과에는 포함하지 않습니다.");
+    }
     Ok(())
 }
 pub async fn run(app: Arc<App>) {
@@ -310,5 +325,14 @@ pub async fn run(app: Arc<App>) {
         if cycle(&app).await.is_err() {
             eprintln!("공용 수집 저장 작업 실패. 다음 주기에 재시도합니다.");
         }
+    }
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::*;
+    #[test]
+    fn service_key_requests_are_globally_spaced_but_remain_fast() {
+        assert_eq!(API_MIN_INTERVAL, Duration::from_millis(25));
     }
 }

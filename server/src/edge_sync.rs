@@ -263,7 +263,8 @@ async fn build_changes(
                 .unwrap_or((None, None));
             value["activityDecision"] = decision.into();
             value["activityDecisionAt"] = decided_at.into();
-            let checksum = state_checksum(&value, &["observedAt"]);
+            // 판정 시각은 상태가 유지되는 동안 매번 달라지므로 공개 상태 변경으로 보지 않습니다.
+            let checksum = state_checksum(&value, &["observedAt", "activityDecisionAt"]);
             let key = ("current".to_owned(), ocid.clone());
             if existing.get(&key) != Some(&checksum) {
                 current.push(value);
@@ -563,5 +564,12 @@ mod tests {
         assert_eq!(activity_decision(&samples(1_000_000_000)).0, None);
         assert_eq!(activity_decision(&samples(1_000_000_000_000)).0, None);
         assert_eq!(activity_decision(&samples(1_000_000_000_001)).0, None);
+    }
+
+    #[test]
+    fn unchanged_activity_does_not_export_again_for_a_new_decision_time() {
+        let first=json!({"ocid":"a","exp":"1","activityDecision":"inactive","activityDecisionAt":"2026-09-13T00:00:00Z","observedAt":"2026-09-13T00:00:00Z"});
+        let second=json!({"ocid":"a","exp":"1","activityDecision":"inactive","activityDecisionAt":"2026-09-13T00:15:00Z","observedAt":"2026-09-13T00:15:00Z"});
+        assert_eq!(state_checksum(&first,&["observedAt","activityDecisionAt"]),state_checksum(&second,&["observedAt","activityDecisionAt"]));
     }
 }
