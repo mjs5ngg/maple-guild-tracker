@@ -33,7 +33,7 @@ fn web_projection_preserves_exact_experience_and_source() {
 
 pub async fn status(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
     Json(
-        json!({"database":app.db.is_some(),"collector":app.db.is_some()&&app.operator_key.is_some(),"providers":auth::available(),"intervalMinutes":15,"favoriteLimit":policy::FAVORITE_LIMIT}),
+        json!({"database":app.db.is_some(),"dataMode":"device-direct","collectorRollback":app.db.is_some()&&app.operator_key.is_some(),"providers":auth::available(),"intervalMinutes":15,"favoriteLimit":policy::FAVORITE_LIMIT}),
     )
 }
 pub async fn me(State(app): State<Arc<App>>, headers: HeaderMap) -> ApiResult<serde_json::Value> {
@@ -206,6 +206,6 @@ pub async fn dashboard(
     .await?;
     let sync=last.map(|r|json!({"status":r.get::<String,_>("status"),"startedAt":r.get::<chrono::DateTime<chrono::Utc>,_>("started_at"),"finishedAt":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("finished_at"),"succeeded":r.get::<i32,_>("succeeded"),"failed":r.get::<i32,_>("failed")}));
     Ok(Json(
-        json!({"characters":characters,"sync":sync,"today":today}),
+        json!({"characters":characters,"sync":sync,"today":today,"legacyBootstrap":true}),
     ))
 }

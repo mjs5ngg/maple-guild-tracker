@@ -26,7 +26,7 @@ function sessionCookie(request:Request,name:string,value:string,maxAge:number){r
 function addSecurity(response:Response,api=false){
  const headers=new Headers(response.headers);
  headers.set("x-content-type-options","nosniff"); headers.set("referrer-policy","no-referrer");
- headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'");
+ headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://maple-exp-personal.pages.dev; frame-ancestors 'none'; base-uri 'none'");
  if(api)headers.set("cache-control","no-store");
  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }
@@ -126,7 +126,7 @@ async function dashboard(request:Request,env:Env){
   return {ocid,basic:basic(row),observedAt:row.observed_at,history:historyRows.map(snapshot=>({date:snapshot.date,basic:historyBasic(snapshot)})),todayBaseline:baselineBy.has(ocid)?historyBasic(baselineBy.get(ocid)!):null,estimated:!historyRows.some(snapshot=>snapshot.date===yesterday),isGuildMember:currentMembers.has(String(row.name)),guildMembership:primary?.guild_key?membership:null,isHunting:Number(row.is_hunting)===1,activityDecidedAt:row.activity_decided_at};
  });
  const sync=await env.DB.prepare("SELECT status,started_at AS startedAt,finished_at AS finishedAt,succeeded,failed FROM sync_state WHERE id=1").first();
- return json({characters,sync,today});
+ return json({characters,sync,today,legacyBootstrap:true});
 }
 
 async function googleStart(request:Request,env:Env){
@@ -216,7 +216,7 @@ async function ingest(request:Request,env:Env){
 async function route(request:Request,env:Env){
  const url=new URL(request.url),path=url.pathname,method=request.method;
  if(method!=="GET"&&method!=="HEAD"&&!path.startsWith("/internal/")){const origin=request.headers.get("origin");if(origin!==url.origin)throw new ApiError(403,"허용하지 않는 요청 출처입니다.");}
- if(path==="/api/status"&&method==="GET")return json({database:true,collector:Boolean(env.INGEST_HMAC_SECRET),providers:[{name:"google",configured:Boolean(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)},{name:"kakao",configured:false},{name:"naver",configured:false}],intervalMinutes:15,favoriteLimit:FAVORITE_LIMIT});
+ if(path==="/api/status"&&method==="GET")return json({database:true,dataMode:"device-direct",collectorRollback:Boolean(env.INGEST_HMAC_SECRET),providers:[{name:"google",configured:Boolean(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)},{name:"kakao",configured:false},{name:"naver",configured:false}],intervalMinutes:15,favoriteLimit:FAVORITE_LIMIT});
  if(path==="/api/device"&&method==="POST")return device(request,env);
  if(path==="/api/me"&&method==="GET")return me(request,env);
  if(path==="/api/profile"&&method==="POST")return profile(request,env);

@@ -21,6 +21,6 @@ return {
  resolve:{alias:{"/src":path.resolve("src")}},
  build:{outDir:path.resolve("web-dist",direct?"direct":"dashboard"),emptyOutDir:true},
  server:{host:"127.0.0.1",port:direct?3101:3102,strictPort:true,fs:{allow:[process.cwd()]},proxy:direct?undefined:{"/api":localProxy,"/auth":localProxy},
- headers:direct?{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3101 https://open.api.nexon.com; img-src 'self' https://open.api.nexon.com data:; frame-ancestors 'none'; base-uri 'none'","Referrer-Policy":"no-referrer"}:{}},
+ headers:direct?{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3101 https://open.api.nexon.com; img-src 'self' https://open.api.nexon.com data:; frame-ancestors http://127.0.0.1:3102 https://maple-exp-public.mjs5ng.workers.dev; base-uri 'none'","Referrer-Policy":"no-referrer"}:{}},
  preview:{host:"127.0.0.1",port:direct?3101:3102,strictPort:true}
 };});

@@ -108,7 +108,7 @@ async fn guard(State(app): State<Arc<App>>, request: Request, next: Next) -> Res
     headers.insert("cache-control", "no-store".parse().unwrap());
     headers.insert("x-content-type-options", "nosniff".parse().unwrap());
     headers.insert("referrer-policy", "no-referrer".parse().unwrap());
-    headers.insert("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
+    headers.insert("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src http://127.0.0.1:3101 https://maple-exp-personal.pages.dev; frame-ancestors 'none'; base-uri 'none'".parse().unwrap());
     response
 }
 fn parse_port(value: Option<&str>, default: u16) -> Result<u16, &'static str> {

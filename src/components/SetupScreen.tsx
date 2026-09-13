@@ -16,6 +16,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState<string | null>(null);
+  const [serviceKeyConfirmed, setServiceKeyConfirmed] = useState(false);
   const [apiHelpOpen, setApiHelpOpen] = useState(false);
 
   async function submit(event: FormEvent) {
@@ -61,7 +62,8 @@ export function SetupScreen({ progress, onComplete }: Props) {
         </div>
         <form onSubmit={submit}>
           <div className="setup-api-label"><label>NEXON Open API 키</label><button type="button" onClick={() => setApiHelpOpen(true)}><HelpCircle />API 키 발급 방법</button></div>
-          <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} autoComplete="off" placeholder="발급받은 API 키" disabled={busy} />
+          <input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} autoComplete="off" placeholder="서비스 단계 API 키" disabled={busy} />
+          <label className="service-key-confirm"><input type="checkbox" checked={serviceKeyConfirmed} onChange={(event) => setServiceKeyConfirmed(event.target.checked)} disabled={busy} />내 명의로 발급한 서비스 단계 키입니다.</label>
           <label>대표 캐릭터명</label>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="길드에 가입된 캐릭터" disabled={busy} />
           {confirmed && <div className="confirmed">확인됨 · {confirmed}</div>}
@@ -73,7 +75,7 @@ export function SetupScreen({ progress, onComplete }: Props) {
             </div>
           )}
           {error && <div className="error-banner">{error}</div>}
-          <button className="primary-button" disabled={busy || !apiKey.trim() || !name.trim()}>{busy ? "기록을 준비하는 중" : "길드 기록 시작"}</button>
+          <button className="primary-button" disabled={busy || !apiKey.trim() || !name.trim() || !serviceKeyConfirmed}>{busy ? "기록을 준비하는 중" : "길드 기록 시작"}</button>
         </form>
         <p className="source-note">Data based on NEXON Open API</p>
       </section>

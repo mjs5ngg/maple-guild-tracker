@@ -479,7 +479,37 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
             "먼저 대표 캐릭터를 설정해 주세요.".into(),
         ));
     }
-    let characters = db::widget_character_records(&connection)?;
+    let oguild_id = db::get_setting(&connection, "oguild_id")?;
+    let world_name = db::get_setting(&connection, "world_name")?.unwrap_or_default();
+    drop(connection);
+    if let Some(oguild_id) = oguild_id {
+        if let Ok(guild) = client.guild_basic_current(&api_key, &oguild_id).await {
+            let connection = db::open(db_path)?;
+            let missing = guild
+                .guild_member
+                .iter()
+                .filter(|name| db::character_record_by_name(&connection, name).ok().flatten().is_none())
+                .cloned()
+                .collect::<Vec<_>>();
+            drop(connection);
+            let mut resolved = stream::iter(missing)
+                .map(|name| {
+                    let client = client.clone();
+                    let key = api_key.clone();
+                    async move { (name.clone(), client.ocid(&key, &name).await) }
+                })
+                .buffer_unordered(5);
+            while let Some((name, Ok(ocid))) = resolved.next().await {
+                let connection = db::open(db_path)?;
+                let _ = db::upsert_character(&connection, &name, &world_name, "", None, &ocid, false)?;
+            }
+            let mut connection = db::open(db_path)?;
+            let today = Utc::now().with_timezone(&Seoul).date_naive().to_string();
+            db::replace_memberships(&mut connection, &today, &guild.guild_member)?;
+        }
+    }
+    let connection = db::open(db_path)?;
+    let characters = db::live_character_records(&connection)?;
     let completed_date = latest_completed_date(Utc::now())
         .format("%Y-%m-%d")
         .to_string();
@@ -603,7 +633,7 @@ pub async fn background_loop(app: AppHandle) {
         if is_configured(&app) && sync_all(app.clone(), None).await.is_ok() {
             let _ = sync_live(app.clone()).await;
         }
-        tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
     }
 }
 

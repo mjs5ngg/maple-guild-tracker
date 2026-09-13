@@ -211,7 +211,18 @@ class MapleWidgetProviderTest {
     assertTrue(worker.contains("NetworkType.CONNECTED"))
     assertTrue(worker.contains("ExistingPeriodicWorkPolicy.KEEP"))
     assertTrue(worker.contains("syncAndBuildSnapshot"))
+    assertFalse(worker.contains("/api/dashboard"))
+    assertFalse(worker.contains("fetchPublicSnapshot"))
     assertTrue(gradle.contains("androidx.work:work-runtime-ktx"))
     assertTrue(proguard.contains("WidgetSyncWorker"))
+  }
+
+  @Test
+  fun directWebResultsAreStoredOnlyThroughTheAndroidDeviceBridge() {
+    val activity = File("src/main/java/com/mjs5ngg/guildmatefollow/MainActivity.kt").readText()
+    assertTrue(activity.contains("addJavascriptInterface(AndroidDirectBridge(), \"AndroidDirect\")"))
+    assertTrue(activity.contains("storeServiceKeyOnDevice"))
+    assertTrue(activity.contains("importDirectSnapshots"))
+    assertFalse(activity.contains("getServiceKey"))
   }
 }

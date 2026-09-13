@@ -146,6 +146,20 @@ impl NexonClient {
             api_key,
             &[("oguild_id", oguild_id), ("date", date)],
         )
+            .await
+    }
+
+    #[cfg(target_os = "android")]
+    pub async fn guild_basic_current(
+        &self,
+        api_key: &str,
+        oguild_id: &str,
+    ) -> Result<GuildBasicResponse, AppError> {
+        self.get(
+            "/maplestory/v1/guild/basic",
+            api_key,
+            &[("oguild_id", oguild_id)],
+        )
         .await
     }
 }

@@ -12,12 +12,17 @@ import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import io.crates.keyring.Keyring
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 class MainActivity : TauriActivity() {
+  companion object {
+    @JvmStatic private external fun storeServiceKey(value: String): Boolean
+    @JvmStatic private external fun importDirectSnapshots(dbPath: String, payload: String): Boolean
+  }
   override val handleBackNavigation: Boolean = true
   private val publicOrigin = "https://maple-exp-public.mjs5ng.workers.dev"
   private var dashboardWebView: WebView? = null
@@ -27,6 +32,18 @@ class MainActivity : TauriActivity() {
     @JavascriptInterface
     fun startGoogleLogin() {
       Thread { beginGoogleLogin() }.start()
+    }
+  }
+
+  private inner class AndroidDirectBridge {
+    @JavascriptInterface
+    fun storeServiceKeyOnDevice(value: String): Boolean = value.length <= 2048 && storeServiceKey(value)
+
+    @JavascriptInterface
+    fun importSnapshots(payload: String): Boolean {
+      if (payload.length > 64 * 1024 * 1024) return false
+      val database = File(applicationContext.applicationInfo.dataDir, "tracker.sqlite3")
+      return importDirectSnapshots(database.absolutePath, payload)
     }
   }
 
@@ -41,6 +58,7 @@ class MainActivity : TauriActivity() {
   override fun onWebViewCreate(webView: WebView) {
     dashboardWebView = webView
     webView.addJavascriptInterface(AndroidAuthBridge(), "AndroidAuth")
+    webView.addJavascriptInterface(AndroidDirectBridge(), "AndroidDirect")
     pendingLoginCode?.let { exchangeLogin(it) }
   }
 

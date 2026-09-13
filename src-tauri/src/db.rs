@@ -515,7 +515,7 @@ pub fn live_character_records(connection: &Connection) -> Result<Vec<CharacterRe
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
-#[cfg(any(target_os = "android", test))]
+#[cfg(test)]
 pub fn widget_character_records(connection: &Connection) -> Result<Vec<CharacterRecord>, AppError> {
     let mut statement = connection.prepare(
         r#"SELECT c.id, ci.ocid
