@@ -513,3 +513,6 @@
 - 새 분산 조회 구조에서 쓰임이 사라진 `/api/activity`도 웹 호출을 제거하고 기존 클라이언트 호환용 무쓰기 응답으로 바꿨다. `/api/device`와 `/api/activity` 모두 실주소에서 `deprecated:true`와 무쿠키 응답을 확인했다.
 - 공개 Worker 버전 `f93400f3-e0af-4bcf-bf61-529537503bff`와 개인 조회 Pages 배포 `fbcd7b1d.maple-exp-personal.pages.dev`를 반영했다. 중앙 수집기는 `inactive`·`disabled`, 운영 화면은 `active` 상태다.
 - 공개 주소·표시 안정화 커밋 `f06c874`와 익명 D1 쓰기 제거 커밋 `5c52df5`를 GitHub `main`에 반영했다.
+- 2026-09-15 모바일 Chrome의 설정 화면 차단을 실서비스에서 재현했다. 배포 직전 일반 `npm run web:build`가 `__DIRECT_ORIGIN__`에 로컬 기본값 `http://127.0.0.1:3101`을 넣고 Worker 정적 자산을 덮어쓴 것이 직접 원인이다. CSP 차단은 정상 보안 동작이며 production build 자체가 운영 Pages 주소를 기본 사용하도록 고친다.
+- production build는 개발용 `.env`보다 `https://app.guildmate.workers.dev`와 `https://maple-exp-personal.pages.dev`를 우선하며, 명시적 배포 환경변수만 기본값을 덮는다. 빌드 후 대시보드 번들에 로컬 개인 조회 주소가 있거나 운영 주소가 없으면 실패한다.
+- 개인 조회 Pages 배포 `5ac1c793.maple-exp-personal.pages.dev`와 Worker 버전 `da587b4e-4aec-47e9-85d4-df746278f485`를 반영했다. S24+ 모바일 Chrome 사용자 에이전트와 412×915 화면에서 설정 iframe과 자동조회 iframe을 함께 열어 운영 URL 2개, 콘솔·네트워크 오류 0건을 확인했다.

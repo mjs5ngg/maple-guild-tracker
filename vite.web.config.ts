@@ -10,8 +10,13 @@ const root=direct?"web/direct":"web/dashboard";
 const rust=fs.readFileSync("src-tauri/src/exp.rs","utf8");
 const table=rust.match(/const EXP_200_TO_299:[\s\S]*?= \[([\s\S]*?)\];/)?.[1].split(",").map(v=>v.trim().replaceAll("_","")).filter(Boolean);
 if(table?.length!==100) throw new Error("경험치표를 확인하세요.");
-export default defineConfig(({mode})=>{
-const {dashboardOrigin,directOrigin}=webOrigins({...loadEnv(mode,process.cwd(),""),...process.env});
+export default defineConfig(({mode,command})=>{
+const productionDefaults=command==="build"?{
+ PUBLIC_ORIGIN:process.env.PUBLIC_ORIGIN||"https://app.guildmate.workers.dev",
+ WEB_DASHBOARD_ORIGIN:process.env.WEB_DASHBOARD_ORIGIN||process.env.PUBLIC_ORIGIN||"https://app.guildmate.workers.dev",
+ WEB_DIRECT_ORIGIN:process.env.WEB_DIRECT_ORIGIN||"https://maple-exp-personal.pages.dev"
+}:{};
+const {dashboardOrigin,directOrigin}=webOrigins({...loadEnv(mode,process.cwd(),""),...process.env,...productionDefaults});
 const localProxy={target:"http://127.0.0.1:3100",changeOrigin:true};
 const proxyOrigin=process.env.WEB_PROXY_ORIGIN||dashboardOrigin;
 const localOrigin={name:"local-api-origin",configureServer(server:any){server.middlewares.use((request:any,_response:any,next:any)=>{if(request.url?.startsWith("/api/")||request.url?.startsWith("/auth/"))request.headers.origin=proxyOrigin;next();});}};
