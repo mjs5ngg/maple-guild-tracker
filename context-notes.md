@@ -512,3 +512,4 @@
 - 익명 시작에서 `/api/device` 호출을 없애고 대표·즐겨찾기를 브라우저 localStorage에만 저장한다. 로그인 전 `/api/me`는 D1을 읽지 않으며, 로그인 직후 로컬 설정이 있을 때만 계정 프로필로 한 번 이관한다.
 - 새 분산 조회 구조에서 쓰임이 사라진 `/api/activity`도 웹 호출을 제거하고 기존 클라이언트 호환용 무쓰기 응답으로 바꿨다. `/api/device`와 `/api/activity` 모두 실주소에서 `deprecated:true`와 무쿠키 응답을 확인했다.
 - 공개 Worker 버전 `f93400f3-e0af-4bcf-bf61-529537503bff`와 개인 조회 Pages 배포 `fbcd7b1d.maple-exp-personal.pages.dev`를 반영했다. 중앙 수집기는 `inactive`·`disabled`, 운영 화면은 `active` 상태다.
+- 공개 주소·표시 안정화 커밋 `f06c874`와 익명 D1 쓰기 제거 커밋 `5c52df5`를 GitHub `main`에 반영했다.
