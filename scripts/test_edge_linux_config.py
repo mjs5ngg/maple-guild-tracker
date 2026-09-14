@@ -13,7 +13,7 @@ spec.loader.exec_module(module)
 class EdgeLinuxConfigTest(unittest.TestCase):
     def test_replaces_only_edge_values(self):
         original = "DATABASE_URL=postgresql:///maple\nEDGE_PUBLIC_ORIGIN=https://old.old.workers.dev\nEDGE_INGEST_HMAC_SECRET=" + "a" * 64 + "\nGOOGLE_CLIENT_ID=kept\n"
-        result = module.merge_config(original, "https://maple-exp-public.mjs5ng.workers.dev", "b" * 64)
+        result = module.merge_config(original, "https://maple-exp-public.guildmate.workers.dev", "b" * 64)
         self.assertIn("DATABASE_URL=postgresql:///maple", result)
         self.assertIn("GOOGLE_CLIENT_ID=kept", result)
         self.assertNotIn("old.old.workers.dev", result)

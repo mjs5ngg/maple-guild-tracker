@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 
-ORIGIN = "https://maple-exp-public.mjs5ng.workers.dev"
+ORIGIN = "https://maple-exp-public.guildmate.workers.dev"
 
 
 def read_google(path: Path):
@@ -24,9 +24,9 @@ def read_google(path: Path):
     return values
 
 
-def put_secret(command: str, name: str, value: str):
+def put_secret(command: str, worker: str, name: str, value: str):
     result = subprocess.run(
-        [command, "wrangler", "secret", "put", name, "--config", "edge/wrangler.jsonc"],
+        [command, "wrangler", "secret", "put", name, "--name", worker],
         input=(value + "\n").encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     if result.returncode:
@@ -39,9 +39,9 @@ def main():
     npx = shutil.which("npx.cmd") or shutil.which("npx")
     if not npx:
         raise RuntimeError("npx unavailable")
-    put_secret(npx, "INGEST_HMAC_SECRET", ingest)
-    put_secret(npx, "GOOGLE_CLIENT_ID", google["GOOGLE_CLIENT_ID"])
-    put_secret(npx, "GOOGLE_CLIENT_SECRET", google["GOOGLE_CLIENT_SECRET"])
+    put_secret(npx, "maple-exp-public", "INGEST_HMAC_SECRET", ingest)
+    put_secret(npx, "app", "GOOGLE_CLIENT_ID", google["GOOGLE_CLIENT_ID"])
+    put_secret(npx, "app", "GOOGLE_CLIENT_SECRET", google["GOOGLE_CLIENT_SECRET"])
     receiver = Path(__file__).with_name("update-edge-linux-config.py").resolve()
     linux_path = "/mnt/c/" + str(receiver)[3:].replace("\\", "/")
     result = subprocess.run(

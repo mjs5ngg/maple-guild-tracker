@@ -1,7 +1,7 @@
 # 공개 주소를 강제해 로컬 URL 혼입 없이 Worker와 정적 웹을 배포합니다.
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$publicOrigin = "https://maple-exp-public.mjs5ng.workers.dev"
+$publicOrigin = "https://app.guildmate.workers.dev"
 $directOrigin = "https://maple-exp-personal.pages.dev"
 
 Push-Location $projectRoot
