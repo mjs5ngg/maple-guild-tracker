@@ -60,28 +60,22 @@ function basic(row:Row){return {character_name:row.name,world_name:row.world_nam
 function historyBasic(row:Row){return {character_name:row.name,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate)};}
 
 async function device(request:Request,env:Env){
- try{return json({ok:true,userId:await userId(request,env)});}catch(error){if(!(error instanceof ApiError)||error.status!==401)throw error;}
- const ip=request.headers.get("cf-connecting-ip")||"unknown"; await takeBudget(env,`new-device:${ip}`,100);
- const id=crypto.randomUUID(),token=randomToken(),now=nowSeconds();
- await env.DB.batch([
-  env.DB.prepare("INSERT INTO users(id,last_active) VALUES(?,?)").bind(id,now),
-  env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'device')").bind(await sha256(token),id,now+30*86400)
- ]);
- const response=json({ok:true}); response.headers.append("set-cookie",sessionCookie(request,"maple_device",token,30*86400)); return response;
+ void request;void env;return json({ok:true,deprecated:true});
 }
 async function me(request:Request,env:Env){
- const id=await userId(request,env),user=await env.DB.prepare("SELECT primary_name FROM users WHERE id=?").bind(id).first<{primary_name:string}>();
+ if(!cookies(request).maple_session)return json({primary:"",favorites:[],signedIn:false});
+ const id=await accountUserId(request,env),user=await env.DB.prepare("SELECT primary_name FROM users WHERE id=?").bind(id).first<{primary_name:string}>();
  const favorites=await env.DB.prepare("SELECT name FROM favorites WHERE user_id=? ORDER BY name").bind(id).all<{name:string}>();
  return json({primary:user?.primary_name||"",favorites:favorites.results.map(row=>row.name),signedIn:Boolean(cookies(request).maple_session)});
 }
 async function profile(request:Request,env:Env){
- const id=await userId(request,env),input=await bodyJson(request); if(!validProfile(input))throw new ApiError(400,"대표캐릭터와 즐겨찾기 30명 이내의 닉네임을 확인하세요.");
+ const id=await accountUserId(request,env),input=await bodyJson(request); if(!validProfile(input))throw new ApiError(400,"대표캐릭터와 즐겨찾기 30명 이내의 닉네임을 확인하세요.");
  await takeBudget(env,`profile:${id}`,10);
  const statements=[env.DB.prepare("UPDATE users SET primary_name=?,last_active=? WHERE id=?").bind(input.primary,nowSeconds(),id),env.DB.prepare("DELETE FROM favorites WHERE user_id=?").bind(id)];
  for(const name of [...input.favorites].sort())statements.push(env.DB.prepare("INSERT INTO favorites(user_id,name) VALUES(?,?)").bind(id,name));
  await env.DB.batch(statements); return json({ok:true});
 }
-async function activity(request:Request,env:Env){const id=await userId(request,env);await env.DB.prepare("UPDATE users SET last_active=? WHERE id=?").bind(nowSeconds(),id).run();return json({ok:true});}
+async function activity(request:Request,env:Env){void request;void env;return json({ok:true,deprecated:true});}
 async function chasePresets(request:Request,env:Env){
  const id=await accountUserId(request,env),method=request.method,url=new URL(request.url),presetId=url.pathname.split("/").filter(Boolean)[2];
  if(method==="GET"){
@@ -103,7 +97,7 @@ async function chasePresets(request:Request,env:Env){
 }
 
 async function dashboard(request:Request,env:Env){
- const id=await userId(request,env),today=kstDate(),start=addDays(today,-30),yesterday=addDays(today,-1);
+ const id=await accountUserId(request,env),today=kstDate(),start=addDays(today,-30),yesterday=addDays(today,-1);
  const rows=await env.DB.prepare(`SELECT DISTINCT c.* FROM characters c WHERE c.name=(SELECT primary_name FROM users WHERE id=?) OR c.name IN (SELECT name FROM favorites WHERE user_id=?) OR c.name IN (SELECT gm.name FROM guild_members gm WHERE gm.guild_key=(SELECT p.guild_key FROM characters p WHERE p.name=(SELECT primary_name FROM users WHERE id=?))) ORDER BY c.level DESC,length(c.exp) DESC,c.exp DESC,c.name`).bind(id,id,id).all<Row>();
  const ocids=rows.results.map(row=>String(row.ocid));
  let histories:Row[]=[],baselines:Row[]=[];
@@ -139,8 +133,8 @@ async function googleStart(request:Request,env:Env){
 async function androidStart(request:Request,env:Env){
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  const input=await bodyJson(request) as {challenge?:unknown};if(typeof input.challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(input.challenge))throw new ApiError(400,"Android 로그인 요청을 확인하세요.");
- const id=await userId(request,env),state=randomToken();
- await env.DB.batch([env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(nowSeconds()),env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user,client_kind,pkce_challenge) VALUES(?,?,?,?,'android',?)").bind(await sha256(state),"",nowSeconds()+600,id,input.challenge)]);
+ let linkUser:string|null=null;try{linkUser=await accountUserId(request,env);}catch{/* 새 계정으로 계속합니다. */}const state=randomToken();
+ await env.DB.batch([env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(nowSeconds()),env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user,client_kind,pkce_challenge) VALUES(?,?,?,?,'android',?)").bind(await sha256(state),"",nowSeconds()+600,linkUser,input.challenge)]);
  return json({url:googleUrl(request,env,state)});
 }
 async function googleCallback(request:Request,env:Env){

@@ -489,3 +489,26 @@
 - 개인 조회 Pages는 `c47afb8b.maple-exp-personal.pages.dev`를 거쳐 정식 주소에 반영했고, 공개 Worker는 버전 `b7d4b000-7559-4f1c-87c5-8e538b5bd084`로 배포했다. 정적 대시보드 `_headers`가 Worker의 새 CSP를 덮어쓰던 문제를 찾아 양쪽 정책에 `frame-src https://maple-exp-personal.pages.dev`를 일치시켰다.
 - 운영 주소 실증 결과 `/api/status`는 HTTP 200과 `dataMode=device-direct`, `collectorRollback=true`를 반환한다. 대시보드는 개인 조회 Pages만 프레임으로 허용하고, 개인 조회 Pages는 정식 대시보드만 부모 출처로 허용한다. 배포 번들에서 IndexedDB, Android 저장 브리지와 NEXON 인증 헤더 사용도 확인했다.
 - 중앙 수집기는 48시간 결과 비교를 위한 롤백 대기로만 남긴다. 비교 완료 전에는 삭제하거나 운영자 키를 폐기하지 않으며, 이후 7일 안정화가 끝나야 내부 수집 API를 차단한다.
+
+# 2026-09-14 공개 웹 표시·운영 주소 진단
+
+- 공개 Worker와 개인 조회 Pages는 HTTP 200이며 `dataMode=device-direct`다. Whale에서만 최신 경험치가 없는 현상은 중앙 터미널과 무관하고, 브라우저마다 `maple-exp-personal.pages.dev` 저장소가 분리되므로 Whale에 서비스 키를 한 번 저장해야 하는 구조다.
+- 기존 WSL은 중지되어 있었고 로그인 예약 작업은 `Ready`였다. `Maple EXP Linux Runtime`을 실행하자 WSL과 `maple-exp.service`, 운영 화면, 백업·보존 타이머가 터미널 없이 활성화됐다. 이 경로는 48시간 롤백 비교용이며 새 공개 화면의 직접 조회 필수 조건이 아니다.
+- Whale의 축 겹침은 고정 높이 카드 안에 고정 27rem 차트와 가변 높이 헤더를 함께 넣어 내용이 카드 밖으로 넘치는 CSS가 원인이다. 카드 내부를 flex로 바꿔 차트가 남은 높이를 사용하게 한다.
+- Cloudflare 공식 정책상 정적 자산 요청은 무료·무제한이고 Worker 실행만 무료 계정 하루 100,000건에 포함된다. NEXON 캐릭터 조회는 브라우저에서 NEXON으로 직접 나가므로 Cloudflare Worker 요청 수나 D1 쓰기를 늘리지 않는다.
+- 현재 계정에는 Worker가 `maple-exp-public` 하나뿐이며 `guildmate.workers.dev` 계정 서브도메인은 사용 가능함을 API로 확인했다.
+- Cloudflare 계정 서브도메인을 `guildmate`로 전환하고 새 사용자용 Worker `app`을 같은 D1에 배포했다. 정식 무도메인 주소는 `https://app.guildmate.workers.dev`이며 기존 중앙 수집 롤백 Worker는 `https://maple-exp-public.guildmate.workers.dev`에서 유지한다.
+- 개인 직접 조회 Pages의 `frame-ancestors`도 새 사용자용 주소로 제한했다. 공개 Worker와 Pages 양쪽 CSP, HTTPS 200, `dataMode=device-direct`를 확인했다.
+- Linux 롤백 수집기의 `EDGE_PUBLIC_ORIGIN`은 새 롤백 Worker 주소로 바꾸고 서비스를 재시작했다. Windows 로그인 예약 작업은 `-WindowStyle Hidden`으로 WSL을 유지하므로 터미널 창은 필요하지 않다.
+- 비밀 설정 자동화도 사용자용 `app`의 Google 비밀과 롤백용 `maple-exp-public`의 수집 서명을 서로 다른 Worker에 넣도록 분리했다. 재실행 시 중앙 수집기가 사용자용 Worker로 잘못 연결되는 경로를 막았다.
+
+# 2026-09-15 D1 한도 경고 대응
+
+- Cloudflare가 2026-09-15 00:00 UTC까지 D1 무료 티어 일일 100,000행 쓰기를 차단했다. KST 초기화 시각은 같은 날 09:00이다.
+- Linux 저널에서 중앙 수집기가 밤새 길드 전체와 과거 보충을 계속 실행한 사실을 확인했다. `maple-exp.service`를 중지하고 자동 시작을 해제했으며 운영 화면과 백업·보존 타이머는 유지했다.
+- 분산 조회 구조에서는 익명 사용자 설정을 D1에 저장할 필요가 없다. 익명 방문의 기기 세션 생성과 시간당 활동 갱신도 제거해 D1 쓰기는 로그인 설정 동기화와 프리셋에만 사용한다.
+- Document Picture-in-Picture의 최상단 출처 표시줄은 브라우저가 제공하는 보안 UI라 웹 문서가 제거하거나 드래그 영역으로 대체할 수 없다. 지원 브라우저에서는 돌아가기 버튼만 숨기고, 페이지 내부 대체 위젯에서는 기존 헤더 드래그를 유지한다.
+- 화면 수정 뒤 Vitest 87개, 웹 공개·직접 빌드, Edge TypeScript 검사와 고정 시안 Playwright 4개를 통과했다. 새 주소를 포함한 Android 0.4.0 ARM64 APK도 v2·v3 서명 검증을 통과했으며 SHA-256은 `5DB0177B6610A408FBD1D054623AF7F075C50375226796F0001E104CDB9AE0BA`다.
+- 익명 시작에서 `/api/device` 호출을 없애고 대표·즐겨찾기를 브라우저 localStorage에만 저장한다. 로그인 전 `/api/me`는 D1을 읽지 않으며, 로그인 직후 로컬 설정이 있을 때만 계정 프로필로 한 번 이관한다.
+- 새 분산 조회 구조에서 쓰임이 사라진 `/api/activity`도 웹 호출을 제거하고 기존 클라이언트 호환용 무쓰기 응답으로 바꿨다. `/api/device`와 `/api/activity` 모두 실주소에서 `deprecated:true`와 무쿠키 응답을 확인했다.
+- 공개 Worker 버전 `f93400f3-e0af-4bcf-bf61-529537503bff`와 개인 조회 Pages 배포 `fbcd7b1d.maple-exp-personal.pages.dev`를 반영했다. 중앙 수집기는 `inactive`·`disabled`, 운영 화면은 `active` 상태다.

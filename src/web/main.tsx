@@ -1,5 +1,5 @@
 // 공개 기록을 상단 탐색·가상 순위·성장·따라잡기 및 미니 위젯 화면으로 제공합니다.
-import {lazy,Suspense,useDeferredValue,useEffect,useMemo,useRef,useState} from "react";
+import {lazy,Suspense,useDeferredValue,useEffect,useMemo,useState} from "react";
 import {createRoot} from "react-dom/client";
 import {QueryClient,QueryClientProvider,useMutation,useQuery,useQueryClient} from "@tanstack/react-query";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -15,9 +15,9 @@ import WebMiniWidget from "./WebMiniWidget";
 import {initialChaseWorkspace} from "./chaseWorkspace";
 import {uniqueCharacters} from "./overviewRows";
 import {registerStatusTool} from "./webmcp";
-import {startSession} from "./startSession";
+import {startSession,writeLocalProfile} from "./startSession";
 import {dashboardApi as api} from "./dashboardApi";
-import {ACTIVITY_REFRESH_MS,DASHBOARD_REFRESH_MS,refreshDue} from "./refreshPolicy";
+import {DASHBOARD_REFRESH_MS} from "./refreshPolicy";
 import {useDirectBridge} from "./useDirectBridge";
 import "./web.css";
 
@@ -36,11 +36,11 @@ export function PublicApp(){
  const [primary,setPrimary]=useState(""),[favorites,setFavorites]=useState(""),[favoriteInput,setFavoriteInput]=useState(""),[personal,setPersonal]=useState<Snapshot[]>([]),[selected,setSelected]=useState("");
  const [rankingPeriod,setRankingPeriod]=useState(localStorage.getItem("web-ranking")!=="total"),[rankingDays,setRankingDays]=useState<1|7|30>(()=>storedDays("web-ranking-days",1)),[growthDays,setGrowthDays]=useState<7|30>(()=>storedDays("web-growth-days",7)===30?30:7),[chaseWorkspace,setChaseWorkspace]=useState(initialChaseWorkspace);
  const deferredRankingPeriod=useDeferredValue(rankingPeriod),deferredRankingDays=useDeferredValue(rankingDays);
- const [theme,setTheme]=useState(localStorage.getItem("web-theme")==="light"?"light":"dark"),[online,setOnline]=useState(navigator.onLine);const lastActivityAt=useRef(0);
+ const [theme,setTheme]=useState(localStorage.getItem("web-theme")==="light"?"light":"dark"),[online,setOnline]=useState(navigator.onLine);
  const statusQuery=useQuery({queryKey:["status"],queryFn:()=>api("/api/status")});
  const sessionQuery=useQuery({queryKey:["session"],queryFn:()=>startSession(api),staleTime:Infinity,retry:1});const me=sessionQuery.data;
  const direct=useDirectBridge(me?.primary||"",me?.favorites||[]);
- const dashboardQuery=useQuery({queryKey:["dashboard","legacy"],queryFn:()=>api("/api/dashboard"),enabled:Boolean(me)&&localStorage.getItem("direct-local-ready")!=="1",staleTime:Infinity,refetchOnWindowFocus:false,refetchOnReconnect:false});
+ const dashboardQuery=useQuery({queryKey:["dashboard","legacy"],queryFn:()=>api("/api/dashboard"),enabled:Boolean(me?.signedIn)&&localStorage.getItem("direct-local-ready")!=="1",staleTime:Infinity,refetchOnWindowFocus:false,refetchOnReconnect:false});
  const rows=(dashboardQuery.data?.characters||[]) as Snapshot[];
  useEffect(()=>{if(direct.rows.length){setPersonal(direct.rows);localStorage.setItem("direct-local-ready","1");}},[direct.rows]);
  useEffect(()=>{if(direct.status.message!=="개인 조회 엔진을 연결하고 있습니다."&&direct.status.cachedCount===0&&localStorage.getItem("direct-local-ready")==="1"){localStorage.removeItem("direct-local-ready");void dashboardQuery.refetch();}},[direct.status.cachedCount,direct.status.message]);
@@ -50,13 +50,11 @@ export function PublicApp(){
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("web-theme",theme);},[theme]);
  useEffect(()=>{const up=()=>setOnline(true),down=()=>setOnline(false);addEventListener("online",up);addEventListener("offline",down);return()=>{removeEventListener("online",up);removeEventListener("offline",down);};},[]);
  useEffect(()=>{if(me){setPrimary(me.primary);setFavorites(me.favorites.join("\n"));}},[me]);useEffect(()=>{if(!selected&&me?.primary)setSelected(me.primary);},[selected,me?.primary]);
- function recordActivity(){const now=Date.now();if(!me||!refreshDue(lastActivityAt.current,now,ACTIVITY_REFRESH_MS))return;lastActivityAt.current=now;void api("/api/activity",{}).catch(()=>{});}
- useEffect(()=>{if(!me)return;recordActivity();const action=()=>recordActivity();document.addEventListener("pointerdown",action);document.addEventListener("keydown",action);return()=>{document.removeEventListener("pointerdown",action);document.removeEventListener("keydown",action);};},[Boolean(me)]);
- const saveMutation=useMutation({mutationFn:async()=>{const names=[...new Set(favorites.split(/[\n,]/).map(value=>value.trim()).filter(Boolean))];await api("/api/profile",{primary:primary.trim(),favorites:names});return {primary:primary.trim(),favorites:names,signedIn:me?.signedIn};},onSuccess:data=>{cache.setQueryData(["session"],data);closeSettings(false);setMessage("설정을 저장했습니다. 이 기기의 다음 직접 조회에 반영됩니다.");},onError:error=>setMessage(String(error))});
- async function replaceFavorites(names:string[]){if(!me)return;const normalized=[...new Set(names.map(value=>value.trim()).filter(Boolean))];if(normalized.length>30){setMessage("즐겨찾기는 최대 30명까지 추가할 수 있습니다.");return;}const previous=me,next={...me,favorites:normalized};cache.setQueryData(["session"],next);setFavorites(normalized.join("\n"));try{await api("/api/profile",{primary:me.primary,favorites:normalized});void cache.invalidateQueries({queryKey:["dashboard"]});}catch(error){cache.setQueryData(["session"],previous);setFavorites(previous.favorites.join("\n"));setMessage(String(error));}}
+ const saveMutation=useMutation({mutationFn:async()=>{const profile=writeLocalProfile({primary:primary.trim(),favorites:[...new Set(favorites.split(/[\n,]/).map(value=>value.trim()).filter(Boolean))]});if(me?.signedIn)await api("/api/profile",profile);return {...profile,signedIn:Boolean(me?.signedIn)};},onSuccess:data=>{cache.setQueryData(["session"],data);closeSettings(false);setMessage("설정을 저장했습니다. 이 기기의 다음 직접 조회에 반영됩니다.");},onError:error=>setMessage(String(error))});
+ async function replaceFavorites(names:string[]){if(!me)return;const normalized=[...new Set(names.map(value=>value.trim()).filter(Boolean))];if(normalized.length>30){setMessage("즐겨찾기는 최대 30명까지 추가할 수 있습니다.");return;}const previous=me,next={...me,favorites:normalized};cache.setQueryData(["session"],next);setFavorites(normalized.join("\n"));writeLocalProfile(next);if(!me.signedIn)return;try{await api("/api/profile",{primary:me.primary,favorites:normalized});void cache.invalidateQueries({queryKey:["dashboard"]});}catch(error){cache.setQueryData(["session"],previous);setFavorites(previous.favorites.join("\n"));writeLocalProfile(previous);setMessage(String(error));}}
  function addFavorite(){const name=favoriteInput.trim();if(!name)return;if(me?.favorites.includes(name)||name===me?.primary){setMessage("이미 등록된 캐릭터입니다.");return;}void replaceFavorites([...(me?.favorites||[]),name]);setFavoriteInput("");}
  async function logout(){try{await api("/api/logout",{});location.reload();}catch(error){setMessage(String(error));}}async function deleteAccount(){const confirmation=prompt("계속하려면 ‘탈퇴’를 입력하세요. 공용 캐릭터 기록은 유지됩니다.");if(confirmation!=="탈퇴")return;try{await api("/api/account/delete",{confirmation});location.reload();}catch(error){setMessage(String(error));}}
- function personalRefresh(){if(!me?.primary){openSettings();setMessage("대표캐릭터를 먼저 저장하세요.");return;}if(!direct.status.keyStored||!direct.status.serviceConfirmed){openSettings();setMessage("설정에서 서비스 단계 API 키를 저장해 주세요.");return;}direct.refresh();recordActivity();}
+ function personalRefresh(){if(!me?.primary){openSettings();setMessage("대표캐릭터를 먼저 저장하세요.");return;}if(!direct.status.keyStored||!direct.status.serviceConfirmed){openSettings();setMessage("설정에서 서비스 단계 API 키를 저장해 주세요.");return;}direct.refresh();}
  const merged=useMemo(()=>{const values=rows.map(row=>personal.find(item=>item.ocid===row.ocid&&item.observedAt>row.observedAt)||row);for(const row of personal)if(!values.some(item=>item.ocid===row.ocid))values.push(row);return values;},[rows,personal]);
  const gainCache=useMemo(()=>new Map(merged.map(row=>[row.ocid,new Map<number,bigint|null>([[1,periodGain(row,1,__EXP_TABLE__).value],[7,periodGain(row,7,__EXP_TABLE__).value],[30,periodGain(row,30,__EXP_TABLE__).value]])] as const)),[merged]);
  const primaryRow=merged.find(row=>row.basic.character_name===me?.primary);
