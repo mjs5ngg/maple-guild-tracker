@@ -18,7 +18,7 @@ function RankingEntry({row,index,primaryName,selected,onSelect,period,days,pinne
   <i>{pinned?<Crown aria-label="대표캐릭터"/>:String(index+1).padStart(2,"0")}</i><Avatar character={row}/>
   <span className="identity"><b>{row.basic.character_name===primaryName&&<Crown/>}{row.basic.character_name}{row.isHunting&&<span className="hunting-fire" title="최근 경험치 변화 감지">🔥</span>}</b><small>{pinned?`${index+1}위 · 대표캐릭터`:row.basic.character_class}</small></span>
   <span className="level">Lv.{row.basic.character_level}<small>{row.basic.character_exp_rate}% · 예상 {projection.label}</small></span>
-  <strong>{gainLabel(gained)}{period&&!result!.complete?<small>일부 수집</small>:row.estimated?<small>추정</small>:null}</strong><WarningBadge reasons={reasons} label={`${row.basic.character_name} 특이사항`}/>
+  <strong>{gainLabel(gained)}{period&&!result!.complete?<small>부분값 {result!.collected}/{result!.total}일</small>:row.estimated?<small>추정</small>:null}</strong><WarningBadge reasons={reasons} label={`${row.basic.character_name} 특이사항`}/>
  </div>;
 }
 

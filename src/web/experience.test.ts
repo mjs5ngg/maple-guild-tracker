@@ -7,15 +7,15 @@ describe("웹 경험치",()=>{
  it("가입 전 획득량도 포함하며 소속 명단 누락은 경험치 집계를 바꾸지 않음",()=>{
  const today=kstDate(),yesterday=dayBefore(today),before=dayBefore(yesterday);
  const s:Snapshot={ocid:"A",basic:basic(200,"9"),observedAt:new Date().toISOString(),history:[{date:before,basic:basic(200,"1")},{date:yesterday,basic:basic(200,"5")}],guildMembership:{[today]:true,[yesterday]:false}};
- expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true});
+ expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true,collected:2,total:2});
  s.guildMembership={[today]:true};
- expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true});
+ expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true,collected:2,total:2});
  s.guildMembership={};
- expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true});
+ expect(periodGain(s,2,["10"])).toEqual({value:8n,complete:true,collected:2,total:2});
  });
  it("최근 기간은 오늘 포함이며 오늘 0을 누락으로 보지 않음",()=>{
  const today=kstDate();const s:Snapshot={ocid:"A",basic:basic(200,"5"),observedAt:new Date().toISOString(),history:[{date:dayBefore(today),basic:basic(200,"5")}]};
- expect(dailyPoints(s,7,["10"])).toHaveLength(7);expect(dailyPoints(s,7,["10"])[6]).toEqual({date:today,value:0n});expect(periodGain(s,1,["10"])).toEqual({value:0n,complete:true});expect(periodGain(s,7,["10"]).complete).toBe(false);
+ expect(dailyPoints(s,7,["10"])).toHaveLength(7);expect(dailyPoints(s,7,["10"])[6]).toEqual({date:today,value:0n});expect(periodGain(s,1,["10"])).toEqual({value:0n,complete:true,collected:1,total:1});expect(periodGain(s,7,["10"])).toMatchObject({complete:false,collected:1,total:7});
  });
  it("공식 전일 기준은 추정 표본보다 우선함",()=>{
  const s:Snapshot={ocid:"A",basic:basic(200,"8"),observedAt:new Date().toISOString(),todayBaseline:basic(200,"3"),history:[{date:dayBefore(kstDate()),basic:basic(200,"5")}]};
@@ -42,5 +42,15 @@ describe("웹 경험치",()=>{
   expect(mergeActivity({...previous,isHunting:true},next("1"),[]).isHunting).toBe(true);
   expect(mergeActivity({...previous,isHunting:true},next("1000000000001"),[]).isHunting).toBe(true);
   expect(mergeActivity({...previous,isHunting:true},next("0"),[]).isHunting).toBe(false);
+ });
+ it("1,000명의 30일 기간 전환 계산을 UI 정지 없이 끝냄",()=>{
+  const today=kstDate(),table=Array(100).fill("1000000000000"),started=performance.now();
+  for(let index=0;index<1000;index++){
+   const history:Array<{date:string;basic:Basic}>=[];let date=today;
+   for(let offset=0;offset<31;offset++){history.push({date,basic:basic(281,String(index*1000+offset))});date=dayBefore(date);}
+   history.reverse();const row:Snapshot={ocid:String(index),basic:basic(281,String(index*1000+31)),observedAt:new Date().toISOString(),history};
+   expect(periodGain(row,7,table).value).not.toBe(null);expect(periodGain(row,30,table).value).not.toBe(null);
+  }
+  expect(performance.now()-started).toBeLessThan(1500);
  });
 });

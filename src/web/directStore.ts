@@ -1,32 +1,25 @@
-// 개인 조회 결과와 OCID 대응을 격리된 브라우저 저장소에 보관합니다.
-import type {Snapshot} from "./types";
+// 현재 캐릭터와 압축 일별 기록을 분리 저장하고 기존 기록을 안전하게 이관합니다.
+import type {HistoryBasic,Snapshot} from "./types";
 
-const DB_NAME="maple-personal-data",DB_VERSION=1;
+const DB_NAME="maple-personal-data",DB_VERSION=2,MIGRATION_KEY="normalized-v2";
 type Identity={name:string;ocid:string;checkedAt:number};
 type MetaValue={key:string;value:unknown};
+type DailyRecord={ocid:string;date:string;basic:HistoryBasic};
+let databasePromise:Promise<IDBDatabase>|null=null;
+const compactBasic=(value:HistoryBasic):HistoryBasic=>({character_level:value.character_level,character_exp:String(value.character_exp),character_exp_rate:String(value.character_exp_rate)});
+const stripHistory=(value:Snapshot):Snapshot=>({...value,basic:{...value.basic,character_exp:String(value.basic.character_exp)},todayBaseline:value.todayBaseline?compactBasic(value.todayBaseline):undefined,history:[]});
 
 function database():Promise<IDBDatabase>{
- return new Promise((resolve,reject)=>{
-  const request=indexedDB.open(DB_NAME,DB_VERSION);
-  request.onupgradeneeded=()=>{
-   const db=request.result;
-   if(!db.objectStoreNames.contains("snapshots"))db.createObjectStore("snapshots",{keyPath:"ocid"});
-   if(!db.objectStoreNames.contains("identities"))db.createObjectStore("identities",{keyPath:"name"});
-   if(!db.objectStoreNames.contains("meta"))db.createObjectStore("meta",{keyPath:"key"});
-  };
-  request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
- });
+ if(databasePromise)return databasePromise;
+ databasePromise=new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,DB_VERSION);request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains("snapshots"))db.createObjectStore("snapshots",{keyPath:"ocid"});if(!db.objectStoreNames.contains("current"))db.createObjectStore("current",{keyPath:"ocid"});if(!db.objectStoreNames.contains("daily")){const store=db.createObjectStore("daily",{keyPath:["ocid","date"]});store.createIndex("by-ocid","ocid");}if(!db.objectStoreNames.contains("identities"))db.createObjectStore("identities",{keyPath:"name"});if(!db.objectStoreNames.contains("meta"))db.createObjectStore("meta",{keyPath:"key"});};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});return databasePromise;
 }
-function requestValue<T>(request:IDBRequest<T>):Promise<T>{return new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});}
-async function transaction<T>(store:string,mode:IDBTransactionMode,work:(value:IDBObjectStore)=>IDBRequest<T>){const db=await database();try{return await requestValue(work(db.transaction(store,mode).objectStore(store)));}finally{db.close();}}
+const requestValue=<T>(request:IDBRequest<T>)=>new Promise<T>((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+const done=(transaction:IDBTransaction)=>new Promise<void>((resolve,reject)=>{transaction.oncomplete=()=>resolve();transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);});
+async function one<T>(store:string,mode:IDBTransactionMode,work:(value:IDBObjectStore)=>IDBRequest<T>){const db=await database();return requestValue(work(db.transaction(store,mode).objectStore(store)));}
+async function saveRows(rows:Snapshot[]){if(!rows.length)return;const db=await database(),transaction=db.transaction(["current","daily"],"readwrite"),current=transaction.objectStore("current"),daily=transaction.objectStore("daily");for(const row of rows){current.put(stripHistory(row));for(const point of row.history)daily.put({ocid:row.ocid,date:point.date,basic:compactBasic(point.basic)} satisfies DailyRecord);}await done(transaction);}
+async function migrateLegacy(){if(await directStore.meta<boolean>(MIGRATION_KEY))return;const db=await database(),keys=await requestValue(db.transaction("snapshots","readonly").objectStore("snapshots").getAllKeys());for(let offset=0;offset<keys.length;offset+=20){const batchKeys=keys.slice(offset,offset+20),transaction=db.transaction("snapshots","readonly"),store=transaction.objectStore("snapshots"),rows=(await Promise.all(batchKeys.map(key=>requestValue(store.get(key))))).filter(Boolean) as Snapshot[];await saveRows(rows);await new Promise(resolve=>setTimeout(resolve,0));}await directStore.saveMeta(MIGRATION_KEY,true);}
+async function snapshots(){await migrateLegacy();const db=await database(),current=await requestValue(db.transaction("current","readonly").objectStore("current").getAll()) as Snapshot[],daily=await requestValue(db.transaction("daily","readonly").objectStore("daily").getAll()) as DailyRecord[],byOcid=new Map<string,Snapshot>();for(const row of current)byOcid.set(row.ocid,{...row,history:[]});for(const point of daily){const row=byOcid.get(point.ocid);if(row)row.history.push({date:point.date,basic:point.basic});}for(const row of byOcid.values())row.history.sort((a,b)=>a.date.localeCompare(b.date));return [...byOcid.values()];}
+async function saveCurrent(rows:Snapshot[]){if(!rows.length)return;const db=await database(),transaction=db.transaction("current","readwrite"),store=transaction.objectStore("current");for(const row of rows)store.put(stripHistory(row));await done(transaction);}
+async function saveHistory(ocid:string,points:Snapshot["history"]){if(!points.length)return;const db=await database(),transaction=db.transaction("daily","readwrite"),store=transaction.objectStore("daily");for(const point of points)store.put({ocid,date:point.date,basic:compactBasic(point.basic)} satisfies DailyRecord);await done(transaction);}
 
-export const directStore={
- snapshots:()=>transaction<Snapshot[]>("snapshots","readonly",store=>store.getAll()),
- snapshot:(ocid:string)=>transaction<Snapshot|undefined>("snapshots","readonly",store=>store.get(ocid)),
- saveSnapshot:(value:Snapshot)=>transaction<IDBValidKey>("snapshots","readwrite",store=>store.put(value)),
- identity:(name:string)=>transaction<Identity|undefined>("identities","readonly",store=>store.get(name)),
- saveIdentity:(value:Identity)=>transaction<IDBValidKey>("identities","readwrite",store=>store.put(value)),
- deleteIdentity:(name:string)=>transaction<undefined>("identities","readwrite",store=>store.delete(name)),
- meta:async<T>(key:string)=>((await transaction<MetaValue|undefined>("meta","readonly",store=>store.get(key)))?.value as T|undefined),
- saveMeta:(key:string,value:unknown)=>transaction<IDBValidKey>("meta","readwrite",store=>store.put({key,value})),
-};
+export const directStore={snapshots,currentSnapshots:async()=>{await migrateLegacy();return one<Snapshot[]>("current","readonly",store=>store.getAll());},saveSnapshot:async(value:Snapshot)=>saveRows([value]),saveCurrent,saveHistory,identity:(name:string)=>one<Identity|undefined>("identities","readonly",store=>store.get(name)),saveIdentity:(value:Identity)=>one<IDBValidKey>("identities","readwrite",store=>store.put(value)),deleteIdentity:(name:string)=>one<undefined>("identities","readwrite",store=>store.delete(name)),meta:async<T>(key:string)=>((await one<MetaValue|undefined>("meta","readonly",store=>store.get(key)))?.value as T|undefined),saveMeta:(key:string,value:unknown)=>one<IDBValidKey>("meta","readwrite",store=>store.put({key,value}))};

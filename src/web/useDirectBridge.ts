@@ -1,5 +1,5 @@
 // 공개 대시보드가 격리된 직접 조회 엔진의 상태와 결과만 수신하게 합니다.
-import {useCallback,useEffect,useRef,useState} from "react";
+import {startTransition,useCallback,useEffect,useRef,useState} from "react";
 import type {Snapshot} from "./types";
 import type {DashboardToDirect,DirectStatus,DirectToDashboard} from "./directProtocol";
 
@@ -16,7 +16,7 @@ export function useDirectBridge(primary:string,favorites:string[]){
   const channel=new MessageChannel();port.current=channel.port1;
   channel.port1.onmessage=(event:MessageEvent<DirectToDashboard>)=>{
    if(event.data?.type==="status")setStatus(event.data.status);
-   else if(event.data?.type==="snapshot"&&Array.isArray(event.data.rows))setRows(event.data.rows.slice(0,1000));
+   else if(event.data?.type==="snapshot"&&Array.isArray(event.data.rows)){const next=event.data.rows.slice(0,1000);startTransition(()=>setRows(next));}
    else if(event.data?.type==="error"){const message=event.data.message;setStatus(value=>({...value,message}));}
   };
   channel.port1.start();
