@@ -3,7 +3,7 @@ import {startTransition,useCallback,useEffect,useRef,useState} from "react";
 import type {Snapshot} from "./types";
 import type {DashboardToDirect,DirectStatus,DirectToDashboard} from "./directProtocol";
 
-const emptyStatus:DirectStatus={keyStored:false,serviceConfirmed:false,busy:false,completed:0,total:0,failed:0,lastSuccessAt:null,nextRefreshAt:null,cachedCount:0,storagePersistent:null,message:"개인 조회 엔진을 연결하고 있습니다."};
+const emptyStatus:DirectStatus={cacheReady:false,keyStored:false,serviceConfirmed:false,busy:false,completed:0,total:0,failed:0,lastSuccessAt:null,nextRefreshAt:null,cachedCount:0,storagePersistent:null,metrics:null,message:"개인 조회 엔진을 연결하고 있습니다."};
 
 export function useDirectBridge(primary:string,favorites:string[]){
  const port=useRef<MessagePort|null>(null),[status,setStatus]=useState(emptyStatus),[rows,setRows]=useState<Snapshot[]>([]);

@@ -36,8 +36,8 @@
 .hero-selectable{cursor:pointer}.hero-selectable:focus-visible,.ranking-row:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* 캐릭터 칸을 바꾸지 않고 투명 여백이 큰 원본 이미지만 확대합니다. */
-.character-avatar img{transform:scale(3) translateY(2%);image-rendering:pixelated}
-.hero-card>.character-avatar img{transform:scale(3.15) translateY(2%)}
+.character-avatar img{transform:scale(3) translateY(0);image-rendering:pixelated}
+.hero-card>.character-avatar img{transform:scale(3.15) translateY(0)}
 
 /* 대표 고정 행과 이상 상태 경고를 순위 본문과 분리합니다. */
 .ranking-head,.ranking-row{grid-template-columns:3.2rem 4.8rem minmax(11rem,1.35fr) minmax(9rem,.8fr) minmax(8rem,.7fr) 2.25rem}
@@ -50,6 +50,8 @@
 .favorite-manager input{min-width:14rem;flex:1;padding:.72rem .85rem;border:1px solid var(--border-strong);border-radius:.65rem;background:var(--page);color:var(--text)}
 .favorite-manager .primary-button{width:auto}.favorite-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.48rem .65rem;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--accent);cursor:pointer}.favorite-chip svg{width:1rem}.favorite-chip span{color:var(--text-muted);font-size:.78rem}.favorite-chip.pending{color:var(--text-muted);cursor:default}
 .chase-row em{display:block;margin-top:.2rem;color:var(--text-muted);font-style:normal;font-size:var(--font-size-sm)}
+.chase-dialog{display:flex;max-height:min(42rem,calc(100dvh - 2rem));flex-direction:column;overflow:hidden}.chase-dialog>.dialog-titlebar,.chase-dialog>.chase-period,.chase-dialog>.chase-create{flex:0 0 auto}.chase-group-scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.chase-group-scroll .chase-group>div{max-height:min(46dvh,28rem);overflow-y:auto;overscroll-behavior:contain}.chase-dialog .chase-create{margin-top:.75rem}.overview-growth-virtual>button>span b{display:flex;align-items:center;gap:.3rem}
+.hero-loading{display:flex;grid-column:1/-1;align-items:center;gap:1rem}.hero-loading h2,.hero-loading p{margin:.2rem 0}.hero-loading p{color:var(--text-muted)}
 
 /* 웹 미니 위젯은 PiP와 페이지 내부 대체 패널에서 같은 레이아웃을 사용합니다. */
 .widget-open-button{display:inline-flex;align-items:center;gap:.4rem;padding:.55rem .72rem;border:1px solid var(--border);border-radius:.65rem;background:var(--surface);color:var(--text);cursor:pointer}.widget-open-button svg{width:1rem}
@@ -61,5 +63,5 @@
 .widget-ranking{min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;margin-top:.65rem}.widget-ranking article{display:grid;min-width:0;grid-template-columns:1.5rem 4rem minmax(0,1fr) auto;align-items:center;gap:.65rem;padding:.62rem 1rem;border-top:1px solid var(--border)}.widget-ranking article>i{font-style:normal;color:var(--text-muted)}.widget-ranking article>.character-avatar{width:4rem;height:4rem}.widget-ranking article>span{min-width:0}.widget-ranking article b,.widget-ranking article small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.widget-ranking article b{display:flex;align-items:center;gap:.3rem}.widget-ranking article small{margin-top:.18rem;color:var(--text-muted)}.widget-ranking article strong{min-width:0;color:var(--positive);font-variant-numeric:tabular-nums;white-space:nowrap}.widget-crown{display:inline-block;flex:0 0 auto;width:1rem;color:var(--accent)}.web-mini-widget>footer{padding:.65rem 1rem;color:var(--text-muted);font-size:.72rem;line-height:1.45;text-align:center;border-top:1px solid var(--border)}
 
 @media(max-width:900px){.overview-grid>.surface{height:auto;min-height:28rem}.overview-growth-scroll{max-height:25rem}}
-@media(max-width:760px){.character-avatar img{transform:scale(3) translateY(2%)}.hero-card>.character-avatar img{transform:scale(3.15) translateY(2%)}.widget-open-button{width:2.6rem;height:2.6rem;padding:0;justify-content:center}.widget-open-button{font-size:0}.web-widget-fallback{left:8px!important;right:8px;width:auto}.ranking-head{display:none}.ranking-row{grid-template-columns:2.6rem 4rem minmax(0,1fr) auto 2rem}.ranking-row .level{display:none}}
+@media(max-width:760px){.character-avatar img{transform:scale(3) translateY(0)}.hero-card>.character-avatar img{transform:scale(3.15) translateY(0)}.widget-open-button{width:2.6rem;height:2.6rem;padding:0;justify-content:center}.widget-open-button{font-size:0}.web-widget-fallback{left:8px!important;right:8px;width:auto}.ranking-head{display:none}.ranking-row{grid-template-columns:2.6rem 4rem minmax(0,1fr) auto 2rem}.ranking-row .level{display:none}.overview-grid>.growth-panel>.chart-area{width:100%;height:20rem;min-height:20rem;flex:0 0 20rem}.chase-dialog{width:calc(100vw - 1rem);max-height:calc(100dvh - 1rem);padding-bottom:max(1rem,env(safe-area-inset-bottom))}.chase-group-scroll .chase-group>div{max-height:42dvh}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.spinner{animation:none}button:active:not(:disabled){transform:none}}

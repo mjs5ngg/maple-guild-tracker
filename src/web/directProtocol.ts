@@ -1,7 +1,8 @@
 // 대시보드와 격리 조회 iframe 사이에서 허용하는 메시지를 정의합니다.
 import type {Snapshot} from "./types";
 
-export type DirectStatus={keyStored:boolean;serviceConfirmed:boolean;busy:boolean;completed:number;total:number;failed:number;lastSuccessAt:string|null;nextRefreshAt:string|null;cachedCount:number;storagePersistent:boolean|null;message:string};
+export type DirectMetrics={latestMs:number|null;totalMs:number|null;requests:number;rateLimits:number};
+export type DirectStatus={cacheReady:boolean;keyStored:boolean;serviceConfirmed:boolean;busy:boolean;completed:number;total:number;failed:number;lastSuccessAt:string|null;nextRefreshAt:string|null;cachedCount:number;storagePersistent:boolean|null;metrics:DirectMetrics|null;message:string};
 export type DashboardToDirect={type:"configure";primary:string;favorites:string[];automatic:boolean}|{type:"refresh"}|{type:"delete-key"};
 export type DirectToDashboard={type:"status";status:DirectStatus}|{type:"snapshot";rows:Snapshot[]}|{type:"error";message:string};
 
