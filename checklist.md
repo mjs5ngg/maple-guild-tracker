@@ -624,3 +624,13 @@
 - [x] 개인정보 안내·CSP·빌드 격리 검사를 새 공급자에 맞춘다.
 - [x] 광고 호스트를 배포하고 공개 웹의 비활성·동의·차단 상태를 검증한다.
 - [x] 전체 테스트 후 커밋하고 운영 웹에 반영한다.
+
+# guildfollow.com 정식 도메인 전환
+
+- [ ] Cloudflare Registrar에서 `guildfollow.com`을 1년 등록하고 자동 갱신 상태를 확인한다.
+- [ ] 공개 Worker에 `guildfollow.com` 사용자 정의 도메인을 연결하고 `www`를 루트로 리디렉션한다.
+- [ ] 공개 웹·직접 조회·광고 출처의 CSP와 허용 origin을 새 도메인으로 전환한다.
+- [ ] Google OAuth 반환 주소와 Android 공개 주소를 새 도메인으로 전환한다.
+- [ ] `ads.txt`, `robots.txt`, sitemap, canonical과 광고 매체 주소를 정식 도메인 기준으로 정리한다.
+- [ ] 기존 `app.guildmate.workers.dev`를 전환 기간 동안 호환한 뒤 정식 도메인으로 리디렉션한다.
+- [ ] 전체 테스트·웹 배포·Android 빌드 후 정식 주소에서 로그인·직접 조회·광고를 검증한다.
