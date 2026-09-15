@@ -4,6 +4,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-12",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "guildfollow.com", "custom_domain": true },
+    { "pattern": "www.guildfollow.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "../web-dist/dashboard",
     "binding": "ASSETS",

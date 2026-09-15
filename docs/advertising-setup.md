@@ -17,7 +17,7 @@
 7. `powershell -ExecutionPolicy Bypass -File scripts/deploy-edge.ps1`을 실행합니다.
 
 ```dotenv
-WEB_AD_HOST_ORIGIN=https://maple-exp-ads.pages.dev
+WEB_AD_HOST_ORIGIN=https://ads.guildfollow.com
 WEB_ADVERTICA_DESKTOP_LEFT_TAG_B64=
 WEB_ADVERTICA_DESKTOP_RIGHT_TAG_B64=
 WEB_ADVERTICA_DESKTOP_BOTTOM_TAG_B64=
@@ -35,7 +35,7 @@ PowerShell에서 태그를 Base64로 바꾸려면 태그를 클립보드에 복�
 
 ## 격리 경계
 
-- 광고 사업자 코드는 `https://maple-exp-ads.pages.dev`에서만 실행됩니다.
+- 광고 사업자 코드는 `https://ads.guildfollow.com`에서만 실행됩니다.
 - 공개 대시보드는 크기와 준비 상태만 전달받고 광고 태그를 포함하지 않습니다.
 - 개인 NEXON 서비스 키 화면에는 광고 출처나 광고 코드가 포함되지 않습니다.
 - 광고 차단 또는 로드 실패 시 광고 슬롯을 숨기며 핵심 기능은 계속 동작합니다.

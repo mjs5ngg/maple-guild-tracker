@@ -12,10 +12,10 @@ const table=rust.match(/const EXP_200_TO_299:[\s\S]*?= \[([\s\S]*?)\];/)?.[1].sp
 if(table?.length!==100) throw new Error("경험치표를 확인하세요.");
 export default defineConfig(({mode,command})=>{
 const productionDefaults=command==="build"?{
- PUBLIC_ORIGIN:process.env.PUBLIC_ORIGIN||"https://app.guildmate.workers.dev",
- WEB_DASHBOARD_ORIGIN:process.env.WEB_DASHBOARD_ORIGIN||process.env.PUBLIC_ORIGIN||"https://app.guildmate.workers.dev",
+ PUBLIC_ORIGIN:process.env.PUBLIC_ORIGIN||"https://guildfollow.com",
+ WEB_DASHBOARD_ORIGIN:process.env.WEB_DASHBOARD_ORIGIN||process.env.PUBLIC_ORIGIN||"https://guildfollow.com",
  WEB_DIRECT_ORIGIN:process.env.WEB_DIRECT_ORIGIN||"https://maple-exp-personal.pages.dev",
- WEB_AD_HOST_ORIGIN:process.env.WEB_AD_HOST_ORIGIN||"https://maple-exp-ads.pages.dev"
+ WEB_AD_HOST_ORIGIN:process.env.WEB_AD_HOST_ORIGIN||"https://ads.guildfollow.com"
 }:{};
 const env={...loadEnv(mode,process.cwd(),""),...process.env,...productionDefaults};
 const {dashboardOrigin,directOrigin}=webOrigins(env);
@@ -34,6 +34,6 @@ return {
  resolve:{alias:{"/src":path.resolve("src")}},
  build:{outDir:path.resolve("web-dist",target),emptyOutDir:true},
  server:{host:"127.0.0.1",port:adHost?3104:direct?3101:3102,strictPort:true,fs:{allow:[process.cwd()]},proxy:direct||adHost?undefined:{"/api":localProxy,"/auth":localProxy},
- headers:direct?{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3101 https://open.api.nexon.com; img-src 'self' https://open.api.nexon.com data:; frame-ancestors http://127.0.0.1:3102 https://app.guildmate.workers.dev; base-uri 'none'","Referrer-Policy":"no-referrer"}:{}},
+ headers:direct?{"Content-Security-Policy":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3101 https://open.api.nexon.com; img-src 'self' https://open.api.nexon.com data:; frame-ancestors http://127.0.0.1:3102 https://guildfollow.com https://app.guildmate.workers.dev; base-uri 'none'","Referrer-Policy":"no-referrer"}:{}},
  preview:{host:"127.0.0.1",port:direct?3101:3102,strictPort:true}
 };});

@@ -604,3 +604,10 @@
 - Cloudflare Registrar 실조회에서 신규 등록과 연간 갱신 가격이 모두 US$10.46이고 현재 구매 가능한 상태임을 확인했다.
 - 공개 웹은 루트 `https://guildfollow.com`을 사용한다. 개인 키 조회와 광고 코드는 기존처럼 별도 출처에 격리하되 부모 허용 origin을 새 정식 주소로 전환한다.
 - 구매 완료 전에는 Worker 라우트와 운영 기본 origin을 바꾸지 않는다. 등록 직후 사용자 정의 도메인 연결, OAuth·CSP 전환, 이전 주소 호환, 광고 심사용 문서를 한 묶음으로 적용한다.
+- `guildfollow.com` 등록을 완료했다. 자동 갱신이 켜져 있고 만료일은 2027-09-16이며 Cloudflare 청구 금액은 US$10.46이다.
+- 공개 Worker 버전 `e7f934fb-1e43-4512-97e3-e9d07775f378`을 루트와 `www` 사용자 정의 도메인에 연결했다. 루트와 `/api/status`는 HTTP 200이며 `www`는 DNS·인증서 전파 중이다.
+- 광고 Pages에는 `ads.guildfollow.com`을 연결했고 HTTP 200과 새 부모 origin CSP를 확인했다. Advertica 공식 문서에서 별도 `ads.txt` 레코드를 제시하지 않아 추측한 판매자 ID는 게시하지 않는다.
+- 개인 조회 iframe을 `key.guildfollow.com`으로 즉시 바꾸면 브라우저 동일 출처 정책 때문에 기존 IndexedDB의 API 키와 경험치 기록을 읽지 못한다. 데이터 손실을 피하기 위해 공개 주소만 먼저 전환하고 직접 조회는 `maple-exp-personal.pages.dev`를 유지한다.
+- 정식 주소를 포함한 Android 0.4.0 ARM64 APK를 다시 빌드했고 v2·v3 서명 검증을 통과했다. SHA-256은 `99282666DEB4B8747AB585EC00975CDCE16586E60C6B5A953EA440A78698439F`다.
+- 기존 `app.guildmate.workers.dev`의 대표·즐겨찾기 설정과 현재 탭을 URL fragment로 정식 주소에 한 번 전달하고 즉시 주소에서 제거하는 이전 경로를 추가했다. fragment는 HTTP 요청으로 서버에 전송되지 않으며 API 키와 경험치 기록은 포함하지 않는다.
+- Cloudflare 단일 리디렉션 규칙 `WWW에서 루트로 리디렉션 [템플릿]`을 301·쿼리 유지로 활성화했다. 공용 DNS 1.1.1.1과 8.8.8.8에서 `www.guildfollow.com` 해석을 확인했다.

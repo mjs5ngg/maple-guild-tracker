@@ -24,7 +24,7 @@ class MainActivity : TauriActivity() {
     @JvmStatic private external fun importDirectSnapshots(dbPath: String, payload: String): Boolean
   }
   override val handleBackNavigation: Boolean = true
-  private val publicOrigin = "https://app.guildmate.workers.dev"
+  private val publicOrigin = "https://guildfollow.com"
   private var dashboardWebView: WebView? = null
   private var pendingLoginCode: String? = null
 

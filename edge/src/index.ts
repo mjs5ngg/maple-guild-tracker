@@ -29,7 +29,7 @@ function sessionCookie(request:Request,name:string,value:string,maxAge:number){r
 function addSecurity(response:Response,api=false){
  const headers=new Headers(response.headers);
  headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("permissions-policy","camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()");headers.set("x-frame-options","DENY");
- headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://maple-exp-personal.pages.dev https://maple-exp-ads.pages.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'");
+ headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://key.guildfollow.com https://ads.guildfollow.com https://maple-exp-personal.pages.dev https://maple-exp-ads.pages.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'");
  if(api)headers.set("cache-control","no-store");
  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }
@@ -245,6 +245,6 @@ async function route(request:Request,env:Env){
 }
 
 export default {async fetch(request:Request,env:Env){
-  try{const path=new URL(request.url).pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
+  try{const url=new URL(request.url);if(url.hostname==="www.guildfollow.com"){url.hostname="guildfollow.com";return Response.redirect(url.toString(),308);}const path=url.pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
   catch(error){if(error instanceof ApiError)return addSecurity(json({error:error.message},error.status),true);console.error("edge request failed",error instanceof Error?error.message:"unknown");return addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true);}
  },async scheduled(_controller:ScheduledController,env:Env){const now=nowSeconds();await env.DB.batch([env.DB.prepare("DELETE FROM login_attempts WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM request_budgets WHERE started_at<?").bind(now-2*86400)]);}} satisfies ExportedHandler<Env>;

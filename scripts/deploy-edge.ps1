@@ -2,8 +2,9 @@
 param([switch]$ApplyMigrations)
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$publicOrigin = "https://app.guildmate.workers.dev"
+$publicOrigin = "https://guildfollow.com"
 $directOrigin = "https://maple-exp-personal.pages.dev"
+$adOrigin = "https://ads.guildfollow.com"
 
 Push-Location $projectRoot
 try {
@@ -16,6 +17,7 @@ try {
     $env:PUBLIC_ORIGIN = $publicOrigin
     $env:WEB_DASHBOARD_ORIGIN = $publicOrigin
     $env:WEB_DIRECT_ORIGIN = $directOrigin
+    $env:WEB_AD_HOST_ORIGIN = $adOrigin
     npm run web:build
     if ($LASTEXITCODE -ne 0) { throw "공개 웹 빌드가 실패했습니다." }
     if ($ApplyMigrations) {
