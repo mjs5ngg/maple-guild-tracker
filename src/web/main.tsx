@@ -33,12 +33,14 @@ type View="overview"|"guild"|"favorites"|"chase";
 const validView=(value:string):value is View=>["overview","guild","favorites","chase"].includes(value);
 const initialView=():View=>{const value=location.hash.slice(1);return validView(value)?value:"overview";};
 const storedDays=(key:string,defaultValue:1|7|30):1|7|30=>{const current=Number(localStorage.getItem(key)||localStorage.getItem("web-days"));return current===7?7:current===30?30:current===1?1:defaultValue;};
+const useMediaQuery=(query:string)=>{const [matches,setMatches]=useState(()=>matchMedia(query).matches);useEffect(()=>{const media=matchMedia(query),update=()=>setMatches(media.matches);media.addEventListener("change",update);update();return()=>media.removeEventListener("change",update);},[query]);return matches;};
 const gainLabel=(value:bigint|null)=>value===null?"자료 없음":`+${compact(value)}`;
 function rankRows(rows:Snapshot[],period:boolean,days:number,gains?:Map<string,Map<number,bigint|null>>){const total=sortRows(rows,false,__EXP_TABLE__),tie=new Map(total.map((row,index)=>[row.ocid,index]));if(!period)return total;return [...rows].sort((left,right)=>{const a=gains?.get(left.ocid)?.get(days)??periodGain(left,days,__EXP_TABLE__).value,b=gains?.get(right.ocid)?.get(days)??periodGain(right,days,__EXP_TABLE__).value;if(a===b)return (tie.get(left.ocid)??0)-(tie.get(right.ocid)??0);return a===null?1:b===null?-1:a>b?-1:1;});}
 
 export function PublicApp(){
  useEffect(registerStatusTool,[]);const cache=useQueryClient();
- const {consent,setConsent,resetConsent}=useAdConsent(),[adsFailed,setAdsFailed]=useState(false),desktopAds=window.innerWidth>=1440,adsEnabled=shouldLoadAds(monetization,consent)&&!adsFailed,sideAds=adsEnabled&&desktopAds&&monetization.ads.desktopLeft&&monetization.ads.desktopRight,bottomPlacement=desktopAds?"desktopBottom" as const:"mobileBottom" as const,bottomEnabled=adsEnabled&&monetization.ads[bottomPlacement];
+ const desktopAds=useMediaQuery("(min-width: 1440px)"),mobileLayout=useMediaQuery("(max-width: 760px)");
+ const {consent,setConsent,resetConsent}=useAdConsent(),[adsFailed,setAdsFailed]=useState(false),adsEnabled=shouldLoadAds(monetization,consent)&&!adsFailed,sideAds=adsEnabled&&desktopAds&&monetization.ads.desktopLeft&&monetization.ads.desktopRight,bottomPlacement=mobileLayout?"mobileBottom" as const:"desktopBottom" as const,bottomEnabled=adsEnabled&&monetization.ads[bottomPlacement];
  const failAds=useCallback(()=>setAdsFailed(true),[]);
  const [message,setMessage]=useState(""),[settingsOpen,setSettingsOpen]=useState(location.hash==="#settings"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[view,setView]=useState<View>(initialView);
  const [primary,setPrimary]=useState(""),[favorites,setFavorites]=useState(""),[favoriteInput,setFavoriteInput]=useState(""),[personal,setPersonal]=useState<Snapshot[]>([]),[selected,setSelected]=useState("");
