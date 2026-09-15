@@ -12,6 +12,7 @@
     "web:build": "node scripts/build-web.mjs",
     "web:server": "cargo run --manifest-path server/Cargo.toml",
     "web:direct": "powershell -NoProfile -Command \"$env:WEB_DIRECT='1'; npx vite --config vite.web.config.ts\"",
+    "web:ads": "powershell -NoProfile -Command \"$env:WEB_AD_HOST='1'; npx vite --config vite.web.config.ts\"",
     "edge:typecheck": "tsc -p edge/tsconfig.json",
     "edge:migrate:local": "wrangler d1 migrations apply maple-exp-public --local --config edge/wrangler.jsonc",
     "edge:dev": "wrangler dev --config edge/wrangler.jsonc",

@@ -8,6 +8,7 @@ for (const [script, args, extraEnv] of [
   ["typescript/bin/tsc", ["--noEmit"], {}],
   ["vite/bin/vite.js", ["build", "--config", "vite.web.config.ts"], { WEB_DIRECT: "0" }],
   ["vite/bin/vite.js", ["build", "--config", "vite.web.config.ts"], { WEB_DIRECT: "1" }],
+  ["vite/bin/vite.js", ["build", "--config", "vite.web.config.ts"], { WEB_DIRECT: "0", WEB_AD_HOST: "1" }],
 ]) {
   const result = spawnSync(process.execPath, [`node_modules/${script}`, ...args], {
     cwd, env: { ...process.env, ...extraEnv }, stdio: "inherit",
@@ -26,7 +27,14 @@ if (dashboardBundle.includes("http://127.0.0.1:3101") || !dashboardBundle.includ
 }
 const directAssets = readdirSync(new URL("../web-dist/direct/assets/", import.meta.url)).filter(name => name.endsWith(".js"));
 const directBundle = directAssets.map(name => readFileSync(new URL(`../web-dist/direct/assets/${name}`, import.meta.url), "utf8")).join("\n");
-if (directBundle.includes("t1.kakaocdn.net") || directBundle.includes("kakao_ad_area") || directBundle.includes("WEB_ADFIT_")) {
+if (directBundle.includes("maple-exp-ads.pages.dev") || directBundle.includes("atOptions") || directBundle.includes("WEB_ADSTERRA_")) {
   console.error("개인 조회 번들에 광고 코드가 포함되었습니다.");
+  process.exit(1);
+}
+const adAssets = readdirSync(new URL("../web-dist/ads/assets/", import.meta.url)).filter(name => name.endsWith(".js"));
+const adBundle = adAssets.map(name => readFileSync(new URL(`../web-dist/ads/assets/${name}`, import.meta.url), "utf8")).join("\n");
+const configuredAdKeys = Object.entries(process.env).filter(([name, value]) => name.startsWith("WEB_ADSTERRA_") && name.endsWith("_KEY") && value).map(([, value]) => value);
+if (configuredAdKeys.some(key => dashboardBundle.includes(key) || directBundle.includes(key)) || configuredAdKeys.some(key => !adBundle.includes(key))) {
+  console.error("광고 키의 격리 번들 경계를 확인하세요.");
   process.exit(1);
 }

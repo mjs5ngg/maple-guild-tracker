@@ -9,6 +9,8 @@ export interface Snapshot {ocid:string;basic:Basic;observedAt:string;history:{da
 declare global {
 const __EXP_TABLE__:string[];
 const __MONETIZATION__:import("./monetizationConfig").MonetizationConfig;
+ const __ADSTERRA__:Record<import("./monetizationConfig").AdPlacement,{key:string;scriptUrl:string;width:number;height:number}|null>;
  const __DASHBOARD_ORIGIN__:string;
  const __DIRECT_ORIGIN__:string;
+ interface Window {atOptions?:Record<string,unknown>;}
 }
