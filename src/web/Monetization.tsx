@@ -1,18 +1,8 @@
-// 광고 동의와 공개 대시보드의 격리 배너·제휴 광고 표시를 관리합니다.
+// 공개 대시보드의 격리 배너와 제휴 광고 표시를 관리합니다.
 import {useEffect,useRef,useState} from "react";
-import type {AdPlacement,AffiliateCard,MonetizationConfig} from "./monetizationConfig";
-import {hasDisplayAds} from "./monetizationConfig";
-
-export type AdConsent="accepted"|"declined"|null;
-const CONSENT_KEY="ad-consent-v3";
-const readConsent=():AdConsent=>{const value=localStorage.getItem(CONSENT_KEY);return value==="accepted"||value==="declined"?value:null;};
-export function useAdConsent(){const [consent,setConsentState]=useState<AdConsent>(readConsent);const setConsent=(value:Exclude<AdConsent,null>)=>{localStorage.setItem(CONSENT_KEY,value);setConsentState(value);};const resetConsent=()=>{localStorage.removeItem(CONSENT_KEY);setConsentState(null);};return {consent,setConsent,resetConsent};}
+import type {AdPlacement,AffiliateCard} from "./monetizationConfig";
 
 const dimensions:Record<AdPlacement,[number,number]>={desktopLeft:[160,600],desktopRight:[160,600],desktopBottom:[728,90],mobileBottom:[320,50]};
 export function AdSlot({placement,origin,onFailure}:{placement:AdPlacement;origin:string;onFailure:()=>void}){const frame=useRef<HTMLIFrameElement>(null),[ready,setReady]=useState(false),[failed,setFailed]=useState(false),[width,height]=dimensions[placement];useEffect(()=>{const receive=(event:MessageEvent)=>{if(event.origin!==origin||event.source!==frame.current?.contentWindow||event.data?.placement!==placement)return;if(event.data.type==="ad-ready")setReady(true);if(event.data.type==="ad-error"){setFailed(true);onFailure();}};addEventListener("message",receive);return()=>removeEventListener("message",receive);},[origin,placement,onFailure]);if(!origin||failed)return null;return <div className={`display-ad-slot ${placement} ${ready?"ready":"loading"}`} aria-label="광고"><span className="ad-disclosure">광고</span><iframe ref={frame} title="광고" width={width} height={height} src={`${origin}/?placement=${placement}`} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" loading={placement.includes("Bottom")?"lazy":"eager"} referrerPolicy="strict-origin-when-cross-origin" onError={onFailure}/></div>;}
-
-export function AdConsentBanner({visible,onChoice}:{visible:boolean;onChoice:(value:"accepted"|"declined")=>void}){if(!visible)return null;return <section className="ad-consent" role="dialog" aria-labelledby="ad-consent-title" aria-describedby="ad-consent-copy"><div><b id="ad-consent-title">광고 쿠키를 선택해 주세요.</b><p id="ad-consent-copy">광고를 허용하면 Advertica가 광고 제공과 성과 측정을 위해 쿠키와 접속 정보를 처리할 수 있습니다. 거부해도 모든 기능을 사용할 수 있습니다.</p><a href="/privacy">자세히 보기</a></div><div><button className="quiet-button" onClick={()=>onChoice("declined")}>필수 기능만</button><button className="primary-button" onClick={()=>onChoice("accepted")}>광고 허용</button></div></section>;}
-
-export function AdSettingsButton({config,onReset}:{config:MonetizationConfig;onReset:()=>void}){if(!hasDisplayAds(config))return null;return <button type="button" className="footer-button" onClick={onReset}>광고 설정</button>;}
 
 export function AffiliateRecommendations({cards}:{cards:AffiliateCard[]}){if(!cards.length)return null;return <section className="surface affiliate-section" aria-labelledby="affiliate-title"><div className="affiliate-heading"><div><span className="section-kicker">RECOMMENDED</span><h2 id="affiliate-title">추천 장비</h2></div><span>광고·제휴 링크</span></div><p className="affiliate-disclosure">링크를 통한 구매가 이루어지면 서비스 운영자가 수수료를 받을 수 있습니다.</p><div className="affiliate-grid">{cards.map(card=><a key={`${card.provider}:${card.url}`} href={card.url} target="_blank" rel="sponsored noopener noreferrer"><small>{card.provider==="coupang"?"쿠팡 파트너스":"링크프라이스"}</small><b>{card.title}</b><span>{card.description}</span><em>상품 보기 ↗</em></a>)}</div></section>;}

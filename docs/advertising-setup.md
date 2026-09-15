@@ -11,7 +11,7 @@
    - 데스크톱 오른쪽 `160×600`.
    - 데스크톱 하단 `728×90`.
    - 모바일 하단 `320×50`.
-4. Placement name은 각각 `guildmate-left`, `guildmate-right`, `guildmate-bottom-desktop`, `guildmate-bottom-mobile`로 정합니다.
+4. Placement name은 각각 `guildmate_desktop_left`, `guildmate_desktop_right`, `guildmate_bottom_desktop`, `guildmate_bottom_mobile`로 정합니다.
 5. 확장 필터에서는 성인·도박·다운로드·오해 유도 소재를 차단합니다. 수익 극대화보다 일반 서비스 화면의 안전성을 우선합니다.
 6. 생성된 HTML 태그 전체를 UTF-8 Base64로 바꿔 `.env.monetization`에 넣습니다. 이 파일은 Git에 올리지 않습니다.
 7. `powershell -ExecutionPolicy Bypass -File scripts/deploy-edge.ps1`을 실행합니다.
@@ -31,7 +31,7 @@ PowerShell에서 태그를 Base64로 바꾸려면 태그를 클립보드에 복�
 [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Clipboard -Raw)))
 ```
 
-광고 태그가 하나도 없으면 광고 동의창, 광고 슬롯, 고정 광고용 여백이 모두 숨겨집니다. 광고가 설정되어도 사용자가 동의하기 전에는 광고 전용 iframe을 만들지 않습니다.
+광고 태그가 하나도 없으면 광고 슬롯과 고정 광고용 여백이 모두 숨겨집니다. 광고 태그가 설정되면 별도 동의창 없이 격리된 광고 전용 iframe을 불러오며, 개인정보 안내에서 광고 공급자와 브라우저 차단 방법을 고지합니다.
 
 ## 격리 경계
 

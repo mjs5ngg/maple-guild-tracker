@@ -13,4 +13,3 @@ export function normalizeMonetization(value:unknown):MonetizationConfig{
  return {ads,adHostOrigin,affiliates};
 }
 export const hasDisplayAds=(config:MonetizationConfig)=>Boolean(config.adHostOrigin)&&Object.values(config.ads).some(Boolean);
-export const shouldLoadAds=(config:MonetizationConfig,consent:string|null)=>hasDisplayAds(config)&&consent==="accepted";
