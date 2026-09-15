@@ -7,7 +7,8 @@ export interface Basic {
 export type HistoryBasic=Pick<Basic,"character_level"|"character_exp"|"character_exp_rate">;
 export interface Snapshot {ocid:string;basic:Basic;observedAt:string;history:{date:string;basic:HistoryBasic}[];todayBaseline?:HistoryBasic;estimated?:boolean;isGuildMember?:boolean;guildMembership?:Record<string,boolean>|null;isHunting?:boolean;activityDecidedAt?:string|null}
 declare global {
- const __EXP_TABLE__:string[];
+const __EXP_TABLE__:string[];
+const __MONETIZATION__:import("./monetizationConfig").MonetizationConfig;
  const __DASHBOARD_ORIGIN__:string;
  const __DIRECT_ORIGIN__:string;
 }

@@ -29,7 +29,7 @@ function sessionCookie(request:Request,name:string,value:string,maxAge:number){r
 function addSecurity(response:Response,api=false){
  const headers=new Headers(response.headers);
  headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("permissions-policy","camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()");headers.set("x-frame-options","DENY");
- headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://maple-exp-personal.pages.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'");
+ headers.set("content-security-policy","default-src 'self'; script-src 'self' https://t1.kakaocdn.net; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https://open.api.nexon.com https://t1.kakaocdn.net https://display.ad.daum.net https://serv.ds.kakao.com https://kaat.daum.net data:; connect-src 'self' https://display.ad.daum.net https://serv.ds.kakao.com https://kaat.daum.net https://aem-kakao-collector.onkakao.net; frame-src https://maple-exp-personal.pages.dev https://t1.kakaocdn.net https://display.ad.daum.net https://serv.ds.kakao.com; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'");
  if(api)headers.set("cache-control","no-store");
  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }

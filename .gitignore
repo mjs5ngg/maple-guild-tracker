@@ -7,6 +7,7 @@ release/
 server/target/
 .env
 .env.local
+.env.monetization
 .google-*
 __pycache__/
 web-dist/
