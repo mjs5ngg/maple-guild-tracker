@@ -1,6 +1,6 @@
 // Cloudflare Workers에서 익명 설정·Google 로그인·공개 순위와 서명 수집 API를 제공합니다.
 import {sha256,signatureMatches,timestampMilliseconds} from "./security";
-import {FAVORITE_LIMIT,type IngestBody,validChasePreset,validIngest,validProfile} from "./validation";
+import {FAVORITE_LIMIT,type IngestBody,validChasePreset,validChasePresetName,validIngest,validProfile} from "./validation";
 
 interface Env{
  DB:D1Database;
@@ -8,6 +8,9 @@ interface Env{
  GOOGLE_CLIENT_ID?:string;
  GOOGLE_CLIENT_SECRET?:string;
  INGEST_HMAC_SECRET?:string;
+ WRITE_RATE_LIMITER?:RateLimit;
+ AUTH_RATE_LIMITER?:RateLimit;
+ LEGACY_ROLLBACK_ENABLED?:string;
 }
 type Row=Record<string,unknown>;
 
@@ -25,8 +28,8 @@ function cookies(request:Request){
 function sessionCookie(request:Request,name:string,value:string,maxAge:number){return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${new URL(request.url).protocol==="https:"?"; Secure":""}`;}
 function addSecurity(response:Response,api=false){
  const headers=new Headers(response.headers);
- headers.set("x-content-type-options","nosniff"); headers.set("referrer-policy","no-referrer");
- headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://maple-exp-personal.pages.dev; frame-ancestors 'none'; base-uri 'none'");
+ headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("permissions-policy","camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()");headers.set("x-frame-options","DENY");
+ headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://maple-exp-personal.pages.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'");
  if(api)headers.set("cache-control","no-store");
  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }
@@ -48,13 +51,9 @@ async function accountUserId(request:Request,env:Env){
  const row=await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND kind='account' AND expires_at>?").bind(await sha256(token),nowSeconds()).first<{user_id:string}>();
  if(!row)throw new ApiError(401,"로그인 세션이 만료되었습니다.");return row.user_id;
 }
-async function takeBudget(env:Env,bucket:string,limit:number){
- const now=nowSeconds(),row=await env.DB.prepare("SELECT started_at,used FROM request_budgets WHERE bucket=?").bind(bucket).first<{started_at:number;used:number}>();
- if(row&&now-row.started_at<3600&&row.used>=limit)throw new ApiError(429,"잠시 후 다시 시도해 주세요.");
- if(!row||now-row.started_at>=3600)await env.DB.prepare("INSERT INTO request_budgets(bucket,started_at,used) VALUES(?,?,1) ON CONFLICT(bucket) DO UPDATE SET started_at=excluded.started_at,used=1").bind(bucket,now).run();
- else await env.DB.prepare("UPDATE request_budgets SET used=used+1 WHERE bucket=?").bind(bucket).run();
-}
-async function bodyJson(request:Request){try{return await request.json();}catch{throw new ApiError(400,"요청 내용을 확인하세요.");}}
+async function takeRate(binding:RateLimit|undefined,key:string){if(!binding)return;const result=await binding.limit({key});if(!result.success)throw new ApiError(429,"요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.");}
+async function readText(request:Request,maxBytes:number){const declared=Number(request.headers.get("content-length")||0);if(declared>maxBytes)throw new ApiError(413,"요청 내용이 너무 큽니다.");const text=await request.text();if(new TextEncoder().encode(text).byteLength>maxBytes)throw new ApiError(413,"요청 내용이 너무 큽니다.");return text;}
+async function bodyJson(request:Request,maxBytes=32_768){try{return JSON.parse(await readText(request,maxBytes));}catch(error){if(error instanceof ApiError)throw error;throw new ApiError(400,"요청 내용을 확인하세요.");}}
 export async function pkceChallenge(verifier:string){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier));return btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+","-").replaceAll("/","_").replace(/=+$/g,"");}
 function basic(row:Row){return {character_name:row.name,world_name:row.world_name,character_class:row.character_class,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate),character_guild_name:row.guild_name,character_image:row.image_url};}
 function historyBasic(row:Row){return {character_name:row.name,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate)};}
@@ -70,7 +69,7 @@ async function me(request:Request,env:Env){
 }
 async function profile(request:Request,env:Env){
  const id=await accountUserId(request,env),input=await bodyJson(request); if(!validProfile(input))throw new ApiError(400,"대표캐릭터와 즐겨찾기 30명 이내의 닉네임을 확인하세요.");
- await takeBudget(env,`profile:${id}`,10);
+ await takeRate(env.WRITE_RATE_LIMITER,`profile:${id}`);
  const statements=[env.DB.prepare("UPDATE users SET primary_name=?,last_active=? WHERE id=?").bind(input.primary,nowSeconds(),id),env.DB.prepare("DELETE FROM favorites WHERE user_id=?").bind(id)];
  for(const name of [...input.favorites].sort())statements.push(env.DB.prepare("INSERT INTO favorites(user_id,name) VALUES(?,?)").bind(id,name));
  await env.DB.batch(statements); return json({ok:true});
@@ -83,15 +82,25 @@ async function chasePresets(request:Request,env:Env){
   return json({presets:rows.results.map(row=>({...row,ocids:JSON.parse(String(row.ocidsJson)),ocidsJson:undefined}))});
  }
  if(method==="DELETE"){
+  await takeRate(env.WRITE_RATE_LIMITER,`preset:${id}`);
   if(!presetId)throw new ApiError(400,"삭제할 프리셋을 확인하세요.");
   await env.DB.prepare("DELETE FROM chase_presets WHERE id=? AND user_id=?").bind(presetId,id).run();return json({ok:true});
  }
+ if(method==="PATCH"){
+  await takeRate(env.WRITE_RATE_LIMITER,`preset:${id}`);
+  if(!presetId)throw new ApiError(400,"수정할 프리셋을 확인하세요.");
+  const input=await bodyJson(request);if(!validChasePresetName(input))throw new ApiError(400,"프리셋 이름은 1자 이상 40자 이내로 입력하세요.");
+  const now=nowSeconds(),preset=await env.DB.prepare("UPDATE chase_presets SET name=?,updated_at=? WHERE id=? AND user_id=? RETURNING id,name,period_days AS periodDays,ocids_json AS ocidsJson,sort_key AS sortKey,sort_direction AS sortDirection,updated_at AS updatedAt").bind(input.name.trim(),now,presetId,id).first<Record<string,unknown>>();
+  if(!preset)throw new ApiError(404,"수정할 프리셋을 찾을 수 없습니다.");
+  return json({preset:{...preset,ocids:JSON.parse(String(preset.ocidsJson)),ocidsJson:undefined}});
+ }
  if(method==="PUT"||method==="POST"){
+  await takeRate(env.WRITE_RATE_LIMITER,`preset:${id}`);
   const input=await bodyJson(request);if(!validChasePreset(input)||presetId&&presetId!==input.id)throw new ApiError(400,"따라잡기 프리셋을 확인하세요.");
   const count=await env.DB.prepare("SELECT count(*) AS count FROM chase_presets WHERE user_id=? AND id<>?").bind(id,input.id).first<{count:number}>();
   if(Number(count?.count||0)>=20)throw new ApiError(400,"프리셋은 최대 20개까지 저장할 수 있습니다.");
   const now=nowSeconds();await env.DB.prepare("INSERT INTO chase_presets(id,user_id,name,period_days,ocids_json,sort_key,sort_direction,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,period_days=excluded.period_days,ocids_json=excluded.ocids_json,sort_key=excluded.sort_key,sort_direction=excluded.sort_direction,updated_at=excluded.updated_at WHERE chase_presets.user_id=excluded.user_id").bind(input.id,id,input.name.trim(),input.periodDays,JSON.stringify(input.ocids),input.sortKey,input.sortDirection,now,now).run();
-  return json({ok:true,updatedAt:now});
+  return json({preset:{...input,name:input.name.trim(),updatedAt:now}});
  }
  throw new ApiError(405,"지원하지 않는 요청 방식입니다.");
 }
@@ -124,6 +133,7 @@ async function dashboard(request:Request,env:Env){
 }
 
 async function googleStart(request:Request,env:Env){
+ await takeRate(env.AUTH_RATE_LIMITER,`google:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  let linkUser:string|null=null; try{linkUser=await userId(request,env);}catch{/* 새 계정으로 계속합니다. */}
  const state=randomToken(),browser=randomToken(),expires=nowSeconds()+600;
@@ -131,6 +141,7 @@ async function googleStart(request:Request,env:Env){
  return new Response(null,{status:302,headers:{location:googleUrl(request,env,state),"set-cookie":sessionCookie(request,"maple_login",browser,600)}});
 }
 async function androidStart(request:Request,env:Env){
+ await takeRate(env.AUTH_RATE_LIMITER,`android-start:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  const input=await bodyJson(request) as {challenge?:unknown};if(typeof input.challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(input.challenge))throw new ApiError(400,"Android 로그인 요청을 확인하세요.");
  let linkUser:string|null=null;try{linkUser=await accountUserId(request,env);}catch{/* 새 계정으로 계속합니다. */}const state=randomToken();
@@ -163,6 +174,7 @@ async function googleCallback(request:Request,env:Env){
  const headers=new Headers({location:`${origin}/`});headers.append("set-cookie",sessionCookie(request,"maple_session",session,30*86400));headers.append("set-cookie",sessionCookie(request,"maple_login","",0));return new Response(null,{status:302,headers});
 }
 async function androidExchange(request:Request,env:Env){
+ await takeRate(env.AUTH_RATE_LIMITER,`android-exchange:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  const input=await bodyJson(request) as {code?:unknown;verifier?:unknown};
  if(typeof input.code!=="string"||typeof input.verifier!=="string"||!/^[A-Za-z0-9_-]{43,128}$/.test(input.verifier))throw new ApiError(400,"Android 로그인 교환 요청을 확인하세요.");
  const challenge=await pkceChallenge(input.verifier);
@@ -170,10 +182,10 @@ async function androidExchange(request:Request,env:Env){
  if(!row)throw new ApiError(400,"Android 로그인 코드가 만료되었거나 이미 사용되었습니다.");
  const session=randomToken();await env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),row.user_id,nowSeconds()+30*86400).run();return json({session});
 }
-async function logout(request:Request,env:Env){const token=cookies(request).maple_session;if(token)await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha256(token)).run();const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
+async function logout(request:Request,env:Env){const token=cookies(request).maple_session;if(token){await takeRate(env.WRITE_RATE_LIMITER,`logout:${await sha256(token)}`);await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha256(token)).run();}const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
 async function deleteAccount(request:Request,env:Env){
  if(!cookies(request).maple_session)throw new ApiError(401,"계정 탈퇴는 로그인 후 가능합니다.");
- const id=await userId(request,env),input=await bodyJson(request) as {confirmation?:unknown};if(input.confirmation!=="탈퇴")throw new ApiError(400,"탈퇴 확인 문구를 입력하세요.");
+ const id=await userId(request,env);await takeRate(env.WRITE_RATE_LIMITER,`account:${id}`);const input=await bodyJson(request) as {confirmation?:unknown};if(input.confirmation!=="탈퇴")throw new ApiError(400,"탈퇴 확인 문구를 입력하세요.");
  await env.DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;
 }
 
@@ -192,7 +204,7 @@ async function subscriptions(request:Request,env:Env){
  return json({activeSince:new Date(active*1000).toISOString(),primaries,favorites,targets:rows.results.map(row=>row.name)});
 }
 async function ingest(request:Request,env:Env){
- const raw=await request.text(),auth=await internalAuth(request,env,raw),parsed:unknown=(()=>{try{return JSON.parse(raw);}catch{return null;}})();
+ const raw=await readText(request,10*1024*1024),auth=await internalAuth(request,env,raw),parsed:unknown=(()=>{try{return JSON.parse(raw);}catch{return null;}})();
  if(!validIngest(parsed)||parsed.batchId!==auth.batch||Math.abs(Date.parse(parsed.sentAt)-timestampMilliseconds(auth.timestamp))>1000)throw new ApiError(400,"정규화 수집 본문을 확인하세요.");
  if(await env.DB.prepare("SELECT 1 FROM ingest_batches WHERE batch_id=?").bind(auth.batch).first())throw new ApiError(409,"이미 처리한 수집 배치입니다.");
  const body=parsed as IngestBody,now=nowSeconds(),guildMembers=body.guilds.flatMap(guild=>guild.members.map(name=>({guildKey:guild.guildKey,name}))),dailyMembers=body.guilds.flatMap(guild=>(guild.daily||[]).flatMap(day=>day.members.map(name=>({guildKey:guild.guildKey,date:day.date,name}))));
@@ -210,19 +222,22 @@ async function ingest(request:Request,env:Env){
 async function route(request:Request,env:Env){
  const url=new URL(request.url),path=url.pathname,method=request.method;
  if(method!=="GET"&&method!=="HEAD"&&!path.startsWith("/internal/")){const origin=request.headers.get("origin");if(origin!==url.origin)throw new ApiError(403,"허용하지 않는 요청 출처입니다.");}
- if(path==="/api/status"&&method==="GET")return json({database:true,dataMode:"device-direct",collectorRollback:Boolean(env.INGEST_HMAC_SECRET),providers:[{name:"google",configured:Boolean(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)},{name:"kakao",configured:false},{name:"naver",configured:false}],intervalMinutes:15,favoriteLimit:FAVORITE_LIMIT});
+ const sessionBound=path==="/api/me"||path==="/api/profile"||path==="/api/account/delete"||path.startsWith("/api/chase-presets/")||path==="/api/chase-presets";
+ if(sessionBound&&cookies(request).maple_session)await takeRate(env.AUTH_RATE_LIMITER,`session:${request.headers.get("cf-connecting-ip")||"unknown"}`);
+ if(path==="/api/status"&&method==="GET")return json({database:true,dataMode:"device-direct",collectorRollback:env.LEGACY_ROLLBACK_ENABLED==="1"&&Boolean(env.INGEST_HMAC_SECRET),providers:[{name:"google",configured:false},{name:"kakao",configured:false},{name:"naver",configured:false}],intervalMinutes:15,favoriteLimit:FAVORITE_LIMIT});
  if(path==="/api/device"&&method==="POST")return device(request,env);
  if(path==="/api/me"&&method==="GET")return me(request,env);
  if(path==="/api/profile"&&method==="POST")return profile(request,env);
  if(path==="/api/activity"&&method==="POST")return activity(request,env);
- if(path==="/api/dashboard"&&method==="GET")return dashboard(request,env);
+ if(path==="/api/dashboard"&&method==="GET"){if(env.LEGACY_ROLLBACK_ENABLED!=="1")throw new ApiError(410,"기기 직접 조회로 전환된 기능입니다.");return dashboard(request,env);}
  if((path==="/api/chase-presets"||path.startsWith("/api/chase-presets/")))return chasePresets(request,env);
  if(path==="/auth/google/start"&&method==="GET")return googleStart(request,env);
- if(path==="/auth/google/callback"&&method==="GET")return googleCallback(request,env);
+ if(path==="/auth/google/callback"&&method==="GET"){await takeRate(env.AUTH_RATE_LIMITER,`google-callback:${request.headers.get("cf-connecting-ip")||"unknown"}`);return googleCallback(request,env);}
  if(path==="/auth/android/start"&&method==="POST")return androidStart(request,env);
  if(path==="/auth/android/exchange"&&method==="POST")return androidExchange(request,env);
  if(path==="/api/logout"&&method==="POST")return logout(request,env);
  if(path==="/api/account/delete"&&method==="POST")return deleteAccount(request,env);
+ if(path.startsWith("/internal/v1/")&&env.LEGACY_ROLLBACK_ENABLED!=="1")throw new ApiError(410,"중앙 수집 경로가 비활성화되었습니다.");
  if(path==="/internal/v1/subscriptions"&&method==="GET")return subscriptions(request,env);
  if(path==="/internal/v1/ingest"&&method==="POST")return ingest(request,env);
  if(path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"))throw new ApiError(404,"요청한 기능을 찾을 수 없습니다.");
@@ -232,4 +247,4 @@ async function route(request:Request,env:Env){
 export default {async fetch(request:Request,env:Env){
   try{const path=new URL(request.url).pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
   catch(error){if(error instanceof ApiError)return addSecurity(json({error:error.message},error.status),true);console.error("edge request failed",error instanceof Error?error.message:"unknown");return addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true);}
- }} satisfies ExportedHandler<Env>;
+ },async scheduled(_controller:ScheduledController,env:Env){const now=nowSeconds();await env.DB.batch([env.DB.prepare("DELETE FROM login_attempts WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM request_budgets WHERE started_at<?").bind(now-2*86400)]);}} satisfies ExportedHandler<Env>;

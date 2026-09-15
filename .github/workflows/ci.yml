@@ -1,0 +1,29 @@
+# 공개 서비스 변경의 웹·Worker·Rust 회귀를 자동 검증합니다.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm test
+      - run: npm run web:build
+      - run: npm run edge:typecheck
+      - run: npm audit --omit=dev --audit-level=high
+      - run: cargo test --manifest-path server/Cargo.toml
+

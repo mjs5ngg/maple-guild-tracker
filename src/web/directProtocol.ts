@@ -2,9 +2,16 @@
 import type {Snapshot} from "./types";
 
 export type DirectMetrics={latestMs:number|null;totalMs:number|null;requests:number;rateLimits:number};
-export type DirectStatus={cacheReady:boolean;keyStored:boolean;serviceConfirmed:boolean;busy:boolean;completed:number;total:number;failed:number;lastSuccessAt:string|null;nextRefreshAt:string|null;cachedCount:number;storagePersistent:boolean|null;metrics:DirectMetrics|null;message:string};
+export type DirectPhase="idle"|"preparing"|"current"|"history"|"guild"|"saving"|"complete";
+export type DirectStatus={cacheReady:boolean;keyStored:boolean;serviceConfirmed:boolean;busy:boolean;phase:DirectPhase;completed:number;total:number;progressPercent:number;failed:number;lastSuccessAt:string|null;nextRefreshAt:string|null;cachedCount:number;storagePersistent:boolean|null;metrics:DirectMetrics|null;message:string};
 export type DashboardToDirect={type:"configure";primary:string;favorites:string[];automatic:boolean}|{type:"refresh"}|{type:"delete-key"};
 export type DirectToDashboard={type:"status";status:DirectStatus}|{type:"snapshot";rows:Snapshot[]}|{type:"error";message:string};
+
+export function directProgress(completed:number,total:number,complete=false){
+ if(complete)return 100;
+ if(total<=0)return 2;
+ return Math.max(2,Math.min(99,Math.round(completed/total*100)));
+}
 
 export function validConfiguration(value:unknown):value is Extract<DashboardToDirect,{type:"configure"}>{
  if(!value||typeof value!=="object")return false;

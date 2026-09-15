@@ -1,0 +1,13 @@
+# 웹과 GitHub Actions 의존성 업데이트를 주 단위로 제안합니다.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

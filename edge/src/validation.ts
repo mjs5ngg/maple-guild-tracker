@@ -41,12 +41,17 @@ function normalized(value:unknown):value is NormalizedCharacter{
 }
 
 export type ChasePresetInput={id:string;name:string;periodDays:7|30;ocids:string[];sortKey:"today"|"period"|"average"|"catchup";sortDirection:"asc"|"desc"};
+export function validChasePresetName(value:unknown):value is {name:string}{
+ if(!value||typeof value!=="object")return false;
+ const row=value as Record<string,unknown>;
+ return exactKeys(row,["name"])&&typeof row.name==="string"&&row.name.trim().length>0&&[...row.name.trim()].length<=40&&!/[\r\n\p{C}]/u.test(row.name);
+}
 export function validChasePreset(value:unknown):value is ChasePresetInput{
  if(!value||typeof value!=="object")return false;
  const row=value as Record<string,unknown>;
  return exactKeys(row,["id","name","periodDays","ocids","sortKey","sortDirection"])
   &&typeof row.id==="string"&&/^[a-zA-Z0-9_-]{8,80}$/.test(row.id)
-  &&typeof row.name==="string"&&row.name.trim().length>0&&[...row.name].length<=40
+  &&validChasePresetName({name:row.name})
   &&(row.periodDays===7||row.periodDays===30)&&Array.isArray(row.ocids)&&row.ocids.length>=1&&row.ocids.length<=10
   &&row.ocids.every(value=>typeof value==="string"&&value.length>0&&value.length<=100)&&new Set(row.ocids).size===row.ocids.length
   &&["today","period","average","catchup"].includes(String(row.sortKey))&&["asc","desc"].includes(String(row.sortDirection));
