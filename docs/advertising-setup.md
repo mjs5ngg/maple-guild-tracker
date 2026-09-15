@@ -10,7 +10,7 @@
    - 데스크톱 왼쪽 `160×600`.
    - 데스크톱 오른쪽 `160×600`.
    - 데스크톱 하단 `728×90`.
-   - 모바일 하단 `300×50`.
+   - 모바일 하단 `320×50`.
 4. Placement name은 각각 `guildmate-left`, `guildmate-right`, `guildmate-bottom-desktop`, `guildmate-bottom-mobile`로 정합니다.
 5. 확장 필터에서는 성인·도박·다운로드·오해 유도 소재를 차단합니다. 수익 극대화보다 일반 서비스 화면의 안전성을 우선합니다.
 6. 생성된 HTML 태그 전체를 UTF-8 Base64로 바꿔 `.env.monetization`에 넣습니다. 이 파일은 Git에 올리지 않습니다.

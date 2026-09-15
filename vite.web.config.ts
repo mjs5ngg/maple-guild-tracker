@@ -19,7 +19,7 @@ const productionDefaults=command==="build"?{
 }:{};
 const env={...loadEnv(mode,process.cwd(),""),...process.env,...productionDefaults};
 const {dashboardOrigin,directOrigin}=webOrigins(env);
-const sizes={desktopLeft:[160,600],desktopRight:[160,600],desktopBottom:[728,90],mobileBottom:[300,50]} as const;
+const sizes={desktopLeft:[160,600],desktopRight:[160,600],desktopBottom:[728,90],mobileBottom:[320,50]} as const;
 const adUnit=(prefix:string,size:readonly [number,number])=>{const encoded=String(env[`${prefix}_TAG_B64`]||"").trim();if(!encoded)return null;if(encoded.length>32_768||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))throw new Error(`${prefix} 광고 태그 인코딩을 확인하세요.`);const html=Buffer.from(encoded,"base64").toString("utf8").trim();if(!html.startsWith("<")||html.length>24_000)throw new Error(`${prefix} 광고 태그 내용을 확인하세요.`);return {html,width:size[0],height:size[1]};};
 const advertica={desktopLeft:adUnit("WEB_ADVERTICA_DESKTOP_LEFT",sizes.desktopLeft),desktopRight:adUnit("WEB_ADVERTICA_DESKTOP_RIGHT",sizes.desktopRight),desktopBottom:adUnit("WEB_ADVERTICA_DESKTOP_BOTTOM",sizes.desktopBottom),mobileBottom:adUnit("WEB_ADVERTICA_MOBILE_BOTTOM",sizes.mobileBottom)};
 let affiliates=[];try{affiliates=env.WEB_AFFILIATE_CARDS_JSON?JSON.parse(String(env.WEB_AFFILIATE_CARDS_JSON)):[];}catch{throw new Error("WEB_AFFILIATE_CARDS_JSON 형식을 확인하세요.");}
