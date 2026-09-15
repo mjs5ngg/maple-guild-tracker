@@ -245,6 +245,6 @@ async function route(request:Request,env:Env){
 }
 
 export default {async fetch(request:Request,env:Env){
-  try{const url=new URL(request.url);if(url.hostname==="www.guildfollow.com"){url.hostname="guildfollow.com";return Response.redirect(url.toString(),308);}const path=url.pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
+  try{const path=new URL(request.url).pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
   catch(error){if(error instanceof ApiError)return addSecurity(json({error:error.message},error.status),true);console.error("edge request failed",error instanceof Error?error.message:"unknown");return addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true);}
  },async scheduled(_controller:ScheduledController,env:Env){const now=nowSeconds();await env.DB.batch([env.DB.prepare("DELETE FROM login_attempts WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM request_budgets WHERE started_at<?").bind(now-2*86400)]);}} satisfies ExportedHandler<Env>;

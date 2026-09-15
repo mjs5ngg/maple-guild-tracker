@@ -24,7 +24,6 @@ import {useDirectBridge} from "./useDirectBridge";
 import LegalPage,{legalKind} from "./LegalPage";
 import {AdSlot,AffiliateRecommendations} from "./Monetization";
 import {hasDisplayAds,normalizeMonetization} from "./monetizationConfig";
-import {migratePublicOrigin} from "./originMigration";
 import "./web.css";
 
 const GrowthPanel=lazy(()=>import("./GrowthPanel")),ChasePanel=lazy(()=>import("./ChasePanel"));
@@ -92,4 +91,4 @@ export function PublicApp(){
 }
 
 const legal=legalKind(location.pathname);
-if(!migratePublicOrigin())createRoot(document.getElementById("root")!).render(legal?<LegalPage kind={legal}/>:<QueryClientProvider client={queryClient}><PublicApp/></QueryClientProvider>);
+createRoot(document.getElementById("root")!).render(legal?<LegalPage kind={legal}/>:<QueryClientProvider client={queryClient}><PublicApp/></QueryClientProvider>);

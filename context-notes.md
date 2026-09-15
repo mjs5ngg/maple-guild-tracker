@@ -609,5 +609,8 @@
 - 광고 Pages에는 `ads.guildfollow.com`을 연결했고 HTTP 200과 새 부모 origin CSP를 확인했다. Advertica 공식 문서에서 별도 `ads.txt` 레코드를 제시하지 않아 추측한 판매자 ID는 게시하지 않는다.
 - 개인 조회 iframe을 `key.guildfollow.com`으로 즉시 바꾸면 브라우저 동일 출처 정책 때문에 기존 IndexedDB의 API 키와 경험치 기록을 읽지 못한다. 데이터 손실을 피하기 위해 공개 주소만 먼저 전환하고 직접 조회는 `maple-exp-personal.pages.dev`를 유지한다.
 - 정식 주소를 포함한 Android 0.4.0 ARM64 APK를 다시 빌드했고 v2·v3 서명 검증을 통과했다. SHA-256은 `99282666DEB4B8747AB585EC00975CDCE16586E60C6B5A953EA440A78698439F`다.
-- 기존 `app.guildmate.workers.dev`의 대표·즐겨찾기 설정과 현재 탭을 URL fragment로 정식 주소에 한 번 전달하고 즉시 주소에서 제거하는 이전 경로를 추가했다. fragment는 HTTP 요청으로 서버에 전송되지 않으며 API 키와 경험치 기록은 포함하지 않는다.
+- 기존 공개 주소의 대표·즐겨찾기 자동 이전은 현재 사용자가 한 명뿐이라는 사용자 판단에 따라 제거했다. 기존 주소는 전환 기간 동안 접근 가능하며 정식 주소에서는 대표캐릭터를 한 번 지정한다.
 - Cloudflare 단일 리디렉션 규칙 `WWW에서 루트로 리디렉션 [템플릿]`을 301·쿼리 유지로 활성화했다. 공용 DNS 1.1.1.1과 8.8.8.8에서 `www.guildfollow.com` 해석을 확인했다.
+- Google OAuth 승인된 리디렉션 URI에 `https://guildfollow.com/auth/google/callback`을 추가하고 저장 상태를 다시 확인했다. 로그인 신규 진입 UI는 현재 운영 방침대로 숨김 상태다.
+- 현재 이용자가 한 명뿐이므로 공개 주소 자동 이전 코드와 Worker 내부의 중복 `www` 리디렉션을 제거했다. `www` 처리는 Cloudflare 단일 리디렉션 규칙만 기준으로 삼는다.
+- 단순화한 Worker 버전 `9804feab-05dd-40df-942f-ee398c363b5d`를 배포했다. 정식 웹·API·광고 주소의 HTTP 200, 이전 Worker 주소의 독립 접근, 공용 DNS의 `www` 해석을 확인했다.
