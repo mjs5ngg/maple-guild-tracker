@@ -9,7 +9,7 @@ export const IDLE_INTERVAL_MS=650;
 export function avatarUrl(image:string,frame:string){
  const url=new URL(image);
  url.searchParams.set("action",frame);
- url.searchParams.set("width","240");url.searchParams.set("height","240");url.searchParams.set("x","120");url.searchParams.set("y","170");
+ url.searchParams.set("width","300");url.searchParams.set("height","300");url.searchParams.set("x","150");url.searchParams.set("y","200");
  return url.toString();
 }
 export function Avatar({character,idle=false}:{character:Snapshot;idle?:boolean}){
