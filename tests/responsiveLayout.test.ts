@@ -15,4 +15,7 @@ describe("공개 웹 반응형 레이아웃",()=>{
   expect(css).toMatch(/\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:192px[^}]*height:192px[^}]*object-fit:contain[^}]*transform:translate\(-50%,-50%\)/);
   expect(css).toMatch(/\.hero-card>\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:504px[^}]*height:504px[^}]*object-fit:contain[^}]*transform:translate\(-50%,-50%\)/);
  });
+ it("정밀 포인터 PC에서는 비정수 도트 배율을 고품질로 보간",()=>{
+  expect(css).toContain("@media(hover:hover) and (pointer:fine){.character-avatar img{image-rendering:auto}}");
+ });
 });

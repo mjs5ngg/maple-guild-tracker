@@ -82,3 +82,4 @@
 
 /* 도트 원본을 중간 축소·재확대하지 않고 기존 체감 크기로 직접 렌더링해 중앙에 맞춥니다. */
 .character-avatar{position:relative}.character-avatar img{position:absolute;top:50%;left:50%;display:block;width:192px;height:192px;max-width:none;object-fit:contain;transform:translate(-50%,-50%);image-rendering:pixelated}.hero-card>.character-avatar img{top:50%;left:50%;width:504px;height:504px;max-width:none;object-fit:contain;transform:translate(-50%,-50%)}
+@media(hover:hover) and (pointer:fine){.character-avatar img{image-rendering:auto}}
