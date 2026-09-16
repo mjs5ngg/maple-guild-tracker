@@ -12,7 +12,7 @@ describe("공개 웹 반응형 레이아웃",()=>{
   expect(css).toContain("@container chase-table (max-width:38rem)");
  });
  it("캐릭터 이미지는 기존 체감 크기로 직접 렌더링해 중앙에 배치",()=>{
-  expect(css).toMatch(/\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:192px[^}]*height:192px[^}]*transform:translate\(-50%,-50%\)/);
-  expect(css).toMatch(/\.hero-card>\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:504px[^}]*height:504px[^}]*transform:translate\(-50%,-50%\)/);
+  expect(css).toMatch(/\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:192px[^}]*height:192px[^}]*object-fit:contain[^}]*transform:translate\(-50%,-50%\)/);
+  expect(css).toMatch(/\.hero-card>\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:504px[^}]*height:504px[^}]*object-fit:contain[^}]*transform:translate\(-50%,-50%\)/);
  });
 });
