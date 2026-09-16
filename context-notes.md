@@ -755,3 +755,11 @@
 - 정식 웹·API·개인 조회는 HTTP 200, 로컬 운영 화면은 DB와 이용 현황 연결 정상, 레거시 수집 API는 HTTP 410임을 확인했다.
 - 기존 D1 캐릭터 491명·일별 기록 13,102건, 로컬 PostgreSQL 원본 관측 13,735건과 백업 타이머를 삭제하지 않고 보존했다.
 - Vitest 109개와 Edge 타입 검사가 통과했다.
+
+# 2026-09-17 PC 전원 독립성 실증
+
+- WSL을 완전히 종료해 로컬 서버·PostgreSQL·관리자 화면이 모두 내려간 상태를 만들었다. 이때 `guildfollow.com`, `/api/status`, `www.guildfollow.com`, `maple-exp-personal.pages.dev`가 모두 Cloudflare 응답 HTTP 200을 유지했다.
+- 공개 웹과 API는 Cloudflare Workers·정적 자산·D1에 있고, 개인 조회 엔진은 Cloudflare Pages에 있다. 캐릭터 API 요청은 이용자 브라우저에서 NEXON으로 직접 전송되므로 이 PC의 전원에 의존하지 않는다.
+- PC가 꺼지면 `127.0.0.1:3103` 관리자 화면, 로컬 PostgreSQL 접근과 예약 백업만 중단된다. 기존 공개 데이터와 이용자 브라우저의 IndexedDB 기록은 영향을 받지 않는다.
+- 첫 WSL 재기동 시험에서 중앙 수집기가 disabled 상태인데도 다른 시작 경로로 active가 되는 문제를 발견했다. 원본 unit을 `/etc/systemd/system/maple-exp.service.disabled-20260917`로 보존하고 `/etc/systemd/system/maple-exp.service`를 `/dev/null`에 영구 마스킹했다.
+- 두 번째 WSL 완전 종료·재기동 후 공개 웹·API·개인 조회는 모두 HTTP 200, 중앙 수집기는 `inactive/masked`, 관리자 화면과 백업 타이머는 `active`임을 확인했다.
