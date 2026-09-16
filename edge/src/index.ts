@@ -74,7 +74,27 @@ async function profile(request:Request,env:Env){
  for(const name of [...input.favorites].sort())statements.push(env.DB.prepare("INSERT INTO favorites(user_id,name) VALUES(?,?)").bind(id,name));
  await env.DB.batch(statements); return json({ok:true});
 }
-async function activity(request:Request,env:Env){void request;void env;return json({ok:true,deprecated:true});}
+async function activity(request:Request,env:Env){
+ const input=await bodyJson(request,512) as {visitor?:unknown;sessionStart?:unknown};
+ if(typeof input.visitor!=="string"||!/^[a-f0-9]{64}$/.test(input.visitor)||typeof input.sessionStart!=="boolean")throw new ApiError(400,"익명 이용 현황 요청을 확인하세요.");
+ await takeRate(env.AUTH_RATE_LIMITER,`activity:${request.headers.get("cf-connecting-ip")||"unknown"}`);
+ const now=nowSeconds(),day=kstDate(),visitorHash=await sha256(input.visitor);
+ await env.DB.prepare(`INSERT INTO anonymous_daily_usage(day,visitor_hash,first_seen,last_seen,session_starts) VALUES(?,?,?,?,?)
+  ON CONFLICT(day,visitor_hash) DO UPDATE SET last_seen=MAX(anonymous_daily_usage.last_seen,excluded.last_seen),session_starts=anonymous_daily_usage.session_starts+excluded.session_starts`)
+  .bind(day,visitorHash,now,now,input.sessionStart?1:0).run();
+ return json({ok:true});
+}
+async function usageAnalytics(request:Request,env:Env){
+ await internalAuth(request,env,"");
+ const now=nowSeconds(),today=kstDate(),seven=addDays(today,-6),thirty=addDays(today,-29);
+ const [periods,recent,sessions]=await env.DB.batch([
+  env.DB.prepare("SELECT COUNT(DISTINCT CASE WHEN day=? THEN visitor_hash END) AS today,COUNT(DISTINCT CASE WHEN day>=? THEN visitor_hash END) AS seven,COUNT(DISTINCT CASE WHEN day>=? THEN visitor_hash END) AS thirty FROM anonymous_daily_usage WHERE day>=?").bind(today,seven,thirty,thirty),
+  env.DB.prepare("SELECT COUNT(DISTINCT CASE WHEN last_seen>=? THEN visitor_hash END) AS active15,COUNT(DISTINCT CASE WHEN last_seen>=? THEN visitor_hash END) AS active60 FROM anonymous_daily_usage WHERE last_seen>=?").bind(now-900,now-3600,now-3600),
+  env.DB.prepare("SELECT COALESCE(SUM(session_starts),0) AS sessionStarts FROM anonymous_daily_usage WHERE day=?").bind(today)
+ ]);
+ const first=(periods.results[0]||{}) as Row,second=(recent.results[0]||{}) as Row,third=(sessions.results[0]||{}) as Row;
+ return json({measuredAt:new Date(now*1000).toISOString(),today:Number(first.today||0),sevenDays:Number(first.seven||0),thirtyDays:Number(first.thirty||0),active15Minutes:Number(second.active15||0),active60Minutes:Number(second.active60||0),todaySessions:Number(third.sessionStarts||0),approximate:true});
+}
 async function chasePresets(request:Request,env:Env){
  const id=await accountUserId(request,env),method=request.method,url=new URL(request.url),presetId=url.pathname.split("/").filter(Boolean)[2];
  if(method==="GET"){
@@ -237,6 +257,7 @@ async function route(request:Request,env:Env){
  if(path==="/auth/android/exchange"&&method==="POST")return androidExchange(request,env);
  if(path==="/api/logout"&&method==="POST")return logout(request,env);
  if(path==="/api/account/delete"&&method==="POST")return deleteAccount(request,env);
+ if(path==="/internal/v1/usage-analytics"&&method==="GET")return usageAnalytics(request,env);
  if(path.startsWith("/internal/v1/")&&env.LEGACY_ROLLBACK_ENABLED!=="1")throw new ApiError(410,"중앙 수집 경로가 비활성화되었습니다.");
  if(path==="/internal/v1/subscriptions"&&method==="GET")return subscriptions(request,env);
  if(path==="/internal/v1/ingest"&&method==="POST")return ingest(request,env);
@@ -247,4 +268,4 @@ async function route(request:Request,env:Env){
 export default {async fetch(request:Request,env:Env){
   try{const path=new URL(request.url).pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
   catch(error){if(error instanceof ApiError)return addSecurity(json({error:error.message},error.status),true);console.error("edge request failed",error instanceof Error?error.message:"unknown");return addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true);}
- },async scheduled(_controller:ScheduledController,env:Env){const now=nowSeconds();await env.DB.batch([env.DB.prepare("DELETE FROM login_attempts WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM request_budgets WHERE started_at<?").bind(now-2*86400)]);}} satisfies ExportedHandler<Env>;
+ },async scheduled(_controller:ScheduledController,env:Env){const now=nowSeconds();await env.DB.batch([env.DB.prepare("DELETE FROM login_attempts WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM request_budgets WHERE started_at<?").bind(now-2*86400),env.DB.prepare("DELETE FROM anonymous_daily_usage WHERE day<?").bind(addDays(kstDate(),-90))]);}} satisfies ExportedHandler<Env>;

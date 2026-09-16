@@ -17,15 +17,17 @@ pub fn router(app: Arc<App>) -> Router {
 }
 
 async fn status(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
-    let (public_web, public_api, direct_engine) = tokio::join!(
+    let (public_web, public_api, direct_engine, usage) = tokio::join!(
         probe(&app.http, "https://guildfollow.com/"),
         probe(&app.http, "https://guildfollow.com/api/status"),
-        probe(&app.http, "https://maple-exp-personal.pages.dev/")
+        probe(&app.http, "https://maple-exp-personal.pages.dev/"),
+        crate::edge_sync::usage_analytics(&app)
     );
     let mut result = local_status(&app).await;
     result["publicWeb"] = public_web;
     result["publicApi"] = public_api;
     result["directEngine"] = direct_engine;
+    result["usage"] = usage.into();
     result["adsEnabled"] = json!(false);
     Json(result)
 }

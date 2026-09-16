@@ -24,6 +24,7 @@ import {useDirectBridge} from "./useDirectBridge";
 import LegalPage,{legalKind} from "./LegalPage";
 import {AdSlot,AffiliateRecommendations} from "./Monetization";
 import {hasDisplayAds,normalizeMonetization} from "./monetizationConfig";
+import {reportVisitorActivity} from "./visitorActivity";
 import "./web.css";
 
 const GrowthPanel=lazy(()=>import("./GrowthPanel")),ChasePanel=lazy(()=>import("./ChasePanel"));
@@ -38,7 +39,7 @@ const gainLabel=(value:bigint|null)=>value===null?"자료 없음":`+${compact(va
 function rankRows(rows:Snapshot[],period:boolean,days:number,gains?:Map<string,Map<number,bigint|null>>){const total=sortRows(rows,false,__EXP_TABLE__),tie=new Map(total.map((row,index)=>[row.ocid,index]));if(!period)return total;return [...rows].sort((left,right)=>{const a=gains?.get(left.ocid)?.get(days)??periodGain(left,days,__EXP_TABLE__).value,b=gains?.get(right.ocid)?.get(days)??periodGain(right,days,__EXP_TABLE__).value;if(a===b)return (tie.get(left.ocid)??0)-(tie.get(right.ocid)??0);return a===null?1:b===null?-1:a>b?-1:1;});}
 
 export function PublicApp(){
- useEffect(registerStatusTool,[]);const cache=useQueryClient();
+ useEffect(registerStatusTool,[]);useEffect(()=>{const report=()=>void reportVisitorActivity().catch(()=>{});report();const onVisible=()=>{if(document.visibilityState==="visible")report();};addEventListener("visibilitychange",onVisible);return()=>removeEventListener("visibilitychange",onVisible);},[]);const cache=useQueryClient();
  const desktopAds=useMediaQuery("(min-width: 1440px)"),mobileLayout=useMediaQuery("(max-width: 760px)");
  const [adsFailed,setAdsFailed]=useState(false),adsEnabled=hasDisplayAds(monetization)&&!adsFailed,sideAds=adsEnabled&&desktopAds&&monetization.ads.desktopLeft&&monetization.ads.desktopRight,bottomPlacement=mobileLayout?"mobileBottom" as const:"desktopBottom" as const,bottomEnabled=adsEnabled&&monetization.ads[bottomPlacement];
  const failAds=useCallback(()=>setAdsFailed(true),[]);

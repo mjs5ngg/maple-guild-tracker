@@ -40,6 +40,49 @@ pub(crate) fn configured() -> bool {
     config().is_some()
 }
 
+pub(crate) async fn usage_analytics(app: &App) -> Option<Value> {
+    let config = config()?;
+    let origin = std::env::var("USAGE_ANALYTICS_ORIGIN")
+        .unwrap_or_else(|_| "https://guildfollow.com".into());
+    let parsed = reqwest::Url::parse(&origin).ok()?;
+    if parsed.origin().ascii_serialization() != origin || parsed.scheme() != "https" {
+        return None;
+    }
+    let timestamp = Utc::now().timestamp_millis().to_string();
+    let batch = format!("analytics_{}", Uuid::new_v4());
+    let response = app
+        .http
+        .get(format!("{origin}/internal/v1/usage-analytics"))
+        .header("user-agent", "MapleGuildTrackerOperations/1.0")
+        .header("x-maple-timestamp", &timestamp)
+        .header("x-maple-batch-id", &batch)
+        .header(
+            "x-maple-signature",
+            signature(&config.secret, &timestamp, &batch, ""),
+        )
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let value = response.json::<Value>().await.ok()?;
+    for key in [
+        "today",
+        "sevenDays",
+        "thirtyDays",
+        "active15Minutes",
+        "active60Minutes",
+        "todaySessions",
+    ] {
+        if value.get(key).and_then(Value::as_u64).is_none() {
+            return None;
+        }
+    }
+    Some(value)
+}
+
 fn signature(secret: &str, timestamp: &str, batch: &str, body: &str) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key");
     mac.update(format!("{timestamp}.{batch}.{body}").as_bytes());
