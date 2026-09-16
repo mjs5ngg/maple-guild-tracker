@@ -11,6 +11,11 @@ describe("공개 웹 반응형 레이아웃",()=>{
   expect(css).toContain('grid-template-areas:"avatar identity catchup" "avatar today catchup" "avatar period average"');
   expect(css).toContain("@container chase-table (max-width:38rem)");
  });
+ it("따라잡기 하단 카드는 그리드 열을 채우고 모바일에서 목록 다음 프리셋 순서를 유지",()=>{
+  expect(css).toContain(".chase-lower>.surface{box-sizing:border-box;width:100%;min-width:0;max-width:none;margin:0}");
+  expect(css).toContain(".overview-grid,.chase-lower{grid-template-columns:1fr}");
+  expect(css).not.toContain(".preset-panel{order:-1}");
+ });
  it("캐릭터 이미지는 기존 체감 크기로 직접 렌더링해 중앙에 배치",()=>{
   expect(css).toMatch(/\.character-avatar img\{[^}]*top:50%[^}]*left:50%[^}]*width:192px[^}]*height:192px[^}]*object-fit:contain[^}]*transform:translate\(-50%,-50%\)/);
   expect(css).toMatch(/\.hero-card>\.character-avatar img\{[^}]*top:calc\(50% - 6px\)[^}]*left:50%[^}]*width:504px[^}]*height:504px[^}]*object-fit:contain[^}]*transform:translate\(-50%,-50%\)/);
