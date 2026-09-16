@@ -21,9 +21,12 @@ test("웹 아바타 발 기준선은 모든 반응형 조건에서 하단 2px을
  for(const item of cases){
   const context=await browser.newContext({viewport:{width:item.width,height:item.height},deviceScaleFactor:item.deviceScaleFactor,isMobile:item.isMobile,hasTouch:item.isMobile});
   const page=await context.newPage();
-  await page.setContent(`<link rel="stylesheet" href="http://127.0.0.1:4174/src/web/web.css"><main><div class="character-avatar"><img src="${image}"></div><section class="hero-card"><div class="character-avatar"><img src="${image}"></div><span></span><span></span></section><div class="chase-profile"><div class="character-avatar"><img src="${image}"></div><span></span></div><label class="chase-option"><input type="checkbox"><div class="character-avatar"><img src="${image}"></div><span></span></label><div class="widget-ranking"><article><i>1</i><div class="character-avatar"><img src="${image}"></div><span></span><strong></strong></article></div></main>`,{waitUntil:"load"});
+  await page.setContent(`<link rel="stylesheet" href="http://127.0.0.1:4174/src/web/web.css"><main><div class="character-avatar"><img src="${image}"></div><section class="hero-card"><div class="character-avatar"><img src="${image}"></div><div class="hero-info"><h2>엘크라우치 <small>Lv.286</small></h2><strong>17.466%</strong><p>오늘 +2.1조 · 7일 +51.6조</p></div><div class="hero-rank">순위</div></section><div class="chase-profile"><div class="character-avatar"><img src="${image}"></div><span></span></div><label class="chase-option"><input type="checkbox"><div class="character-avatar"><img src="${image}"></div><span></span></label><div class="widget-ranking"><article><i>1</i><div class="character-avatar"><img src="${image}"></div><span></span><strong></strong></article></div></main>`,{waitUntil:"load"});
   const gaps=await page.locator(".character-avatar").evaluateAll(elements=>elements.map(element=>{const container=element.getBoundingClientRect(),image=element.querySelector("img")!.getBoundingClientRect();return container.bottom-(image.top+image.height*2/3);}));
   for(const gap of gaps)expect(gap,`${item.name}의 발 기준 간격`).toBeCloseTo(2,4);
+  const hero=await page.locator(".hero-card").evaluate(element=>{const avatar=element.querySelector(".character-avatar")!.getBoundingClientRect(),info=element.querySelector(".hero-info")!.getBoundingClientRect();return {fits:element.scrollWidth<=element.clientWidth,overlaps:avatar.right>info.left+0.5};});
+  expect(hero.fits,`${item.name}의 대표 카드 너비`).toBe(true);
+  expect(hero.overlaps,`${item.name}의 대표 이미지와 정보 간격`).toBe(false);
   await context.close();
  }
 });

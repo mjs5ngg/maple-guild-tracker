@@ -24,6 +24,10 @@ describe("공개 웹 반응형 레이아웃",()=>{
   expect(css).toContain(".hero-card>.character-avatar{--avatar-render-size:504px}");
   expect(css).not.toContain(".chase-profile>.character-avatar img,.chase-option>.character-avatar img");
  });
+ it("모바일 대표 이미지 칸은 360px에서도 축소하지 않고 8rem을 유지",()=>{
+  expect(css).toMatch(/@media\(max-width:760px\)\{[^\n]*\.hero-card\{grid-template-columns:8rem minmax\(0,1fr\)[^\n]*\.hero-card>\.character-avatar\{width:8rem;height:8rem\}/);
+  expect(css).toMatch(/@media\(max-width:420px\)\{[^\n]*\.hero-card\{grid-template-columns:8rem minmax\(0,1fr\)[^\n]*\.hero-card>\.character-avatar\{width:8rem;height:8rem\}/);
+ });
  it("정밀 포인터 PC에서는 비정수 도트 배율을 고품질로 보간",()=>{
   expect(css).toContain("@media(hover:hover) and (pointer:fine){.character-avatar img{image-rendering:auto}}");
  });
