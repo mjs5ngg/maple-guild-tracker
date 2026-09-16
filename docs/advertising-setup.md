@@ -17,6 +17,7 @@
 7. `powershell -ExecutionPolicy Bypass -File scripts/deploy-edge.ps1`을 실행합니다.
 
 ```dotenv
+WEB_MONETIZATION_ENABLED=0
 WEB_AD_HOST_ORIGIN=https://ads.guildfollow.com
 WEB_ADVERTICA_DESKTOP_LEFT_TAG_B64=
 WEB_ADVERTICA_DESKTOP_RIGHT_TAG_B64=
@@ -25,13 +26,15 @@ WEB_ADVERTICA_MOBILE_BOTTOM_TAG_B64=
 WEB_AFFILIATE_CARDS_JSON=[]
 ```
 
+현재 운영 배포는 `WEB_MONETIZATION_ENABLED=0`으로 모든 배너와 제휴 추천을 숨깁니다. 광고를 다시 시작할 때만 값을 `1`로 바꾸며, 기존 태그는 비활성 기간에도 로컬 설정 파일에 보존합니다.
+
 PowerShell에서 태그를 Base64로 바꾸려면 태그를 클립보드에 복사한 뒤 아래 명령을 실행합니다. 출력값만 해당 항목에 넣습니다.
 
 ```powershell
 [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Clipboard -Raw)))
 ```
 
-광고 태그가 하나도 없으면 광고 슬롯과 고정 광고용 여백이 모두 숨겨집니다. 광고 태그가 설정되면 별도 동의창 없이 격리된 광고 전용 iframe을 불러오며, 개인정보 안내에서 광고 공급자와 브라우저 차단 방법을 고지합니다.
+마스터 스위치가 꺼져 있거나 광고 태그가 하나도 없으면 광고 슬롯과 고정 광고용 여백이 모두 숨겨집니다. 스위치와 광고 태그가 함께 설정되면 별도 동의창 없이 격리된 광고 전용 iframe을 불러오며, 개인정보 안내에서 광고 공급자와 브라우저 차단 방법을 고지합니다.
 
 ## 격리 경계
 

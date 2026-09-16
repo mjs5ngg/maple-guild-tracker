@@ -25,6 +25,10 @@ if (dashboardBundle.includes("http://127.0.0.1:3101") || !dashboardBundle.includ
   console.error("공개 대시보드 번들에 개인 조회 운영 주소가 반영되지 않았습니다.");
   process.exit(1);
 }
+if (process.env.WEB_MONETIZATION_ENABLED !== "1" && dashboardBundle.includes("https://ads.guildfollow.com")) {
+  console.error("광고 비활성 빌드에 광고 출처가 포함되었습니다.");
+  process.exit(1);
+}
 const directAssets = readdirSync(new URL("../web-dist/direct/assets/", import.meta.url)).filter(name => name.endsWith(".js"));
 const directBundle = directAssets.map(name => readFileSync(new URL(`../web-dist/direct/assets/${name}`, import.meta.url), "utf8")).join("\n");
 if (directBundle.includes("ads.guildfollow.com") || directBundle.includes("maple-exp-ads.pages.dev") || directBundle.includes("WEB_ADVERTICA_")) {

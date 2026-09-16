@@ -21,9 +21,10 @@ const env={...loadEnv(mode,process.cwd(),""),...process.env,...productionDefault
 const {dashboardOrigin,directOrigin}=webOrigins(env);
 const sizes={desktopLeft:[160,600],desktopRight:[160,600],desktopBottom:[728,90],mobileBottom:[320,50]} as const;
 const adUnit=(prefix:string,size:readonly [number,number])=>{const encoded=String(env[`${prefix}_TAG_B64`]||"").trim();if(!encoded)return null;if(encoded.length>32_768||!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded))throw new Error(`${prefix} 광고 태그 인코딩을 확인하세요.`);const html=Buffer.from(encoded,"base64").toString("utf8").trim();if(!html.startsWith("<")||html.length>24_000)throw new Error(`${prefix} 광고 태그 내용을 확인하세요.`);return {html,width:size[0],height:size[1]};};
-const advertica={desktopLeft:adUnit("WEB_ADVERTICA_DESKTOP_LEFT",sizes.desktopLeft),desktopRight:adUnit("WEB_ADVERTICA_DESKTOP_RIGHT",sizes.desktopRight),desktopBottom:adUnit("WEB_ADVERTICA_DESKTOP_BOTTOM",sizes.desktopBottom),mobileBottom:adUnit("WEB_ADVERTICA_MOBILE_BOTTOM",sizes.mobileBottom)};
-let affiliates=[];try{affiliates=env.WEB_AFFILIATE_CARDS_JSON?JSON.parse(String(env.WEB_AFFILIATE_CARDS_JSON)):[];}catch{throw new Error("WEB_AFFILIATE_CARDS_JSON 형식을 확인하세요.");}
-const adHostOrigin=String(env.WEB_AD_HOST_ORIGIN||"").replace(/\/$/,"");
+const monetizationEnabled=String(env.WEB_MONETIZATION_ENABLED||"0")==="1";
+const advertica=monetizationEnabled?{desktopLeft:adUnit("WEB_ADVERTICA_DESKTOP_LEFT",sizes.desktopLeft),desktopRight:adUnit("WEB_ADVERTICA_DESKTOP_RIGHT",sizes.desktopRight),desktopBottom:adUnit("WEB_ADVERTICA_DESKTOP_BOTTOM",sizes.desktopBottom),mobileBottom:adUnit("WEB_ADVERTICA_MOBILE_BOTTOM",sizes.mobileBottom)}:{desktopLeft:null,desktopRight:null,desktopBottom:null,mobileBottom:null};
+let affiliates=[];if(monetizationEnabled)try{affiliates=env.WEB_AFFILIATE_CARDS_JSON?JSON.parse(String(env.WEB_AFFILIATE_CARDS_JSON)):[];}catch{throw new Error("WEB_AFFILIATE_CARDS_JSON 형식을 확인하세요.");}
+const adHostOrigin=monetizationEnabled?String(env.WEB_AD_HOST_ORIGIN||"").replace(/\/$/,""):"";
 const monetization=direct||adHost?{ads:{desktopLeft:false,desktopRight:false,desktopBottom:false,mobileBottom:false},adHostOrigin:"",affiliates:[]}:{ads:Object.fromEntries(Object.entries(advertica).map(([name,value])=>[name,Boolean(value)])),adHostOrigin,affiliates};
 const localProxy={target:"http://127.0.0.1:3100",changeOrigin:true};
 const proxyOrigin=process.env.WEB_PROXY_ORIGIN||dashboardOrigin;
