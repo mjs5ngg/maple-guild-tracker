@@ -4,7 +4,7 @@ import type {Snapshot} from "./types";
 
 export const WALK_FRAMES=["A02.0","A02.1","A02.2","A02.3"];
 export const WALK_INTERVAL_MS=180;
-export const IDLE_FRAMES=["A00.1","A00.2","A00.3","A00.2"];
+export const IDLE_FRAMES=["A00.0","A00.1","A00.2","A00.1"];
 export const IDLE_INTERVAL_MS=650;
 export function avatarUrl(image:string,frame:string){
  const url=new URL(image);
