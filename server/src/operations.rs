@@ -2,6 +2,7 @@
 use crate::*;
 use axum::response::Html;
 use sqlx::Row;
+use std::time::Instant;
 
 pub fn router(app: Arc<App>) -> Router {
     Router::new().route("/", get(|| async { Html(include_str!("operations.html")) }))
@@ -16,10 +17,39 @@ pub fn router(app: Arc<App>) -> Router {
 }
 
 async fn status(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
+    let (public_web, public_api, direct_engine) = tokio::join!(
+        probe(&app.http, "https://guildfollow.com/"),
+        probe(&app.http, "https://guildfollow.com/api/status"),
+        probe(&app.http, "https://maple-exp-personal.pages.dev/")
+    );
+    let mut result = local_status(&app).await;
+    result["publicWeb"] = public_web;
+    result["publicApi"] = public_api;
+    result["directEngine"] = direct_engine;
+    result["adsEnabled"] = json!(false);
+    Json(result)
+}
+
+async fn probe(http: &reqwest::Client, url: &str) -> serde_json::Value {
+    let started = Instant::now();
+    match http
+        .get(url)
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            json!({"ok":response.status().is_success(),"status":response.status().as_u16(),"latencyMs":started.elapsed().as_millis()})
+        }
+        Err(_) => json!({"ok":false,"status":null,"latencyMs":started.elapsed().as_millis()}),
+    }
+}
+
+async fn local_status(app: &App) -> serde_json::Value {
     let mut result = json!({"checkedAt":chrono::Utc::now(),"database":false,
-        "collectorConfigured":app.operator_key.is_some(),"origin":app.origin,
+        "legacyCollectorConfigured":app.operator_key.is_some(),
         "edgeConfigured":crate::edge_sync::configured(),"edgeOutbox":null,
-        "publicVerified":false,"intervalMinutes":15,"runs":[],"usageConnected":false});
+        "intervalMinutes":15,"runs":[]});
     if let Some(pool) = &app.db {
         if let Ok(rows) = sqlx::query("SELECT id,started_at,finished_at,status,succeeded,failed FROM sync_runs ORDER BY id DESC LIMIT 20").fetch_all(pool).await {
             result["database"] = json!(true);
@@ -37,16 +67,21 @@ async fn status(State(app): State<Arc<App>>) -> Json<serde_json::Value> {
             })).into();
         }
     }
-    Json(result)
+    result
 }
 
 #[tokio::test]
 async fn missing_database_is_not_reported_healthy() {
-    let app = Arc::new(App {db:None,http:reqwest::Client::new(),origin:"http://127.0.0.1:3100".into(),operator_key:Some("secret-test-value".into()),nexon_origin:"http://localhost".into()});
-    let value = status(State(app)).await.0;
-    assert_eq!(value["database"],false);
-    assert_eq!(value["collectorConfigured"],true);
-    assert_eq!(value["edgeConfigured"],false);
-    assert_eq!(value["publicVerified"],false);
+    let app = Arc::new(App {
+        db: None,
+        http: reqwest::Client::new(),
+        origin: "http://127.0.0.1:3100".into(),
+        operator_key: Some("secret-test-value".into()),
+        nexon_origin: "http://localhost".into(),
+    });
+    let value = local_status(&app).await;
+    assert_eq!(value["database"], false);
+    assert_eq!(value["legacyCollectorConfigured"], true);
+    assert_eq!(value["edgeConfigured"], false);
     assert!(!value.to_string().contains("secret-test-value"));
 }

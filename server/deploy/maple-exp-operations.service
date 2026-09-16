@@ -1,4 +1,4 @@
-# 기존 수집 서버와 분리하여 읽기 전용 로컬 운영 화면을 유지합니다.
+# 정식 서비스 상태를 점검하는 읽기 전용 로컬 관리자 화면을 유지합니다.
 [Unit]
 Description=Maple EXP local operations dashboard
 After=network-online.target postgresql.service
@@ -8,9 +8,9 @@ Wants=network-online.target
 Type=simple
 User=mapledev
 Group=mapledev
-WorkingDirectory=/home/mapledev/maple-releases/20260913-refresh-fix
+WorkingDirectory=/home/mapledev/maple-operations-current
 EnvironmentFile=/etc/maple-exp/server.env
-ExecStart=/home/mapledev/maple-releases/20260913-refresh-fix/maple-exp-server --operations-only
+ExecStart=/home/mapledev/maple-operations-current/maple-exp-server --operations-only
 Restart=on-failure
 RestartSec=10
 UMask=0077
