@@ -28,7 +28,7 @@ function cookies(request:Request){
 function sessionCookie(request:Request,name:string,value:string,maxAge:number){return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${new URL(request.url).protocol==="https:"?"; Secure":""}`;}
 function addSecurity(response:Response,api=false){
  const headers=new Headers(response.headers);
- headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("permissions-policy","camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()");headers.set("x-frame-options","DENY");
+ headers.set("x-content-type-options","nosniff");headers.set("referrer-policy","no-referrer");headers.set("strict-transport-security","max-age=31536000; includeSubDomains");headers.set("permissions-policy",'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=(), clipboard-read=(self "https://maple-exp-personal.pages.dev")');headers.set("x-frame-options","DENY");
  headers.set("content-security-policy","default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' https://open.api.nexon.com data:; connect-src 'self'; frame-src https://key.guildfollow.com https://ads.guildfollow.com https://maple-exp-personal.pages.dev https://maple-exp-ads.pages.dev; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'");
  if(api)headers.set("cache-control","no-store");
  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
