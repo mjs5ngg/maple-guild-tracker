@@ -1,0 +1,8 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "maple-exp-public",
+  "main": "src/legacy-disabled.ts",
+  "compatibility_date": "2026-09-16",
+  "workers_dev": true,
+  "observability": { "enabled": true }
+}
