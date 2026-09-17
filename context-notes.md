@@ -801,3 +801,11 @@
 - 신규 앱 버전은 `0.5.0`, Android 패키지 ID는 `com.guildfollow.mobile`, 신규 로그인 딥링크는 `guildfollow://auth`다. 기존 앱용 `guildmatefollow://auth` 반환도 서버에서 계속 지원한다.
 - Vitest 118개, Edge 타입 검사, Rust 30개, Android ARM64 단위 테스트가 통과했다. 서명 APK는 v2·v3 서명이 유효하며 `aapt` 검사에서 실제 패키지 `com.guildfollow.mobile`, 시작 Activity `com.guildfollow.mobile.MainActivity`, 버전 `0.5.0`을 확인했다.
 - 생성된 APK는 `release/guildmate-follow-android-arm64-v0.5.0.apk`, 크기는 22,838,602바이트, SHA-256은 `6AEA58196D8D788E67DDC6B4F999C5830ED969015085A42CAE8F8B644D0951E5`다. Microsoft 연결 장치의 `민제의 S24+ (3)\storage\Download`로 복사했으며 휴대폰 파일의 크기와 해시가 원본과 일치한다.
+
+# 2026-09-18 관리자 대시보드 복구 및 바로가기
+
+- 공개 사용자 화면과 달리 관리자 대시보드는 이 PC의 `127.0.0.1:3103`에서만 제공한다. 따라서 로컬 운영 서비스와 Windows 접근 경로를 함께 점검한다.
+- 바로가기는 단순 URL 링크보다 서비스 미기동을 감지해 복구를 시도한 뒤 기본 브라우저로 여는 방식으로 만든다.
+- 장애 원인은 `Ubuntu-24.04` WSL 배포판 전체가 중지되어 3103 포트를 듣는 프로세스가 없었던 것이다. 운영 서비스 자체는 `enabled`이고 WSL을 시작하자 `active`로 정상 기동했으며 HTTP 200을 반환했다.
+- `scripts/open-operations-dashboard.ps1`는 WSL의 `maple-exp-operations.service`를 시작하고 최대 15초간 HTTP 200을 기다린 뒤 기본 브라우저를 연다. 실패하면 숨은 터미널 대신 Windows 오류 대화상자를 표시한다.
+- 바탕화면에 `길드원 따라가기 관리자 대시보드.lnk`를 만들었다. WSL을 강제로 종료한 콜드 상태에서 실행해 서비스 `active/enabled`, 대시보드 HTTP 200과 7,824바이트 응답을 확인했다.
