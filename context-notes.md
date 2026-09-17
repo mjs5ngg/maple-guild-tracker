@@ -763,3 +763,11 @@
 - PC가 꺼지면 `127.0.0.1:3103` 관리자 화면, 로컬 PostgreSQL 접근과 예약 백업만 중단된다. 기존 공개 데이터와 이용자 브라우저의 IndexedDB 기록은 영향을 받지 않는다.
 - 첫 WSL 재기동 시험에서 중앙 수집기가 disabled 상태인데도 다른 시작 경로로 active가 되는 문제를 발견했다. 원본 unit을 `/etc/systemd/system/maple-exp.service.disabled-20260917`로 보존하고 `/etc/systemd/system/maple-exp.service`를 `/dev/null`에 영구 마스킹했다.
 - 두 번째 WSL 완전 종료·재기동 후 공개 웹·API·개인 조회는 모두 HTTP 200, 중앙 수집기는 `inactive/masked`, 관리자 화면과 백업 타이머는 `active`임을 확인했다.
+
+# 2026-09-17 NEXON API 점검 응답 진단
+
+- Windows 자격 증명 관리자의 사용자 키로 `엘크라우치` OCID 조회는 HTTP 200에 성공해 키 자체가 유효함을 확인했다.
+- 이어진 캐릭터 기본 정보 조회는 HTTP 400과 `OPENAPI00010`을 반환했다. NEXON 공식 공지상 2026-09-17 07:00~13:00 메이플스토리 Open API 점검 시간이다.
+- 현재 개인 조회 엔진이 모든 비 429 오류를 `NEXON API 응답을 확인해 주세요.`로 축약해 실제 원인을 숨기므로, 응답 본문에서 점검 코드를 안전하게 해석해 전용 안내를 표시한다.
+- `OPENAPI00010`을 `NEXON Open API 점검 중입니다. 기존 기록을 표시하며 점검 종료 후 자동으로 다시 확인합니다.`로 변환하고 다른 알 수 없는 응답은 기존 일반 안내를 유지했다.
+- Vitest 111개와 공개 웹 3종 빌드가 통과했다. 개인 조회 Pages 배포 `4a85680f.maple-exp-personal.pages.dev`를 반영했고 정식 주소 번들 `index-D8L7jAcT.js`에 점검 안내가 포함된 것을 확인했다.

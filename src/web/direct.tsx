@@ -6,6 +6,7 @@ import {mergeActivity,parseNexon,kstDate} from "./experience";
 import type {Basic,HistoryBasic,Snapshot} from "./types";
 import type {DashboardToDirect,DirectStatus,DirectToDashboard} from "./directProtocol";
 import {directProgress,validConfiguration,validDashboardMessage} from "./directProtocol";
+import {nexonErrorMessage} from "./nexonError";
 import {directStore} from "./directStore";
 import {DIRECT_MIN_INTERVAL_MS,recoveredInterval,retryAfterDelay,slowedInterval} from "./directRate";
 import {readPersonal,writePersonal} from "./personalStorage";
@@ -33,12 +34,12 @@ class NexonClient{
    await this.pace();this.requestCount++;this.runRequests++;if(this.requestCount%100===0)void directStore.saveMeta("request-budget",{date:this.requestDay,count:this.requestCount});
    const url=new URL(`https://open.api.nexon.com/maplestory/v1/${path}`);url.search=new URLSearchParams(params).toString();
    const timeout=AbortSignal.timeout(20_000),signal=typeof AbortSignal.any==="function"?AbortSignal.any([this.signal,timeout]):this.signal;
-   const response=await fetch(url,{headers:{"x-nxopen-api-key":this.key},credentials:"omit",referrerPolicy:"no-referrer",signal});
-   if(response.ok){if(++this.successStreak>=50){this.interval=recoveredInterval(this.interval);this.successStreak=0;}return parseNexon(await response.text());}
+   const response=await fetch(url,{headers:{"x-nxopen-api-key":this.key},credentials:"omit",referrerPolicy:"no-referrer",signal}),body=await response.text();
+   if(response.ok){if(++this.successStreak>=50){this.interval=recoveredInterval(this.interval);this.successStreak=0;}return parseNexon(body);}
    if(response.status===429){this.rateLimits++;this.successStreak=0;this.interval=slowedInterval(this.interval);}
    if((response.status===429||response.status>=500)&&attempt<3){let wait=700*2**attempt+Math.random()*300;if(response.status===429)wait=Math.max(wait,retryAfterDelay(response.headers.get("retry-after")));await delay(wait);continue;}
    if(response.status===429)throw new Error("호출 한도에 도달했습니다. 서비스 단계 키인지 확인해 주세요.");
-   throw new Error("NEXON API 응답을 확인해 주세요.");
+   throw new Error(nexonErrorMessage(body));
   }
   throw new Error("NEXON API 재시도 횟수를 초과했습니다.");
  }
