@@ -7,7 +7,7 @@ use tauri::{
 
 use crate::models::MobileWidgetSnapshot;
 
-const PLUGIN_IDENTIFIER: &str = "com.mjs5ngg.guildmatefollow";
+const PLUGIN_IDENTIFIER: &str = "com.guildfollow.mobile";
 
 struct MobileWidgets<R: Runtime>(PluginHandle<R>);
 

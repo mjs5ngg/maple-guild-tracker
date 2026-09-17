@@ -1,5 +1,5 @@
 // Rust가 계산한 즐겨찾기 데이터를 홈 위젯 저장소와 이미지 캐시에 반영합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import android.app.Activity
 import app.tauri.annotation.Command

@@ -1,5 +1,5 @@
 // 공개 API 응답을 Android 홈 위젯이 사용하는 요약 형식으로 변환합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import org.json.JSONArray
 import org.json.JSONObject

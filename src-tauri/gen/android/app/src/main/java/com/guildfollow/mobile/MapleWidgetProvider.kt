@@ -1,5 +1,5 @@
 // 즐겨찾기 순위와 대표 캐릭터 주간 성장을 Android 홈 위젯으로 렌더링합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager

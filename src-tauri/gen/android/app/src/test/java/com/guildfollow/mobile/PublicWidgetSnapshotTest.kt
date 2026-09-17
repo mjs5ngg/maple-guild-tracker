@@ -1,5 +1,5 @@
 // 공개 API 기록이 Android 홈 위젯 요약으로 정확히 변환되는지 검증합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,12 +38,12 @@ class PublicWidgetSnapshotTest {
 
   @Test
   fun googleLoginUsesSystemBrowserPkceAndOneTimeDeepLink() {
-    val activity = File("src/main/java/com/mjs5ngg/guildmatefollow/MainActivity.kt").readText()
+    val activity = File("src/main/java/com/guildfollow/mobile/MainActivity.kt").readText()
     val manifest = File("src/main/AndroidManifest.xml").readText()
     assertTrue(activity.contains("Intent.ACTION_VIEW"))
-    assertTrue(activity.contains("/auth/android/start"))
+    assertTrue(activity.contains("/auth/android/start-v2"))
     assertTrue(activity.contains("/auth/android/exchange"))
     assertTrue(activity.contains("pkce_verifier"))
-    assertTrue(manifest.contains("android:scheme=\"guildmatefollow\""))
+    assertTrue(manifest.contains("android:scheme=\"guildfollow\""))
   }
 }

@@ -204,7 +204,7 @@ fn import(path: &Path, payload: &str) -> Result<(), crate::AppError> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_mjs5ngg_guildmatefollow_MainActivity_storeServiceKey(
+pub extern "system" fn Java_com_guildfollow_mobile_MainActivity_storeServiceKey(
     mut env: JNIEnv,
     _class: JClass,
     value: JString,
@@ -221,7 +221,7 @@ pub extern "system" fn Java_com_mjs5ngg_guildmatefollow_MainActivity_storeServic
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_mjs5ngg_guildmatefollow_MainActivity_importDirectSnapshots(
+pub extern "system" fn Java_com_guildfollow_mobile_MainActivity_importDirectSnapshots(
     mut env: JNIEnv,
     _class: JClass,
     db_path: JString,

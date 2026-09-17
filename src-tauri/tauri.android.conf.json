@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "identifier": "com.mjs5ngg.guildmatefollow",
+  "identifier": "com.guildfollow.mobile",
   "app": {
     "windows": [
       {

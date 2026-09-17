@@ -15,10 +15,10 @@ val tauriProperties = Properties().apply {
 
 android {
     compileSdk = 36
-    namespace = "com.mjs5ngg.guildmatefollow"
+    namespace = "com.guildfollow.mobile"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.mjs5ngg.guildmatefollow"
+        applicationId = "com.guildfollow.mobile"
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

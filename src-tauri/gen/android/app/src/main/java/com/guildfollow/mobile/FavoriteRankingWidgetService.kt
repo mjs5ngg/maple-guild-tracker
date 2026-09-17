@@ -1,5 +1,5 @@
 // 대형 위젯의 고정 높이 즐겨찾기 순위 행을 스크롤 컬렉션으로 제공합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import android.content.Context
 import android.content.Intent

@@ -1,5 +1,5 @@
 // 길드원 따라가기 Android 앱의 기본 액티비티를 제공합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import android.content.Intent
 import android.net.Uri
@@ -69,7 +69,7 @@ class MainActivity : TauriActivity() {
   }
 
   private fun handleLoginIntent(intent: Intent?) {
-    val code = intent?.data?.takeIf { it.scheme == "guildmatefollow" && it.host == "auth" }?.getQueryParameter("code") ?: return
+    val code = intent?.data?.takeIf { it.scheme == "guildfollow" && it.host == "auth" }?.getQueryParameter("code") ?: return
     pendingLoginCode = code
     if (dashboardWebView != null) exchangeLogin(code)
   }
@@ -99,7 +99,7 @@ class MainActivity : TauriActivity() {
 
   private fun beginGoogleLogin() {
     val verifier = randomVerifier()
-    val response = runCatching { request("/auth/android/start", JSONObject().put("challenge", challenge(verifier))) }.getOrNull()
+    val response = runCatching { request("/auth/android/start-v2", JSONObject().put("challenge", challenge(verifier))) }.getOrNull()
     val url = response?.optString("url").orEmpty()
     if (url.isBlank()) return showLoginError()
     getSharedPreferences("android_auth", MODE_PRIVATE).edit().putString("pkce_verifier", verifier).apply()

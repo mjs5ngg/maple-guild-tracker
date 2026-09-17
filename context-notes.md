@@ -791,3 +791,13 @@
 - Vitest 117개, Rust 30개, Android 전체 Gradle 단위 테스트와 Playwright 시각 회귀 5개가 통과했다. 공개 Worker 버전 `ee76d628-e37e-4a26-b4b2-fde5023beec0`에서 두 만렙 판정 문구가 포함된 번들을 확인했다.
 - ARM64 APK를 v2·v3 방식으로 서명 검증했다. 생성물은 `release/guildmate-follow-android-arm64-v0.4.0.apk`, 크기는 22,703,154바이트, SHA-256은 `99282666DEB4B8747AB585EC00975CDCE16586E60C6B5A953EA440A78698439F`다.
 - Microsoft 연결 장치 경로 `C:\Users\mjs5n\CrossDevice\민제의 S24+ (3)\storage\Download`로 APK를 복사했으며, 휴대폰 쪽 파일의 크기와 SHA-256이 원본과 일치한다.
+
+# 2026-09-17 Android 새 앱 분리 및 단풍잎 아이콘
+
+- 새 Android 애플리케이션 ID는 개인 식별 문자열이 없는 `com.guildfollow.mobile`로 정한다. 기존 `com.mjs5ngg.guildmatefollow`과 동시에 설치되며 앱 데이터·서비스 키·위젯·WorkManager 저장소도 별도로 생성된다.
+- Tauri Android 빌드는 애플리케이션 식별자와 Java/Kotlin 소스 경로가 일치해야 한다. 따라서 Kotlin 생성·커스텀 패키지, Manifest 컴포넌트, JNI 진입점과 위젯 플러그인 식별자를 모두 `com.guildfollow.mobile`로 함께 이전했다.
+- 기존 앱과 신규 앱이 동시에 설치됐을 때 로그인 반환 선택창이 생기지 않도록 신규 앱은 `guildfollow://auth`와 `/auth/android/start-v2`를 사용한다. 서버는 기존 `guildmatefollow://auth`도 계속 지원한다.
+- 웹 상단에서 사용 중인 단풍잎 계열 원본 `maple-leaf-v2.png`를 Android 아이콘에 사용한다. 런처 마스크에서 가장자리가 잘리지 않도록 적응형 전경 크기를 줄이고 짙은 남청색 배경을 적용한다.
+- 신규 앱 버전은 `0.5.0`, Android 패키지 ID는 `com.guildfollow.mobile`, 신규 로그인 딥링크는 `guildfollow://auth`다. 기존 앱용 `guildmatefollow://auth` 반환도 서버에서 계속 지원한다.
+- Vitest 118개, Edge 타입 검사, Rust 30개, Android ARM64 단위 테스트가 통과했다. 서명 APK는 v2·v3 서명이 유효하며 `aapt` 검사에서 실제 패키지 `com.guildfollow.mobile`, 시작 Activity `com.guildfollow.mobile.MainActivity`, 버전 `0.5.0`을 확인했다.
+- 생성된 APK는 `release/guildmate-follow-android-arm64-v0.5.0.apk`, 크기는 22,838,602바이트, SHA-256은 `6AEA58196D8D788E67DDC6B4F999C5830ED969015085A42CAE8F8B644D0951E5`다. Microsoft 연결 장치의 `민제의 S24+ (3)\storage\Download`로 복사했으며 휴대폰 파일의 크기와 해시가 원본과 일치한다.

@@ -14,7 +14,7 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:launchMode="singleTask"
             android:label="@string/main_activity_title"
-            android:name=".MainActivity"
+            android:name="com.guildfollow.mobile.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -26,29 +26,29 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="guildmatefollow" android:host="auth" />
+                <data android:scheme="guildfollow" android:host="auth" />
             </intent-filter>
         </activity>
 
-        <receiver android:name=".FavoriteRankingWidgetProvider" android:exported="true">
+        <receiver android:name="com.guildfollow.mobile.FavoriteRankingWidgetProvider" android:exported="true">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_favorite_ranking_info" />
         </receiver>
-        <receiver android:name=".PrimaryWeeklyWidgetProvider" android:exported="true">
+        <receiver android:name="com.guildfollow.mobile.PrimaryWeeklyWidgetProvider" android:exported="true">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_primary_weekly_info" />
         </receiver>
-        <receiver android:name=".PrimarySquareWidgetProvider" android:exported="true">
+        <receiver android:name="com.guildfollow.mobile.PrimarySquareWidgetProvider" android:exported="true">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_primary_square_info" />
         </receiver>
-        <receiver android:name=".PrimaryCombinedWidgetProvider" android:exported="true">
+        <receiver android:name="com.guildfollow.mobile.PrimaryCombinedWidgetProvider" android:exported="true">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_primary_combined_info" />
         </receiver>
 
         <service
-            android:name=".FavoriteRankingWidgetService"
+            android:name="com.guildfollow.mobile.FavoriteRankingWidgetService"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 

@@ -55,6 +55,7 @@ async function takeRate(binding:RateLimit|undefined,key:string){if(!binding)retu
 async function readText(request:Request,maxBytes:number){const declared=Number(request.headers.get("content-length")||0);if(declared>maxBytes)throw new ApiError(413,"요청 내용이 너무 큽니다.");const text=await request.text();if(new TextEncoder().encode(text).byteLength>maxBytes)throw new ApiError(413,"요청 내용이 너무 큽니다.");return text;}
 async function bodyJson(request:Request,maxBytes=32_768){try{return JSON.parse(await readText(request,maxBytes));}catch(error){if(error instanceof ApiError)throw error;throw new ApiError(400,"요청 내용을 확인하세요.");}}
 export async function pkceChallenge(verifier:string){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier));return btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+","-").replaceAll("/","_").replace(/=+$/g,"");}
+export function androidCallbackScheme(clientKind:string){return clientKind==="android-v2"?"guildfollow":"guildmatefollow";}
 function basic(row:Row){return {character_name:row.name,world_name:row.world_name,character_class:row.character_class,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate),character_guild_name:row.guild_name,character_image:row.image_url};}
 function historyBasic(row:Row){return {character_name:row.name,character_level:row.level,character_exp:String(row.exp),character_exp_rate:String(row.exp_rate)};}
 
@@ -160,12 +161,12 @@ async function googleStart(request:Request,env:Env){
  await env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user) VALUES(?,?,?,?)").bind(await sha256(state),await sha256(browser),expires,linkUser).run();
  return new Response(null,{status:302,headers:{location:googleUrl(request,env,state),"set-cookie":sessionCookie(request,"maple_login",browser,600)}});
 }
-async function androidStart(request:Request,env:Env){
+async function androidStart(request:Request,env:Env,clientKind="android"){
  await takeRate(env.AUTH_RATE_LIMITER,`android-start:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  const input=await bodyJson(request) as {challenge?:unknown};if(typeof input.challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(input.challenge))throw new ApiError(400,"Android 로그인 요청을 확인하세요.");
  let linkUser:string|null=null;try{linkUser=await accountUserId(request,env);}catch{/* 새 계정으로 계속합니다. */}const state=randomToken();
- await env.DB.batch([env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(nowSeconds()),env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user,client_kind,pkce_challenge) VALUES(?,?,?,?,'android',?)").bind(await sha256(state),"",nowSeconds()+600,linkUser,input.challenge)]);
+ await env.DB.batch([env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(nowSeconds()),env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user,client_kind,pkce_challenge) VALUES(?,?,?,?,?,?)").bind(await sha256(state),"",nowSeconds()+600,linkUser,clientKind,input.challenge)]);
  return json({url:googleUrl(request,env,state)});
 }
 async function googleCallback(request:Request,env:Env){
@@ -184,10 +185,10 @@ async function googleCallback(request:Request,env:Env){
  if(!existing&&!attempt.link_user)statements.push(env.DB.prepare("INSERT INTO users(id,last_active) VALUES(?,?)").bind(id,now));
  if(!existing)statements.push(env.DB.prepare("INSERT INTO identities(provider,subject,user_id) VALUES('google',?,?)").bind(google.sub,id));
  statements.push(env.DB.prepare("UPDATE users SET last_active=? WHERE id=?").bind(now,id));
- if(attempt.client_kind==="android"){
+ if(attempt.client_kind==="android"||attempt.client_kind==="android-v2"){
   if(!attempt.pkce_challenge)throw new ApiError(400,"Android 로그인 요청이 만료되었습니다.");const exchange=randomToken();
   statements.push(env.DB.prepare("INSERT INTO android_exchange_codes(code_hash,user_id,pkce_challenge,expires_at) VALUES(?,?,?,?)").bind(await sha256(exchange),id,attempt.pkce_challenge,now+120));await env.DB.batch(statements);
-  return new Response(null,{status:302,headers:{location:`guildmatefollow://auth?code=${encodeURIComponent(exchange)}`}});
+  return new Response(null,{status:302,headers:{location:`${androidCallbackScheme(attempt.client_kind)}://auth?code=${encodeURIComponent(exchange)}`}});
  }
  statements.push(env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),id,now+30*86400));
  await env.DB.batch(statements);
@@ -254,6 +255,7 @@ async function route(request:Request,env:Env){
  if(path==="/auth/google/start"&&method==="GET")return googleStart(request,env);
  if(path==="/auth/google/callback"&&method==="GET"){await takeRate(env.AUTH_RATE_LIMITER,`google-callback:${request.headers.get("cf-connecting-ip")||"unknown"}`);return googleCallback(request,env);}
  if(path==="/auth/android/start"&&method==="POST")return androidStart(request,env);
+ if(path==="/auth/android/start-v2"&&method==="POST")return androidStart(request,env,"android-v2");
  if(path==="/auth/android/exchange"&&method==="POST")return androidExchange(request,env);
  if(path==="/api/logout"&&method==="POST")return logout(request,env);
  if(path==="/api/account/delete"&&method==="POST")return deleteAccount(request,env);

@@ -1,5 +1,5 @@
 // 앱이 닫힌 동안 대표·즐겨찾기 정보를 동기화하고 홈 위젯을 갱신합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName

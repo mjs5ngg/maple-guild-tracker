@@ -1,0 +1,6 @@
+{
+  "default": "android-app-icon.png",
+  "android_bg": "android-icon-background.png",
+  "android_fg": "maple-leaf-v2.png",
+  "android_fg_scale": 68
+}

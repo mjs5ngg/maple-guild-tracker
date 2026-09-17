@@ -1,5 +1,5 @@
 // Android 홈 위젯의 이미지 크기와 경험치 표기 규칙을 검증합니다.
-package com.mjs5ngg.guildmatefollow
+package com.guildfollow.mobile
 
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -204,7 +204,7 @@ class MapleWidgetProviderTest {
 
   @Test
   fun widgetBackgroundSyncUsesPersistentFifteenMinuteWork() {
-    val worker = File("src/main/java/com/mjs5ngg/guildmatefollow/WidgetSyncWorker.kt").readText()
+    val worker = File("src/main/java/com/guildfollow/mobile/WidgetSyncWorker.kt").readText()
     val gradle = File("build.gradle.kts").readText()
     val proguard = File("widget.pro").readText()
     assertTrue(worker.contains("PeriodicWorkRequestBuilder<WidgetSyncWorker>(15, TimeUnit.MINUTES)"))
@@ -219,7 +219,7 @@ class MapleWidgetProviderTest {
 
   @Test
   fun directWebResultsAreStoredOnlyThroughTheAndroidDeviceBridge() {
-    val activity = File("src/main/java/com/mjs5ngg/guildmatefollow/MainActivity.kt").readText()
+    val activity = File("src/main/java/com/guildfollow/mobile/MainActivity.kt").readText()
     assertTrue(activity.contains("addJavascriptInterface(AndroidDirectBridge(), \"AndroidDirect\")"))
     assertTrue(activity.contains("storeServiceKeyOnDevice"))
     assertTrue(activity.contains("importDirectSnapshots"))

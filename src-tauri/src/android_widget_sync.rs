@@ -8,7 +8,7 @@ use jni::{
 };
 
 #[no_mangle]
-pub extern "system" fn Java_com_mjs5ngg_guildmatefollow_WidgetSyncWorker_syncAndBuildSnapshot(
+pub extern "system" fn Java_com_guildfollow_mobile_WidgetSyncWorker_syncAndBuildSnapshot(
     mut env: JNIEnv,
     _class: JClass,
     db_path: JString,
