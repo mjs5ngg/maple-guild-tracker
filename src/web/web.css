@@ -86,3 +86,6 @@
 /* 고정 300px 캔버스의 y=200 발 기준점을 모든 칸 하단에서 2px 위에 맞춥니다. */
 .character-avatar{position:relative;--avatar-render-size:192px}.character-avatar img{position:absolute;top:auto;bottom:2px;left:50%;display:block;width:var(--avatar-render-size);height:var(--avatar-render-size);max-width:none;object-fit:contain;transform:translate(-50%,33.333333%);image-rendering:pixelated}.hero-card>.character-avatar{--avatar-render-size:504px}.hero-card>.character-avatar img{top:auto;bottom:2px;left:50%;width:var(--avatar-render-size);height:var(--avatar-render-size);max-width:none;object-fit:contain;transform:translate(-50%,33.333333%)}
 @media(hover:hover) and (pointer:fine){.character-avatar img{image-rendering:auto}}
+
+/* NEXON 점검 상태를 설정창 밖에서도 분명하게 알립니다. */
+.state-banner.maintenance{display:flex;align-items:center;gap:.75rem;border-color:color-mix(in srgb,var(--warning) 62%,var(--border));background:color-mix(in srgb,var(--warning) 9%,var(--surface));color:var(--warning)}.state-banner.maintenance>svg{width:1.35rem;height:1.35rem;flex:0 0 auto}.state-banner.maintenance div{display:grid;gap:.18rem}.state-banner.maintenance span{color:var(--text-muted);font-size:var(--font-size-sm);line-height:1.45}
