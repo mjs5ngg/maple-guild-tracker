@@ -7,6 +7,10 @@ export type Projection={label:string;days:number|null;date:string|null;status:"r
 function addDays(date:string,days:number){const value=new Date(`${date}T00:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
 function ceilingDivide(value:bigint,divisor:bigint){return (value+divisor-1n)/divisor;}
 function dateLabel(date:string){const [year,month,day]=date.split("-");return `${year}.${month}.${day}`;}
+function maximumProgress(table:string[]):bigint|null{
+ if(table.length<100)return null;
+ try{return table.slice(0,100).reduce((sum,value)=>sum+BigInt(value),0n);}catch{return null;}
+}
 
 export function sevenDayAverage(snapshot:Snapshot,table:string[]):bigint|null{
  const points=dailyPoints(snapshot,7,table);
@@ -18,6 +22,7 @@ export function absoluteProgress(basic:Basic,table:string[]):bigint|null{
  const level=basic.character_level;
  if(level<200||level>300||table.length<100)return null;
  try{
+  if(level===300)return maximumProgress(table);
   let value=BigInt(basic.character_exp);
   for(let current=200;current<level;current++)value+=BigInt(table[current-200]);
   return value;
@@ -44,6 +49,7 @@ export function levelUpProjection(snapshot:Snapshot,table:string[],today=kstDate
 }
 
 export function catchupProjection(primary:Snapshot,target:Snapshot,table:string[],today=kstDate()):Projection{
+ if(target.basic.character_level>=300)return {label:"상대가 최고 레벨이라 추월 불가",days:null,date:null,status:"impossible"};
  const gap=absoluteGap(primary.basic,target.basic,table);
  if(gap===null)return {label:"계산표 갱신 필요",days:null,date:null,status:"unsupported"};
  if(gap<=0n)return {label:"이미 추월",days:0,date:today,status:"complete"};
@@ -52,6 +58,12 @@ export function catchupProjection(primary:Snapshot,target:Snapshot,table:string[
  const closing=ownAverage-otherAverage;
  if(closing<=0n)return {label:"현재 추세로 추월 어려움",days:null,date:null,status:"impossible"};
  const exactDays=ceilingDivide(gap,closing);
+ if(otherAverage>0n){
+  const maximum=maximumProgress(table),targetPosition=absoluteProgress(target.basic,table);
+  if(maximum===null||targetPosition===null)return {label:"계산표 갱신 필요",days:null,date:null,status:"unsupported"};
+  const targetCapDays=ceilingDivide(maximum-targetPosition,otherAverage);
+  if(exactDays>targetCapDays)return {label:"상대가 먼저 최고 레벨에 도달해 추월 불가",days:null,date:null,status:"impossible"};
+ }
  if(exactDays>3650n)return {label:"10년 이상",days:3651,date:null,status:"impossible"};
  const days=Number(exactDays);
  const date=addDays(today,days);return {label:dateLabel(date),days,date,status:"ready"};
