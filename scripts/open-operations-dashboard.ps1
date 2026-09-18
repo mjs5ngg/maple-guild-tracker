@@ -5,8 +5,19 @@ $ErrorActionPreference = "Stop"
 $dashboardUrl = "http://127.0.0.1:3103/"
 $distroName = "Ubuntu-24.04"
 $serviceName = "maple-exp-operations.service"
+$keepAliveMarker = "MAPLE_OPERATIONS_KEEPALIVE=1"
 
 try {
+    # WSL은 연결된 wsl.exe가 없으면 약 15초(instanceIdleTimeout) 뒤 배포판을 종료해 대시보드도 함께 내려간다.
+    # 숨은 세션 하나를 유지해 배포판을 살려 두고, 이미 떠 있으면 중복 실행하지 않는다.
+    $keepAlive = Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" |
+        Where-Object { $_.CommandLine -like "*$keepAliveMarker*" }
+    if (-not $keepAlive) {
+        Start-Process wsl.exe -WindowStyle Hidden -ArgumentList @(
+            "-d", $distroName, "--exec", "/usr/bin/env", $keepAliveMarker, "sleep", "infinity"
+        )
+    }
+
     & wsl.exe -d $distroName -- bash -lc "systemctl start $serviceName" | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "WSL 운영 서비스를 시작하지 못했습니다."

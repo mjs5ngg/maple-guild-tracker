@@ -809,3 +809,11 @@
 - 장애 원인은 `Ubuntu-24.04` WSL 배포판 전체가 중지되어 3103 포트를 듣는 프로세스가 없었던 것이다. 운영 서비스 자체는 `enabled`이고 WSL을 시작하자 `active`로 정상 기동했으며 HTTP 200을 반환했다.
 - `scripts/open-operations-dashboard.ps1`는 WSL의 `maple-exp-operations.service`를 시작하고 최대 15초간 HTTP 200을 기다린 뒤 기본 브라우저를 연다. 실패하면 숨은 터미널 대신 Windows 오류 대화상자를 표시한다.
 - 바탕화면에 `길드원 따라가기 관리자 대시보드.lnk`를 만들었다. WSL을 강제로 종료한 콜드 상태에서 실행해 서비스 `active/enabled`, 대시보드 HTTP 200과 7,824바이트 응답을 확인했다.
+
+# 2026-09-18 관리자 대시보드 15초 후 응답 없음
+
+- 증상: 바로가기로 연 대시보드가 잠시 뒤 새로고침 실패·연결 불가가 된다. journalctl에 매 부팅마다 서비스가 시작 15~25초 뒤 `Stopping`되는 기록이 반복됐다.
+- 원인: WSL `[general] instanceIdleTimeout` 기본값 15000ms. 연결된 `wsl.exe`가 하나도 없으면 systemd 서비스가 떠 있어도 배포판 전체를 종료한다. 바로가기 스크립트의 `wsl.exe ... systemctl start`가 끝나는 순간부터 15초 카운트가 시작됐다. 재현 시 15초까지 200, 20초부터 연결 실패, 배포판 `Stopped`.
+- 같은 배포판의 `maple-exp-ngrok`, 백업·보존 타이머도 같은 이유로 함께 멈춘다.
+- 조치: 스크립트가 `MAPLE_OPERATIONS_KEEPALIVE=1 sleep infinity`를 숨은 `wsl.exe`로 한 번만 띄워 배포판을 유지한다. 전역 `.wslconfig`는 바꾸지 않았다. 실행 후 90초 동안 `/status` 200 유지, 재실행 시 keepalive 중복 없음 확인. 끄려면 `wsl --terminate Ubuntu-24.04`.
+- 상시 유지: 작업 스케줄러 `MapleOperationsDashboardKeepAlive`(현재 사용자 로그온 시, 제한 권한, 실행 시간 제한 없음, 중복 실행 무시)가 `conhost --headless`로 `scripts/keep-operations-dashboard-alive.ps1`을 창 없이 실행한다. 스크립트는 keepalive 세션이 끝나면 10초 뒤 다시 띄우고, 바로가기가 띄운 세션이 있으면 그것을 기다린다. `wsl --shutdown` 직후 20초 안에 `/status` 200으로 복구되고 100초 유지되는 것을 확인했다. 해제하려면 `Unregister-ScheduledTask MapleOperationsDashboardKeepAlive` 후 `wsl --shutdown`.
