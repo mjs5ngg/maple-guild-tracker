@@ -6,7 +6,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
 import android.webkit.JavascriptInterface
+import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.view.View
+import androidx.activity.OnBackPressedCallback
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -50,6 +56,14 @@ class MainActivity : TauriActivity() {
       val uri = Uri.parse(url)
       if (uri.scheme != "https" || uri.host != "guildfollow.com") return
       runOnUiThread { startActivity(loginTabIntent(url)) }
+    }
+
+    // 화면 테마가 바뀌면 상태 표시줄(머리 영역 색)과 내비게이션 막대(페이지 색)를 함께 맞춥니다.
+    @JavascriptInterface
+    fun setSystemBars(dark: Boolean, top: String, bottom: String) {
+      val topColor = parseCssColor(top) ?: return
+      val bottomColor = parseCssColor(bottom) ?: topColor
+      runOnUiThread { applySystemBars(dark, topColor, bottomColor) }
     }
 
     @JavascriptInterface
@@ -158,23 +172,68 @@ class MainActivity : TauriActivity() {
     pendingLoginCode?.let { exchangeLogin(it) }
     keepContentInsideSystemBars(webView)
     installNativeNetwork(webView)
+    installBackHandling(webView)
+  }
+
+  // 뒤로 가기는 먼저 화면에 열린 창을 닫고, 다른 화면이면 개요로, 개요에서는 앱을 뒤로 보냅니다.
+  private fun installBackHandling(webView: WebView) {
+    onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+      override fun handleOnBackPressed() {
+        webView.evaluateJavascript("(window.__androidBack&&window.__androidBack())===true") { handled ->
+          // 개요에서는 화면 사이 기록을 되감지 않고 일반 앱처럼 작업을 뒤로 보냅니다(다시 열면 그대로 이어짐).
+          if (handled != "true") moveTaskToBack(true)
+        }
+      }
+    })
   }
 
   // 내장 화면이 상태 표시줄·내비게이션 막대·키보드 아래로 들어가지 않도록 여백을 둡니다.
+  private val barsBackground = SystemBarsBackground()
+
+  private fun applySystemBars(dark: Boolean, top: Int, bottom: Int) {
+    barsBackground.top = top
+    barsBackground.bottom = bottom
+    barsBackground.invalidateSelf()
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+      isAppearanceLightStatusBars = !dark
+      isAppearanceLightNavigationBars = !dark
+    }
+  }
+
+  private fun parseCssColor(value: String): Int? =
+    runCatching { android.graphics.Color.parseColor(value.trim()) }.getOrNull()
+
+  // 상태 표시줄 높이만큼은 머리 영역 색, 나머지는 페이지 색으로 칠하는 배경입니다.
+  private class SystemBarsBackground : Drawable() {
+    var top = 0xFF101826.toInt()
+    var bottom = 0xFF0B1220.toInt()
+    var topHeight = 0
+    private val paint = Paint()
+    override fun draw(canvas: Canvas) {
+      paint.color = bottom
+      canvas.drawRect(bounds, paint)
+      paint.color = top
+      canvas.drawRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), (bounds.top + topHeight).toFloat(), paint)
+    }
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = PixelFormat.OPAQUE
+  }
+
   private fun keepContentInsideSystemBars(webView: WebView) {
     // WebView는 이 시점에 아직 부모에 붙지 않았을 수 있어 항상 존재하는 콘텐츠 영역에 여백을 줍니다.
     val container = findViewById<View>(android.R.id.content) ?: webView
-    container.setBackgroundColor(0xFF0B1220.toInt())
-    WindowCompat.getInsetsController(window, window.decorView).apply {
-      isAppearanceLightStatusBars = false
-      isAppearanceLightNavigationBars = false
-    }
+    container.background = barsBackground
+    applySystemBars(true, barsBackground.top, barsBackground.bottom)
     // 삼성 3버튼 내비게이션의 밝은 반투명 막을 없애 앱 배경과 맞춥니다.
     if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
     ViewCompat.setOnApplyWindowInsetsListener(container) { view, insets ->
       val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
       val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime())
       view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, keyboard.bottom))
+      barsBackground.topHeight = bars.top
+      barsBackground.invalidateSelf()
       WindowInsetsCompat.CONSUMED
     }
     ViewCompat.requestApplyInsets(container)

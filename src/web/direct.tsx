@@ -12,6 +12,10 @@ import {DIRECT_MIN_INTERVAL_MS,recoveredInterval,retryAfterDelay,slowedInterval}
 import {readPersonal,writePersonal} from "./personalStorage";
 import {APP_MODE,PUBLIC_SITE} from "./appMode";
 import {appFetch} from "./nativeFetch";
+
+// 설정 창에 들어간 키 화면은 출처가 달라 저장소를 공유하지 못하므로, 주소로 받은 테마를 그대로 따릅니다.
+const requestedTheme=new URLSearchParams(location.search).get("theme");
+if(requestedTheme==="light"||requestedTheme==="dark")document.documentElement.dataset.theme=requestedTheme;
 import "./web.css";
 
 declare global {interface Window {AndroidDirect?:{storeServiceKeyOnDevice:(value:string)=>boolean;importSnapshots:(payload:string)=>boolean}}}

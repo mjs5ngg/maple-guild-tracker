@@ -120,3 +120,10 @@ html:has(.personal-page.embedded),body:has(.personal-page.embedded){min-width:0;
  .mobile-menu-drawer>footer{display:grid;gap:.55rem}
  .mobile-menu-drawer>footer a{color:var(--text-muted)}
 }
+
+/* 앱 안에서 여는 개인정보·이용 안내 레이어 */
+.legal-layer{position:fixed;z-index:150;inset:0;overflow:auto;overscroll-behavior:contain;background:var(--page)}
+.legal-page.in-app{min-height:100%;box-sizing:border-box;padding:1rem .75rem 2rem}
+.legal-page.in-app>.brand{display:flex;align-items:center;gap:.5rem;border:0;background:transparent;color:var(--text);font:inherit;cursor:pointer}
+.legal-page.in-app footer .quiet-button{width:auto}
+@media(max-width:760px){.legal-page article{padding:1.2rem}.legal-page footer{flex-wrap:wrap}}

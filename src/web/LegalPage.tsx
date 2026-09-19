@@ -1,5 +1,5 @@
 // 공개 서비스의 개인정보 처리 및 이용 조건을 독립된 주소에서 안내합니다.
-type LegalKind="privacy"|"terms";
+export type LegalKind="privacy"|"terms";
 
 export function legalKind(pathname:string):LegalKind|null{
  if(pathname==="/privacy")return "privacy";
@@ -7,18 +7,19 @@ export function legalKind(pathname:string):LegalKind|null{
  return null;
 }
 
-export default function LegalPage({kind}:{kind:LegalKind}){
+// 앱에서는 외부 탭 대신 화면 안에서 열고, 돌아가기는 onBack으로 처리합니다.
+export default function LegalPage({kind,onBack}:{kind:LegalKind;onBack?:()=>void}){
  const privacy=kind==="privacy";
- return <main className="legal-page"><a className="brand" href="/"><span>🍁</span><b>길드원 따라가기</b></a><article className="surface"><span className="section-kicker">{privacy?"PRIVACY":"TERMS"}</span><h1>{privacy?"개인정보 처리 안내":"서비스 이용 안내"}</h1><p className="legal-updated">시행일 {privacy?"2026년 9월 16일":"2026년 9월 15일"}.</p>{privacy?<>
-  <h2>기기에만 저장하는 정보.</h2><p>NEXON Open API 서비스 키와 캐릭터의 현재·일별 경험치 기록은 개인 조회 전용 출처의 브라우저 저장소에 보관됩니다. 이 정보는 길드원 따라가기 서버 또는 다른 이용자에게 전송하지 않습니다.</p>
-  <h2>서버가 처리하는 정보.</h2><p>서비스 이용 현황 확인을 위해 브라우저가 생성한 임의 식별자의 해시, 접속 날짜, 최초·최근 활성 시각과 세션 시작 횟수를 최대 90일간 처리합니다. 원본 IP, NEXON API 키와 캐릭터 경험치 기록은 이 이용 현황에 저장하지 않습니다. 현재 신규 소셜 로그인은 중단되어 있습니다. 기존 로그인 이용자의 경우 Google 계정 식별자, 대표캐릭터명, 즐겨찾기명, 따라잡기 프리셋과 세션 토큰을 기기 간 설정 동기화 목적으로 처리할 수 있습니다.</p>
-  <h2>보관과 삭제.</h2><p>로그아웃하면 브라우저 세션이 삭제되며, 계정 탈퇴를 실행하면 계정 설정과 프리셋이 삭제됩니다. 브라우저에서 사이트 데이터를 삭제하면 기기에 저장된 API 키와 경험치 기록도 삭제될 수 있습니다.</p>
-  <h2>외부 서비스.</h2><p>캐릭터 정보 조회는 이용자 브라우저에서 NEXON Open API로 직접 전송됩니다. NEXON의 개인정보 및 API 이용 정책은 해당 서비스의 정책을 따릅니다.</p>
+ return <main className={onBack?"legal-page in-app":"legal-page"}>{onBack?<button className="brand" onClick={onBack}><span>🍁</span><b>길드원 따라가기</b></button>:<a className="brand" href="/"><span>🍁</span><b>길드원 따라가기</b></a>}<article className="surface"><span className="section-kicker">{privacy?"PRIVACY":"TERMS"}</span><h1>{privacy?"개인정보 처리 안내":"서비스 이용 안내"}</h1><p className="legal-updated">시행일 {privacy?"2026년 9월 19일":"2026년 9월 15일"}.</p>{privacy?<>
+  <h2>기기에만 저장하는 정보.</h2><p>NEXON Open API 서비스 키와 캐릭터의 현재·일별 경험치 기록은 웹에서는 개인 조회 전용 출처의 브라우저 저장소에, Android 앱에서는 앱 내부 저장소에 보관됩니다. Android 앱은 홈 위젯 갱신을 위해 서비스 키를 기기의 암호화 저장소(Android Keystore)에도 보관합니다. 이 정보는 길드원 따라가기 서버 또는 다른 이용자에게 전송하지 않습니다.</p>
+  <h2>서버가 처리하는 정보.</h2><p>서비스 이용 현황 확인을 위해 브라우저가 생성한 임의 식별자의 해시, 접속 날짜, 최초·최근 활성 시각과 세션 시작 횟수를 최대 90일간 처리합니다. 원본 IP, NEXON API 키와 캐릭터 경험치 기록은 이 이용 현황에 저장하지 않습니다. Google 로그인을 선택한 경우에만 Google 계정 식별자, 대표캐릭터명, 즐겨찾기명, 따라잡기 프리셋과 세션 토큰의 해시를 기기 간 설정 동기화 목적으로 처리합니다. 서비스 키와 경험치 기록은 동기화하지 않습니다. 로그인하지 않아도 모든 조회 기능을 사용할 수 있습니다.</p>
+  <h2>보관과 삭제.</h2><p>로그아웃하면 서버의 세션과 기기의 로그인 정보가 삭제되며, 계정 탈퇴를 실행하면 계정 설정과 프리셋이 삭제됩니다. 브라우저의 사이트 데이터나 앱 데이터를 삭제하면 기기에 저장된 API 키와 경험치 기록도 삭제될 수 있습니다.</p>
+  <h2>외부 서비스.</h2><p>캐릭터 정보 조회는 이용자의 브라우저 또는 앱에서 NEXON Open API로 직접 전송됩니다. NEXON의 개인정보 및 API 이용 정책과 Google 로그인은 각 서비스의 정책을 따릅니다.</p>
  </>:<>
   <h2>서비스 성격.</h2><p>길드원 따라가기는 NEXON Open API 데이터를 기기에서 조회해 성장 기록을 계산하는 비공식 보조 서비스입니다. NEXON이 운영하거나 보증하는 서비스가 아닙니다.</p>
   <h2>데이터와 계산.</h2><p>API 지연, 점검, 날짜 경계와 경험치표 변경으로 값이 늦게 확정되거나 재정렬될 수 있습니다. 누락 자료는 0으로 추정하지 않으며 중요한 판단에는 공식 게임 정보를 함께 확인해야 합니다.</p>
   <h2>서비스 키.</h2><p>본인 명의의 서비스 단계 키만 입력하고 다른 사람과 공유하지 않아야 합니다. 이용자는 NEXON Open API 약관과 호출 한도를 준수할 책임이 있습니다.</p>
   <h2>광고와 제휴.</h2><p>공개 대시보드에는 서비스 운영을 위한 광고와 제휴 링크가 표시될 수 있습니다. 광고 차단 여부와 관계없이 조회·순위·그래프·따라잡기 기능은 동일하게 제공됩니다.</p>
   <h2>변경과 중단.</h2><p>안전한 운영, 외부 API 정책 변경 또는 장애 대응을 위해 기능을 변경하거나 일시 중단할 수 있습니다. 유료 자동 전환 없이 무료 인프라 한도 안에서 운영합니다.</p>
- </>}<footer><a href="/">서비스로 돌아가기</a><span>Data based on NEXON Open API</span></footer></article></main>;
+ </>}<footer>{onBack?<button className="quiet-button" onClick={onBack}>돌아가기</button>:<a href="/">서비스로 돌아가기</a>}<span>Data based on NEXON Open API</span></footer></article></main>;
 }
