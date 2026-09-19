@@ -54,6 +54,8 @@ export function PublicApp(){
  useEffect(()=>{const onLogin=()=>{markAccountLoginPending();void sessionQuery.refetch();};addEventListener("android-login",onLogin);return ()=>removeEventListener("android-login",onLogin);},[]);
  const profileSync=useMemo(()=>createProfileSync(profile=>api("/api/profile",profile)),[]);
  useEffect(()=>{if(sessionQuery.data?.signedIn&&!sessionQuery.isPlaceholderData)profileSync.markSynced(sessionQuery.data);},[sessionQuery.data,sessionQuery.isPlaceholderData,profileSync]);
+ // 앱이 화면에서 사라지면(홈으로 나가기 등) 타이머가 멈추므로 기다리던 설정 변경을 즉시 보냅니다.
+ useEffect(()=>{const send=()=>{if(document.visibilityState==="hidden"&&profileSync.hasPending())void profileSync.flush().catch(()=>undefined);};document.addEventListener("visibilitychange",send);addEventListener("pagehide",send);return()=>{document.removeEventListener("visibilitychange",send);removeEventListener("pagehide",send);};},[profileSync]);
  useEffect(()=>{if(!me?.signedIn)return;const onVisible=()=>{if(document.visibilityState!=="visible"||!shouldRefreshAccount(sessionQuery.dataUpdatedAt))return;void profileSync.flush().catch(()=>undefined).finally(()=>void sessionQuery.refetch());};document.addEventListener("visibilitychange",onVisible);return ()=>document.removeEventListener("visibilitychange",onVisible);},[me?.signedIn,sessionQuery.dataUpdatedAt,profileSync]);
  const direct=useDirectBridge(me?.primary||"",me?.favorites||[]);
  const dashboardQuery=useQuery({queryKey:["dashboard","legacy"],queryFn:()=>api("/api/dashboard"),enabled:Boolean(me?.signedIn)&&localStorage.getItem("legacy-bootstrap-opt-in")==="1"&&localStorage.getItem("direct-local-ready")!=="1",staleTime:Infinity,refetchOnWindowFocus:false,refetchOnReconnect:false});

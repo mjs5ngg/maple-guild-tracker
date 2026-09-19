@@ -517,7 +517,8 @@ pub fn live_character_records(connection: &Connection) -> Result<Vec<CharacterRe
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
-#[cfg(test)]
+// 위젯은 대표·즐겨찾기만 보여 주므로 백그라운드 조회도 이들만 합니다.
+#[cfg(any(target_os = "android", test))]
 pub fn widget_character_records(connection: &Connection) -> Result<Vec<CharacterRecord>, AppError> {
     let mut statement = connection.prepare(
         r#"SELECT c.id, ci.ocid

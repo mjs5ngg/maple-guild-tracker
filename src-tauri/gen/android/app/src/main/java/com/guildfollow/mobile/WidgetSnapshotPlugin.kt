@@ -40,6 +40,11 @@ class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
 
 object WidgetSnapshotStore {
   fun save(context: android.content.Context, snapshot: JSONObject) {
+    // 위젯 갱신 추적용 요약(이름은 남기지 않음): 캐릭터 수와 이미지 주소가 있는 수.
+    val characters = snapshot.optJSONArray("characters")
+    val count = characters?.length() ?: 0
+    val withImage = (0 until count).count { !characters!!.getJSONObject(it).isNull("character_image") }
+    android.util.Log.i("GuildWidget", "save snapshot updated=${snapshot.optString("updated_at")} characters=$count images=$withImage")
     context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
       .edit()
       .putString(MapleWidgetRenderer.SNAPSHOT_KEY, snapshot.toString())

@@ -315,6 +315,16 @@ mod tests {
     }
 
     #[test]
+    fn widget_snapshot_can_be_rebuilt_from_saved_records_without_network() {
+        let path = temp_db("rebuild");
+        let payload = serde_json::json!({"primary":"대표","favorites":["친구"],"guildKey":"g1","rows":[row("대표",Some("길드"),3),row("친구",Some("길드"),3)]});
+        import(&path, &payload.to_string()).unwrap();
+        let rebuilt = crate::sync::rebuild_mobile_widget_snapshot(&path).unwrap();
+        let names = rebuilt.characters.iter().map(|character| character.character_name.as_str()).collect::<Vec<_>>();
+        assert!(names.contains(&"대표") && names.contains(&"친구"));
+    }
+
+    #[test]
     fn favorites_are_replaced_by_the_app_list() {
         let path = temp_db("favorites");
         let first = serde_json::json!({"primary":"대표","favorites":["예전친구"],"guildKey":"g1","rows":[row("대표",Some("길드"),2),row("예전친구",Some("길드"),2)]});

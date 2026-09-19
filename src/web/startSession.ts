@@ -14,11 +14,22 @@ export function readLocalProfile():Omit<SessionProfile,"signedIn">{
 export function writeLocalProfile(value:{primary:string;favorites:string[]}){
  const normalized=normalize(value);try{localStorage.setItem(LOCAL_PROFILE_KEY,JSON.stringify(normalized));}catch{/* 현재 탭에서는 계속 사용할 수 있습니다. */}return normalized;
 }
+// 계정에 아직 보내지 못한 설정 변경입니다. 앱이 종료·업데이트돼도 남아 있다가 다음 실행 때 먼저 올립니다.
+const UNSENT_PROFILE_KEY="web-profile-unsent-v1";
+export function readUnsentProfile():{primary:string;favorites:string[]}|null{
+ try{const raw=localStorage.getItem(UNSENT_PROFILE_KEY);return raw?normalize(JSON.parse(raw)):null;}catch{return null;}
+}
+function writeUnsentProfile(value:{primary:string;favorites:string[]}|null){
+ try{if(value)localStorage.setItem(UNSENT_PROFILE_KEY,JSON.stringify(normalize(value)));else localStorage.removeItem(UNSENT_PROFILE_KEY);}catch{/* 저장이 막히면 현재 실행 중에만 보관합니다. */}
+}
 export async function startSession(api:(path:string,body?:unknown)=>Promise<Record<string,any>>):Promise<SessionProfile>{
  const local=readLocalProfile();
  try{
   const remote=await api("/api/me"),profile={...normalize(remote),signedIn:Boolean(remote.signedIn)};
   if(!profile.signedIn)return {...local,signedIn:false};
+  // 보내지 못한 변경이 있으면 서버 값으로 덮어쓰지 않고 먼저 올립니다(즐겨찾기 추가 직후 앱을 나간 경우 등).
+  const unsent=readUnsentProfile();
+  if(unsent&&unsent.primary){await api("/api/profile",unsent);writeUnsentProfile(null);return {...writeLocalProfile(unsent),signedIn:true};}
   if(!profile.primary&&!profile.favorites.length&&(local.primary||local.favorites.length)){
    await api("/api/profile",local);return {...writeLocalProfile(local),signedIn:true};
   }
@@ -42,16 +53,18 @@ export function createProfileSync(send:(profile:{primary:string;favorites:string
  async function flush(){
   if(timer){clearTimeout(timer);timer=null;}
   const next=pending;pending=null;
-  if(!next||synced&&sameProfile(synced,next))return false;
-  await send(next);synced=normalize(next);return true;
+  if(!next||synced&&sameProfile(synced,next)){if(next)writeUnsentProfile(null);return false;}
+  try{await send(next);}catch(error){if(!pending)pending=next;throw error;}
+  synced=normalize(next);if(!pending)writeUnsentProfile(null);return true;
  }
  return {
   markSynced(profile:{primary:string;favorites:string[]}){synced=normalize(profile);},
   schedule(profile:{primary:string;favorites:string[]},onError?:(error:unknown)=>void){
-   pending=normalize(profile);if(timer)clearTimeout(timer);
+   pending=normalize(profile);writeUnsentProfile(pending);if(timer)clearTimeout(timer);
    timer=setTimeout(()=>{void flush().catch(error=>onError?.(error));},delay);
   },
-  async sendNow(profile:{primary:string;favorites:string[]}){pending=normalize(profile);return flush();},
+  async sendNow(profile:{primary:string;favorites:string[]}){pending=normalize(profile);writeUnsentProfile(pending);return flush();},
+  hasPending(){return pending!==null;},
   flush,
  };
 }

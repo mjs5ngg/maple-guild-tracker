@@ -479,37 +479,10 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
             "먼저 대표 캐릭터를 설정해 주세요.".into(),
         ));
     }
-    let oguild_id = db::get_setting(&connection, "oguild_id")?;
-    let world_name = db::get_setting(&connection, "world_name")?.unwrap_or_default();
     drop(connection);
-    if let Some(oguild_id) = oguild_id {
-        if let Ok(guild) = client.guild_basic_current(&api_key, &oguild_id).await {
-            let connection = db::open(db_path)?;
-            let missing = guild
-                .guild_member
-                .iter()
-                .filter(|name| db::character_record_by_name(&connection, name).ok().flatten().is_none())
-                .cloned()
-                .collect::<Vec<_>>();
-            drop(connection);
-            let mut resolved = stream::iter(missing)
-                .map(|name| {
-                    let client = client.clone();
-                    let key = api_key.clone();
-                    async move { (name.clone(), client.ocid(&key, &name).await) }
-                })
-                .buffer_unordered(5);
-            while let Some((name, Ok(ocid))) = resolved.next().await {
-                let connection = db::open(db_path)?;
-                let _ = db::upsert_character(&connection, &name, &world_name, "", None, &ocid, false)?;
-            }
-            let mut connection = db::open(db_path)?;
-            let today = Utc::now().with_timezone(&Seoul).date_naive().to_string();
-            db::replace_memberships(&mut connection, &today, &guild.guild_member)?;
-        }
-    }
+    // 위젯은 대표·즐겨찾기만 보여 주므로 길드 명단 갱신과 길드원 전체 조회는 하지 않습니다(호출 한도 절약).
     let connection = db::open(db_path)?;
-    let characters = db::live_character_records(&connection)?;
+    let characters = db::widget_character_records(&connection)?;
     let completed_date = latest_completed_date(Utc::now())
         .format("%Y-%m-%d")
         .to_string();
@@ -598,6 +571,17 @@ pub async fn sync_mobile_widget(db_path: &Path) -> Result<MobileWidgetSnapshot, 
         ));
     }
     let connection = db::open(db_path)?;
+    let today = Utc::now().with_timezone(&Seoul).date_naive().to_string();
+    db::mobile_widget_snapshot_for_date(&connection, &today)
+}
+
+// 조회에 실패해도 앱이 이미 저장한 기록으로 위젯을 다시 그릴 수 있게 스냅샷만 만듭니다.
+#[cfg(any(target_os = "android", test))]
+pub fn rebuild_mobile_widget_snapshot(
+    db_path: &std::path::Path,
+) -> Result<crate::models::MobileWidgetSnapshot, AppError> {
+    let connection = db::open(db_path)?;
+    db::migrate(&connection)?;
     let today = Utc::now().with_timezone(&Seoul).date_naive().to_string();
     db::mobile_widget_snapshot_for_date(&connection, &today)
 }

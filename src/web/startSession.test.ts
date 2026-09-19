@@ -2,7 +2,7 @@
 import {beforeEach,expect,it,vi} from "vitest";
 import {ACCOUNT_REFRESH_MS,createProfileSync,readLocalProfile,sameProfile,shouldRefreshAccount,startSession,writeLocalProfile} from "./startSession";
 const values=new Map<string,string>();
-beforeEach(()=>{values.clear();vi.stubGlobal("localStorage",{getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>values.set(key,value)});});
+beforeEach(()=>{values.clear();vi.stubGlobal("localStorage",{getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>values.set(key,value),removeItem:(key:string)=>values.delete(key)});});
 it("익명 사용자는 기기 세션을 만들지 않고 로컬 설정을 사용한다",async()=>{
  writeLocalProfile({primary:"대표",favorites:["친구"]});const api=vi.fn().mockResolvedValue({signedIn:false,primary:"",favorites:[]});
  expect(await startSession(api)).toEqual({signedIn:false,primary:"대표",favorites:["친구"]});
@@ -38,4 +38,31 @@ it("이미 동기화한 값과 같으면 보내지 않는다",async()=>{
 it("다른 기기 변경은 5분이 지나야 다시 읽는다",()=>{
  expect(shouldRefreshAccount(1_000,1_000+ACCOUNT_REFRESH_MS-1)).toBe(false);
  expect(shouldRefreshAccount(1_000,1_000+ACCOUNT_REFRESH_MS)).toBe(true);
+});
+it("보내기 전에 앱이 종료돼도 다음 실행 때 서버 값으로 덮어쓰지 않고 먼저 올린다",async()=>{
+ const sync=createProfileSync(vi.fn().mockResolvedValue({ok:true}),60_000);
+ sync.schedule({primary:"대표",favorites:["새친구"]});
+ writeLocalProfile({primary:"대표",favorites:["새친구"]});
+ const api=vi.fn().mockResolvedValueOnce({signedIn:true,primary:"대표",favorites:[]}).mockResolvedValueOnce({ok:true});
+ expect(await startSession(api)).toEqual({signedIn:true,primary:"대표",favorites:["새친구"]});
+ expect(api.mock.calls[1]).toEqual(["/api/profile",{primary:"대표",favorites:["새친구"]}]);
+ expect(await startSession(vi.fn().mockResolvedValue({signedIn:true,primary:"대표",favorites:["새친구"]}))).toEqual({signedIn:true,primary:"대표",favorites:["새친구"]});
+});
+it("전송에 성공하면 보내지 못한 변경 기록을 지운다",async()=>{
+ const send=vi.fn().mockResolvedValue({ok:true}),sync=createProfileSync(send,60_000);
+ sync.schedule({primary:"대표",favorites:["친구"]});
+ expect(sync.hasPending()).toBe(true);
+ await sync.flush();
+ expect(sync.hasPending()).toBe(false);
+ const api=vi.fn().mockResolvedValue({signedIn:true,primary:"대표",favorites:["친구"]});
+ await startSession(api);
+ expect(api.mock.calls).toEqual([["/api/me"]]);
+});
+it("전송이 실패하면 변경을 잃지 않고 다시 보낼 수 있다",async()=>{
+ const send=vi.fn().mockRejectedValueOnce(new Error("연결 실패")).mockResolvedValue({ok:true}),sync=createProfileSync(send,60_000);
+ sync.schedule({primary:"대표",favorites:["친구"]});
+ await expect(sync.flush()).rejects.toThrow("연결 실패");
+ expect(sync.hasPending()).toBe(true);
+ await sync.flush();
+ expect(send).toHaveBeenCalledTimes(2);
 });

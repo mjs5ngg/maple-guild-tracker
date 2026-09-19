@@ -27,6 +27,9 @@ class WidgetSyncWorker(context: Context, parameters: WorkerParameters) : Worker(
 
     @JvmStatic
     private external fun syncAndBuildSnapshot(dbPath: String): String?
+
+    @JvmStatic
+    private external fun buildSnapshot(dbPath: String): String?
   }
 
   // 새로고침 버튼으로 시작한 작업은 재시도 대기에 걸리지 않게 실패를 바로 알리고 끝냅니다.
@@ -48,7 +51,15 @@ class WidgetSyncWorker(context: Context, parameters: WorkerParameters) : Worker(
       val database = File(applicationContext.applicationInfo.dataDir, "tracker.sqlite3")
       if (!database.isFile) return if (manual) manualFailed() else Result.success()
       val rawSnapshot = syncAndBuildSnapshot(database.absolutePath)
-        ?: return if (manual) manualFailed() else Result.retry()
+      if (rawSnapshot == null) {
+        // 조회가 실패해도(예: 앱 화면 조회와 겹쳐 호출 한도 초과) 저장된 기록과 이미지로 위젯을 다시 그립니다.
+        buildSnapshot(database.absolutePath)?.let { fallback ->
+          val snapshot = org.json.JSONObject(fallback)
+          WidgetSnapshotStore.save(applicationContext, snapshot)
+          WidgetSnapshotStore.cacheImagesAndRefresh(applicationContext, snapshot)
+        }
+        return if (manual) manualFailed() else Result.retry()
+      }
       val snapshot = org.json.JSONObject(rawSnapshot)
       WidgetSnapshotStore.save(applicationContext, snapshot)
       WidgetSnapshotStore.cacheImagesAndRefresh(applicationContext, snapshot)
