@@ -827,3 +827,8 @@
 - D1 쓰기 절감: 즐겨찾기를 `users.favorites_json` 한 칸으로 합쳐 설정 저장 최대 32행→1행, 같은 값이면 0행. `/api/me` 1회 조회. 클라이언트는 즐겨찾기 변경 2초 모음, 다른 기기 변경은 화면 복귀 시 5분 간격으로만 재조회.
 - 주의: 출처가 바뀌어 v0.5.0의 WebView 저장소(서비스 키·IndexedDB 기록)는 이어지지 않는다. 서비스 키 1회 재입력 필요, 위젯용 네이티브 SQLite·Keystore는 유지.
 - 미완료: 운영 배포(`wrangler login` 필요, 이 PC에 Cloudflare 인증이 없어 주간 D1 백업 작업도 한 번도 성공하지 못함), 실기기 Google 로그인 왕복과 PC↔앱 설정 일치 확인.
+
+# 2026-09-19 Dependabot 업데이트 제안 보류
+
+- `.github/dependabot.yml` 설정에 따라 GitHub에 `dependabot/...` 브랜치 7개가 있다(2026-09-15 생성, 이번 작업과 무관). 급하지 않아 합치지 않고 `checklist.md`의 보류 항목으로만 남긴다.
+- 대부분 주 버전 도약(Vite 8, TypeScript 7, plugin-react 6, lucide-react 1.x)이라 그대로 합치면 빌드나 화면이 달라질 수 있다. 진행할 때는 한 건씩 올리고 `npm test`, `npm run web:build`, `npm run web:build:app`, APK 빌드와 실기기 확인을 거친다.

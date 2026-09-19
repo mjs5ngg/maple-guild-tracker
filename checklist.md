@@ -773,3 +773,10 @@
 - [x] 관리자 대시보드가 재부팅 후에도 안정적으로 열리도록 시작 경로를 복구한다.
 - [x] 바탕화면에 상태 확인·필요 시 복구·브라우저 열기를 수행하는 바로가기를 만든다.
 - [x] 실제 바로가기를 실행해 HTTP 응답과 화면 접근을 검증한다.
+
+# 보류: Dependabot 의존성 업데이트 제안 (급하지 않음)
+
+- [ ] 2026-09-15 Dependabot이 만든 업데이트 제안 7건을 필요할 때 하나씩 검토한다. 합치기 전까지 앱에는 영향이 없다.
+  - GitHub Actions: `actions/checkout` 4→7, `actions/setup-node` 4→7 (CI 전용, 비교적 안전)
+  - npm: `lucide-react` 0.468→1.45, `react`·`@types/react` 묶음, `typescript` 5.7→7.0, `vite` 6.4→8.3, `@vitejs/plugin-react` 4.7→6.1
+  - 대부분 큰 버전 도약이고 `vite`·`@vitejs/plugin-react`·`typescript`는 서로 맞물려 있어 함께 검토한다. 올릴 때는 테스트·앱 빌드·휴대폰 확인을 거친다.
