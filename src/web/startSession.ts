@@ -1,5 +1,5 @@
 // 로그인 설정과 브라우저 로컬 설정을 D1 쓰기 없이 합쳐 불러옵니다.
-export type SessionProfile={primary:string;favorites:string[];signedIn:boolean;unreachable?:boolean};
+export type SessionProfile={primary:string;favorites:string[];signedIn:boolean;unreachable?:boolean;unsynced?:boolean};
 const LOCAL_PROFILE_KEY="web-local-profile-v1";
 
 function normalize(value:unknown):Omit<SessionProfile,"signedIn">{
@@ -22,20 +22,31 @@ export function readUnsentProfile():{primary:string;favorites:string[]}|null{
 function writeUnsentProfile(value:{primary:string;favorites:string[]}|null){
  try{if(value)localStorage.setItem(UNSENT_PROFILE_KEY,JSON.stringify(normalize(value)));else localStorage.removeItem(UNSENT_PROFILE_KEY);}catch{/* 저장이 막히면 현재 실행 중에만 보관합니다. */}
 }
+// 화면에서 바꾼 설정은 로그인 확인 여부와 관계없이 로컬과 미전송 기록에 함께 남겨, 나중에 서버 값이 덮어쓰지 못하게 합니다.
+export function recordLocalChange(value:{primary:string;favorites:string[]}){const normalized=writeLocalProfile(value);writeUnsentProfile(normalized);return normalized;}
 export async function startSession(api:(path:string,body?:unknown)=>Promise<Record<string,any>>):Promise<SessionProfile>{
  const local=readLocalProfile();
- try{
-  const remote=await api("/api/me"),profile={...normalize(remote),signedIn:Boolean(remote.signedIn)};
-  if(!profile.signedIn)return {...local,signedIn:false};
-  // 보내지 못한 변경이 있으면 서버 값으로 덮어쓰지 않고 먼저 올립니다(즐겨찾기 추가 직후 앱을 나간 경우 등).
-  const unsent=readUnsentProfile();
-  if(unsent&&unsent.primary){await api("/api/profile",unsent);writeUnsentProfile(null);return {...writeLocalProfile(unsent),signedIn:true};}
-  if(!profile.primary&&!profile.favorites.length&&(local.primary||local.favorites.length)){
-   await api("/api/profile",local);return {...writeLocalProfile(local),signedIn:true};
-  }
-  return {...writeLocalProfile(profile),signedIn:true};
+ let remote:Record<string,any>;
  // 연결 실패는 로그아웃이 아니므로 표시해 두고, 호출한 쪽이 로그인 흔적을 지우지 않게 합니다.
- }catch{return {...local,signedIn:false,unreachable:true};}
+ try{remote=await api("/api/me");}catch{return {...local,signedIn:false,unreachable:true};}
+ const profile=normalize(remote);
+ if(!remote.signedIn)return {...local,signedIn:false};
+ // 보내지 못한 변경이 있으면 서버 값으로 덮어쓰지 않고 먼저 올립니다. 실패해도 기기 값을 유지하고 다음 기회에 다시 보냅니다.
+ const unsent=readUnsentProfile();
+ if(unsent){
+  const next={primary:unsent.primary||profile.primary,favorites:unsent.favorites};
+  if(sameProfile(next,profile)){writeUnsentProfile(null);return {...writeLocalProfile(profile),signedIn:true};}
+  if(next.primary){
+   writeUnsentProfile(next);
+   try{await api("/api/profile",next);}catch{return {...writeLocalProfile(next),signedIn:true,unsynced:true};}
+   writeUnsentProfile(null);return {...writeLocalProfile(next),signedIn:true};
+  }
+ }
+ if(!profile.primary&&!profile.favorites.length&&(local.primary||local.favorites.length)){
+  try{await api("/api/profile",local);}catch{writeUnsentProfile(local);return {...local,signedIn:true,unsynced:true};}
+  return {...writeLocalProfile(local),signedIn:true};
+ }
+ return {...writeLocalProfile(profile),signedIn:true};
 }
 
 // 다른 기기의 변경은 화면 복귀 때 이 간격이 지났을 때만 다시 읽어 Worker 요청을 아낍니다.

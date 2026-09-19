@@ -1,6 +1,6 @@
 // 익명 로컬 설정과 로그인 계정 설정의 병합 규칙을 검증합니다.
 import {beforeEach,expect,it,vi} from "vitest";
-import {ACCOUNT_REFRESH_MS,createProfileSync,readLocalProfile,sameProfile,shouldRefreshAccount,startSession,writeLocalProfile} from "./startSession";
+import {ACCOUNT_REFRESH_MS,createProfileSync,readLocalProfile,readUnsentProfile,recordLocalChange,sameProfile,shouldRefreshAccount,startSession,writeLocalProfile} from "./startSession";
 const values=new Map<string,string>();
 beforeEach(()=>{values.clear();vi.stubGlobal("localStorage",{getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>values.set(key,value),removeItem:(key:string)=>values.delete(key)});});
 it("익명 사용자는 기기 세션을 만들지 않고 로컬 설정을 사용한다",async()=>{
@@ -65,4 +65,31 @@ it("전송이 실패하면 변경을 잃지 않고 다시 보낼 수 있다",asy
  expect(sync.hasPending()).toBe(true);
  await sync.flush();
  expect(send).toHaveBeenCalledTimes(2);
+});
+it("로그인 확인 전에 추가한 즐겨찾기는 서버가 비어 있어도 유지하고 한 번 올린다",async()=>{
+ recordLocalChange({primary:"대표",favorites:["새친구"]});
+ const api=vi.fn().mockResolvedValueOnce({signedIn:true,primary:"대표",favorites:[]}).mockResolvedValueOnce({ok:true});
+ expect(await startSession(api)).toEqual({signedIn:true,primary:"대표",favorites:["새친구"]});
+ expect(api.mock.calls).toEqual([["/api/me"],["/api/profile",{primary:"대표",favorites:["새친구"]}]]);
+ expect(readUnsentProfile()).toBeNull();
+});
+it("미전송 변경을 올리다 실패해도 서버 값으로 덮지 않고 로그인을 유지한다",async()=>{
+ recordLocalChange({primary:"대표",favorites:["새친구"]});
+ const api=vi.fn().mockResolvedValueOnce({signedIn:true,primary:"대표",favorites:[]}).mockRejectedValueOnce(new Error("요청이 너무 많습니다."));
+ expect(await startSession(api)).toEqual({signedIn:true,unsynced:true,primary:"대표",favorites:["새친구"]});
+ expect(readLocalProfile()).toEqual({primary:"대표",favorites:["새친구"]});
+ expect(readUnsentProfile()).toEqual({primary:"대표",favorites:["새친구"]});
+});
+it("미전송 변경이 서버 값과 같으면 쓰기 없이 기록만 지운다",async()=>{
+ recordLocalChange({primary:"대표",favorites:["친구"]});
+ const api=vi.fn().mockResolvedValue({signedIn:true,primary:"대표",favorites:["친구"]});
+ await startSession(api);
+ expect(api.mock.calls).toEqual([["/api/me"]]);
+ expect(readUnsentProfile()).toBeNull();
+});
+it("대표가 비어 있는 미전송 변경은 계정의 대표로 보완해 보낸다",async()=>{
+ recordLocalChange({primary:"",favorites:["친구"]});
+ const api=vi.fn().mockResolvedValueOnce({signedIn:true,primary:"계정대표",favorites:[]}).mockResolvedValueOnce({ok:true});
+ expect(await startSession(api)).toEqual({signedIn:true,primary:"계정대표",favorites:["친구"]});
+ expect(api.mock.calls[1]).toEqual(["/api/profile",{primary:"계정대표",favorites:["친구"]}]);
 });
