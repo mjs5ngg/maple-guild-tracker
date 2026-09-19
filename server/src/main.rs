@@ -1,6 +1,7 @@
 // 로컬 웹 서버와 PostgreSQL 연결 및 안전한 공통 응답을 구성합니다.
 mod auth;
 mod backfill;
+mod cloudflare_usage;
 mod collector;
 mod edge_sync;
 #[allow(dead_code)]
