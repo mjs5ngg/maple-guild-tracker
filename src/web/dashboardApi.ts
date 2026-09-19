@@ -1,11 +1,12 @@
 // 공개 터널 안내 페이지를 우회하고 대시보드 API 응답 형식을 검증합니다.
 import {parseNexon} from "./experience";
+import {APP_MODE,apiUrl,appAuthHeaders} from "./appMode";
 
 export async function dashboardApi(path:string,body?:unknown,methodOrFetcher:string|typeof fetch=fetch){
  const method=typeof methodOrFetcher==="string"?methodOrFetcher:body===undefined?"GET":"POST",fetcher=typeof methodOrFetcher==="function"?methodOrFetcher:fetch;
- const headers:Record<string,string>={"ngrok-skip-browser-warning":"1"};
+ const headers:Record<string,string>=APP_MODE?appAuthHeaders():{"ngrok-skip-browser-warning":"1"};
  if(body!==undefined)headers["Content-Type"]="application/json";
- const response=await fetcher(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+ const response=await fetcher(apiUrl(path),{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
  const text=await response.text();
  let data:Record<string,any>;
  try{data=parseNexon(text) as Record<string,any>;}

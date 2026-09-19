@@ -1,6 +1,7 @@
 // 공개 대시보드가 격리된 직접 조회 엔진의 상태와 결과만 수신하게 합니다.
 import {startTransition,useCallback,useEffect,useRef,useState} from "react";
 import type {Snapshot} from "./types";
+import {DIRECT_PATH} from "./appMode";
 import type {DashboardToDirect,DirectStatus,DirectToDashboard} from "./directProtocol";
 
 const emptyStatus:DirectStatus={cacheReady:false,keyStored:false,serviceConfirmed:false,busy:false,phase:"idle",completed:0,total:0,progressPercent:0,failed:0,lastSuccessAt:null,nextRefreshAt:null,cachedCount:0,storagePersistent:null,metrics:null,message:"개인 조회 엔진을 연결하고 있습니다."};
@@ -11,7 +12,7 @@ export function useDirectBridge(primary:string,favorites:string[]){
  useEffect(()=>{
   if(!primary)return;
   const nonce=crypto.randomUUID(),frame=document.createElement("iframe");
-  frame.className="direct-engine-frame";frame.title="개인 API 직접 조회 엔진";frame.tabIndex=-1;frame.src=`${__DIRECT_ORIGIN__}/?engine=1#${encodeURIComponent(nonce)}`;
+  frame.className="direct-engine-frame";frame.title="개인 API 직접 조회 엔진";frame.tabIndex=-1;frame.src=`${__DIRECT_ORIGIN__}${DIRECT_PATH}/?engine=1#${encodeURIComponent(nonce)}`;
   frame.setAttribute("sandbox","allow-scripts allow-same-origin");document.body.append(frame);
   const channel=new MessageChannel();port.current=channel.port1;
   channel.port1.onmessage=(event:MessageEvent<DirectToDashboard>)=>{

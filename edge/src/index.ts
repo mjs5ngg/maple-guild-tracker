@@ -25,6 +25,22 @@ function cookies(request:Request){
  }
  return result;
 }
+// 앱 내장 화면은 교차 출처라 쿠키 대신 Bearer 토큰을 보내므로 두 경로를 함께 읽습니다.
+export function sessionToken(request:Request){
+ const bearer=/^Bearer ([A-Za-z0-9]{32,128})$/.exec(request.headers.get("authorization")||"")?.[1];
+ return bearer||cookies(request).maple_session||"";
+}
+// Android 앱에 내장된 화면의 출처만 교차 출처 호출을 허용합니다.
+export const APP_ORIGINS=["http://tauri.localhost","https://tauri.localhost"];
+export function corsHeaders(origin:string|null):Record<string,string>{
+ if(!origin||!APP_ORIGINS.includes(origin))return {};
+ return {"access-control-allow-origin":origin,"access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE","access-control-allow-headers":"authorization,content-type","access-control-max-age":"7200","vary":"Origin"};
+}
+function withCors(request:Request,response:Response){
+ const extra=corsHeaders(request.headers.get("origin"));if(!Object.keys(extra).length)return response;
+ const headers=new Headers(response.headers);for(const [name,value] of Object.entries(extra))headers.set(name,value);
+ return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+}
 function sessionCookie(request:Request,name:string,value:string,maxAge:number){return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${new URL(request.url).protocol==="https:"?"; Secure":""}`;}
 function addSecurity(response:Response,api=false){
  const headers=new Headers(response.headers);
@@ -40,14 +56,14 @@ function googleUrl(request:Request,env:Env,state:string){const origin=new URL(re
 async function userId(request:Request,env:Env){
  const values=cookies(request);
  for(const [name,kind] of [["maple_session","account"],["maple_device","device"]] as const){
-  const token=values[name]; if(!token)continue;
+  const token=name==="maple_session"?sessionToken(request):values[name]; if(!token)continue;
   const row=await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND kind=? AND expires_at>?").bind(await sha256(token),kind,nowSeconds()).first<{user_id:string}>();
   if(row)return row.user_id;
  }
  throw new ApiError(401,"기기 설정을 먼저 시작해 주세요.");
 }
 async function accountUserId(request:Request,env:Env){
- const token=cookies(request).maple_session;if(!token)throw new ApiError(401,"로그인 후 프리셋을 동기화할 수 있습니다.");
+ const token=sessionToken(request);if(!token)throw new ApiError(401,"로그인 후 프리셋을 동기화할 수 있습니다.");
  const row=await env.DB.prepare("SELECT user_id FROM sessions WHERE token_hash=? AND kind='account' AND expires_at>?").bind(await sha256(token),nowSeconds()).first<{user_id:string}>();
  if(!row)throw new ApiError(401,"로그인 세션이 만료되었습니다.");return row.user_id;
 }
@@ -66,11 +82,11 @@ async function device(request:Request,env:Env){
 export function favoritesJson(names:string[]){return JSON.stringify([...new Set(names)].sort());}
 function parseFavorites(value:unknown){try{const parsed=JSON.parse(String(value||"[]"));return Array.isArray(parsed)?parsed.filter((name):name is string=>typeof name==="string"):[];}catch{return [];}}
 async function me(request:Request,env:Env){
- const token=cookies(request).maple_session;
+ const token=sessionToken(request);
  if(!token)return json({primary:"",favorites:[],signedIn:false});
  // 세션 확인과 설정 조회를 한 번의 읽기로 끝냅니다.
  const row=await env.DB.prepare("SELECT u.primary_name,u.favorites_json FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.kind='account' AND s.expires_at>?").bind(await sha256(token),nowSeconds()).first<{primary_name:string;favorites_json:string}>();
- if(!row){const response=json({primary:"",favorites:[],signedIn:false});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
+ if(!row){const response=json({primary:"",favorites:[],signedIn:false});if(cookies(request).maple_session)response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
  return json({primary:row.primary_name||"",favorites:parseFavorites(row.favorites_json),signedIn:true});
 }
 async function profile(request:Request,env:Env){
@@ -209,9 +225,9 @@ async function androidExchange(request:Request,env:Env){
  if(!row)throw new ApiError(400,"Android 로그인 코드가 만료되었거나 이미 사용되었습니다.");
  const session=randomToken();await env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),row.user_id,nowSeconds()+30*86400).run();return json({session});
 }
-async function logout(request:Request,env:Env){const token=cookies(request).maple_session;if(token){await takeRate(env.WRITE_RATE_LIMITER,`logout:${await sha256(token)}`);await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha256(token)).run();}const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
+async function logout(request:Request,env:Env){const token=sessionToken(request);if(token){await takeRate(env.WRITE_RATE_LIMITER,`logout:${await sha256(token)}`);await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await sha256(token)).run();}const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
 async function deleteAccount(request:Request,env:Env){
- if(!cookies(request).maple_session)throw new ApiError(401,"계정 탈퇴는 로그인 후 가능합니다.");
+ if(!sessionToken(request))throw new ApiError(401,"계정 탈퇴는 로그인 후 가능합니다.");
  const id=await userId(request,env);await takeRate(env.WRITE_RATE_LIMITER,`account:${id}`);const input=await bodyJson(request) as {confirmation?:unknown};if(input.confirmation!=="탈퇴")throw new ApiError(400,"탈퇴 확인 문구를 입력하세요.");
  await env.DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();const response=json({ok:true});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;
 }
@@ -248,9 +264,9 @@ async function ingest(request:Request,env:Env){
 
 async function route(request:Request,env:Env){
  const url=new URL(request.url),path=url.pathname,method=request.method;
- if(method!=="GET"&&method!=="HEAD"&&!path.startsWith("/internal/")){const origin=request.headers.get("origin");if(origin!==url.origin)throw new ApiError(403,"허용하지 않는 요청 출처입니다.");}
+ if(method!=="GET"&&method!=="HEAD"&&!path.startsWith("/internal/")){const origin=request.headers.get("origin");if(origin!==url.origin&&!APP_ORIGINS.includes(origin||""))throw new ApiError(403,"허용하지 않는 요청 출처입니다.");}
  const sessionBound=path==="/api/me"||path==="/api/profile"||path==="/api/account/delete"||path.startsWith("/api/chase-presets/")||path==="/api/chase-presets";
- if(sessionBound&&cookies(request).maple_session)await takeRate(env.AUTH_RATE_LIMITER,`session:${request.headers.get("cf-connecting-ip")||"unknown"}`);
+ if(sessionBound&&sessionToken(request))await takeRate(env.AUTH_RATE_LIMITER,`session:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  if(path==="/api/status"&&method==="GET")return json({database:true,dataMode:"device-direct",collectorRollback:env.LEGACY_ROLLBACK_ENABLED==="1"&&Boolean(env.INGEST_HMAC_SECRET),providers:[{name:"google",configured:false},{name:"kakao",configured:false},{name:"naver",configured:false}],intervalMinutes:15,favoriteLimit:FAVORITE_LIMIT});
  if(path==="/api/device"&&method==="POST")return device(request,env);
  if(path==="/api/me"&&method==="GET")return me(request,env);
@@ -274,6 +290,9 @@ async function route(request:Request,env:Env){
 }
 
 export default {async fetch(request:Request,env:Env){
-  try{const path=new URL(request.url).pathname;return addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/"));}
-  catch(error){if(error instanceof ApiError)return addSecurity(json({error:error.message},error.status),true);console.error("edge request failed",error instanceof Error?error.message:"unknown");return addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true);}
+  const path=new URL(request.url).pathname;
+  // 앱 화면의 프리플라이트는 D1을 건드리지 않고 바로 응답합니다(2시간 캐시).
+  if(request.method==="OPTIONS"&&(path.startsWith("/api/")||path.startsWith("/auth/android/")))return withCors(request,addSecurity(new Response(null,{status:204}),true));
+  try{return withCors(request,addSecurity(await route(request,env),path.startsWith("/api/")||path.startsWith("/auth/")||path.startsWith("/internal/")));}
+  catch(error){if(error instanceof ApiError)return withCors(request,addSecurity(json({error:error.message},error.status),true));console.error("edge request failed",error instanceof Error?error.message:"unknown");return withCors(request,addSecurity(json({error:"서비스 처리 중 오류가 발생했습니다."},500),true));}
  },async scheduled(_controller:ScheduledController,env:Env){const now=nowSeconds();await env.DB.batch([env.DB.prepare("DELETE FROM login_attempts WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM sessions WHERE expires_at<=?").bind(now),env.DB.prepare("DELETE FROM request_budgets WHERE started_at<?").bind(now-2*86400),env.DB.prepare("DELETE FROM anonymous_daily_usage WHERE day<?").bind(addDays(kstDate(),-90))]);}} satisfies ExportedHandler<Env>;

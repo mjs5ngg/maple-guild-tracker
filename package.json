@@ -1,7 +1,7 @@
 {
   "name": "maple-guild-tracker",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "web:build": "node scripts/build-web.mjs",
+    "web:build:app": "node scripts/build-app-web.mjs",
     "web:server": "cargo run --manifest-path server/Cargo.toml",
     "web:direct": "powershell -NoProfile -Command \"$env:WEB_DIRECT='1'; npx vite --config vite.web.config.ts\"",
     "web:ads": "powershell -NoProfile -Command \"$env:WEB_AD_HOST='1'; npx vite --config vite.web.config.ts\"",

@@ -1,4 +1,5 @@
 // 개인정보 없이 공개 웹의 익명 이용 현황을 낮은 빈도로 전송합니다.
+import {APP_MODE,apiUrl} from "./appMode";
 const VISITOR_KEY="web-anonymous-visitor-v1";
 const LAST_ACTIVITY_KEY="web-anonymous-activity-at-v1";
 const SESSION_KEY="web-anonymous-session-reported-v1";
@@ -15,7 +16,7 @@ export async function reportVisitorActivity(fetcher:typeof fetch=fetch,now=Date.
  let visitor=storageValue(localStorage,VISITOR_KEY);
  if(!visitor){visitor=crypto.randomUUID();writeStorage(localStorage,VISITOR_KEY,visitor);}
  const visitorHash=await digest(visitor);
- const response=await fetcher("/api/activity",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({visitor:visitorHash,sessionStart}),keepalive:true});
+ const response=await fetcher(apiUrl("/api/activity"),{method:"POST",headers:{"Content-Type":APP_MODE?"text/plain":"application/json"},body:JSON.stringify({visitor:visitorHash,sessionStart}),keepalive:true});
  if(!response.ok)throw new Error("anonymous activity failed");
  writeStorage(localStorage,LAST_ACTIVITY_KEY,String(now));
  writeStorage(sessionStorage,SESSION_KEY,"1");
