@@ -56,13 +56,16 @@ class MapleWidgetProviderTest {
   }
 
   @Test
-  fun standingAvatarUrlUsesFourOfficialIdleFrames() {
+  fun standingAvatarUsesTheSameIdleMotionAsTheWebAvatar() {
     val image = "https://open.api.nexon.com/static/maplestory/character/look/abc.png?width=96"
     assertEquals(
-      "https://open.api.nexon.com/static/maplestory/character/look/abc.png?action=A00.0&width=128&height=128&x=64&y=90",
+      "https://open.api.nexon.com/static/maplestory/character/look/abc.png?action=A00.0&width=128&height=128&x=64&y=85",
       standingAvatarUrl(image, 0),
     )
-    assertTrue((0..3).all { standingAvatarUrl(image, it).contains("action=A00.$it") })
+    // 웹 IDLE_FRAMES(A00.0, A00.1, A00.2, A00.1)와 같은 왕복 순서이며 A00.3은 쓰지 않습니다.
+    assertEquals(listOf(0, 1, 2, 1), IDLE_FRAME_SEQUENCE.toList())
+    assertTrue(IDLE_FRAME_SEQUENCE.all { standingAvatarUrl(image, it).contains("action=A00.$it") })
+    assertTrue(standingAvatarUrl(image, 3).contains("action=A00.2"))
   }
 
   @Test

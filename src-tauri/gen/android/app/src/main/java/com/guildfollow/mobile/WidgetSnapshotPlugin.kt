@@ -11,8 +11,13 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+// 웹·앱과 같은 대기 모션: A00.0→A00.1→A00.2→A00.1 왕복(650ms). 위젯은 서로 다른 세 프레임만 받습니다.
+internal val IDLE_FRAME_SEQUENCE = intArrayOf(0, 1, 2, 1)
+internal const val IDLE_FRAME_COUNT = 3
+
+// 웹 아바타와 같은 기준점 비율(가로 중앙, 세로 2/3)로 잘라 받아 위치가 같게 보이게 합니다.
 internal fun standingAvatarUrl(imageUrl: String, frame: Int): String =
-  "${imageUrl.substringBefore('?')}?action=A00.${frame.coerceIn(0, 3)}&width=128&height=128&x=64&y=90"
+  "${imageUrl.substringBefore('?')}?action=A00.${frame.coerceIn(0, IDLE_FRAME_COUNT - 1)}&width=128&height=128&x=64&y=85"
 
 @TauriPlugin
 class WidgetSnapshotPlugin(private val activity: Activity) : Plugin(activity) {
@@ -39,6 +44,7 @@ object WidgetSnapshotStore {
       .edit()
       .putString(MapleWidgetRenderer.SNAPSHOT_KEY, snapshot.toString())
       .remove(MapleWidgetRenderer.REFRESHING_KEY)
+      .remove(MapleWidgetRenderer.REFRESH_FAILED_KEY)
       .apply()
     MapleWidgetRenderer.updateAll(context)
   }
@@ -64,7 +70,7 @@ object WidgetSnapshotStore {
       val urlKey = "avatar_url_$id"
       cacheAvatarFile(context, destination, urlKey, imageUrl)
       if (character.optBoolean("is_primary")) {
-        repeat(4) { frame ->
+        repeat(IDLE_FRAME_COUNT) { frame ->
           val standingFileName = "${id}_stand_$frame.png"
           activeFiles += standingFileName
           cacheAvatarFile(

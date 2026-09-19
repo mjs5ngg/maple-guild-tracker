@@ -157,7 +157,8 @@ abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProv
     if (intent.action == MapleWidgetRenderer.ACTION_REFRESH) {
       // 새로고침 버튼: "갱신 중" 표시 후 1회 동기화를 실행합니다. 결과가 저장되면 표시가 풀립니다.
       context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Context.MODE_PRIVATE).edit()
-        .putLong(MapleWidgetRenderer.REFRESHING_KEY, System.currentTimeMillis()).apply()
+        .putLong(MapleWidgetRenderer.REFRESHING_KEY, System.currentTimeMillis())
+        .remove(MapleWidgetRenderer.REFRESH_FAILED_KEY).apply()
       MapleWidgetRenderer.updateAll(context)
       WidgetSyncScheduler.syncNow(context)
       return
@@ -192,11 +193,17 @@ object MapleWidgetRenderer {
   const val AVATAR_DIRECTORY = "widget_avatars"
   const val ACTION_REFRESH = "com.guildfollow.mobile.widget.REFRESH"
   const val REFRESHING_KEY = "refreshing_since"
+  const val REFRESH_FAILED_KEY = "refresh_failed_at"
   private const val REFRESH_TIMEOUT_MS = 2 * 60 * 1000L
 
   fun refreshIntent(context: Context, requestCode: Int): PendingIntent {
     val intent = Intent(context, FavoriteRankingWidgetProvider::class.java).setAction(ACTION_REFRESH)
     return PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  }
+
+  private fun refreshFailedRecently(context: Context): Boolean {
+    val at = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getLong(REFRESH_FAILED_KEY, 0L)
+    return at > 0 && System.currentTimeMillis() - at < REFRESH_TIMEOUT_MS
   }
 
   private fun isRefreshing(context: Context): Boolean {
@@ -251,8 +258,9 @@ object MapleWidgetRenderer {
       R.id.primary_avatar_frame_2,
       R.id.primary_avatar_frame_3,
     )
+    // 네 칸의 전환 순서를 웹과 같은 0-1-2-1 왕복으로 채웁니다.
     val frames = frameIds.indices.map { index ->
-      File(directory, "${characterId}_stand_$index.png").takeIf { it.isFile }
+      File(directory, "${characterId}_stand_${IDLE_FRAME_SEQUENCE[index]}.png").takeIf { it.isFile }
         ?.let { BitmapFactory.decodeFile(it.absolutePath) }
     }
     val bitmaps = frames.filterNotNull()
@@ -339,7 +347,17 @@ object MapleWidgetRenderer {
     views.setOnClickPendingIntent(R.id.favorite_header, openApp(context, 6200 + widgetId))
     views.setOnClickPendingIntent(R.id.favorite_refresh, refreshIntent(context, 7200 + widgetId))
     val updated = formatWidgetUpdatedAt(snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at"))
-    views.setTextViewText(R.id.favorite_updated, if (isRefreshing(context)) "갱신 중…" else updated?.let { "$it 갱신" } ?: "앱에서 동기화해 주세요")
+    val refreshing = isRefreshing(context)
+    views.setTextViewText(
+      R.id.favorite_updated,
+      when {
+        refreshing -> "갱신 중…"
+        refreshFailedRecently(context) -> "갱신 실패 · 다시 눌러 주세요"
+        else -> updated?.let { "$it 갱신" } ?: "앱에서 동기화해 주세요"
+      },
+    )
+    // 눌렀다는 것이 바로 보이도록 진행 중에는 버튼 아이콘을 흐리게 합니다.
+    views.setInt(R.id.favorite_refresh, "setImageAlpha", if (refreshing) 90 else 255)
     return views
   }
 

@@ -13,6 +13,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
+import androidx.work.workDataOf
 import androidx.work.WorkerParameters
 import io.crates.keyring.Keyring
 import java.io.File
@@ -28,20 +29,32 @@ class WidgetSyncWorker(context: Context, parameters: WorkerParameters) : Worker(
     private external fun syncAndBuildSnapshot(dbPath: String): String?
   }
 
+  // 새로고침 버튼으로 시작한 작업은 재시도 대기에 걸리지 않게 실패를 바로 알리고 끝냅니다.
+  private val manual get() = inputData.getBoolean(WidgetSyncScheduler.MANUAL_KEY, false)
+
+  private fun manualFailed(): Result {
+    applicationContext.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Context.MODE_PRIVATE).edit()
+      .remove(MapleWidgetRenderer.REFRESHING_KEY)
+      .putLong(MapleWidgetRenderer.REFRESH_FAILED_KEY, System.currentTimeMillis()).apply()
+    MapleWidgetRenderer.updateAll(applicationContext)
+    return Result.failure()
+  }
+
   override fun doWork(): Result {
     return try {
       // 홈 화면에 위젯이 없으면 NEXON을 조회하지 않고 끝내 호출 한도를 아낍니다.
       if (!WidgetSyncScheduler.hasWidgets(applicationContext)) return Result.success()
       Keyring.initializeNdkContext(applicationContext)
       val database = File(applicationContext.applicationInfo.dataDir, "tracker.sqlite3")
-      if (!database.isFile) return Result.success()
-      val rawSnapshot = syncAndBuildSnapshot(database.absolutePath) ?: return Result.retry()
+      if (!database.isFile) return if (manual) manualFailed() else Result.success()
+      val rawSnapshot = syncAndBuildSnapshot(database.absolutePath)
+        ?: return if (manual) manualFailed() else Result.retry()
       val snapshot = org.json.JSONObject(rawSnapshot)
       WidgetSnapshotStore.save(applicationContext, snapshot)
       WidgetSnapshotStore.cacheImagesAndRefresh(applicationContext, snapshot)
       Result.success()
     } catch (_: Exception) {
-      Result.retry()
+      if (manual) manualFailed() else Result.retry()
     }
   }
 
@@ -50,10 +63,12 @@ class WidgetSyncWorker(context: Context, parameters: WorkerParameters) : Worker(
 object WidgetSyncScheduler {
   private const val WORK_NAME = "maple-home-widget-periodic-sync"
   private const val MANUAL_WORK_NAME = "maple-home-widget-manual-sync"
+  const val MANUAL_KEY = "manual"
 
   // 위젯의 새로고침 버튼: 기다리지 않고 한 번 동기화합니다. 연달아 눌러도 한 번만 실행됩니다.
   fun syncNow(context: Context) {
     val request = OneTimeWorkRequestBuilder<WidgetSyncWorker>()
+      .setInputData(workDataOf(MANUAL_KEY to true))
       .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
       .build()
     WorkManager.getInstance(context.applicationContext)
