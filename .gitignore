@@ -20,3 +20,5 @@ playwright-report/
 *.jks
 *.keystore
 *.aab
+# 비밀값을 담은 .env 파일(이름과 관계없이)은 저장소에 올리지 않습니다.
+*.env
