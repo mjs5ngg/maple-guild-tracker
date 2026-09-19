@@ -25,7 +25,7 @@ import LegalPage,{legalKind} from "./LegalPage";
 import {AdSlot,AffiliateRecommendations} from "./Monetization";
 import {hasDisplayAds,normalizeMonetization} from "./monetizationConfig";
 import {reportVisitorActivity} from "./visitorActivity";
-import {APP_MODE,PUBLIC_SITE,clearAppSession} from "./appMode";
+import {APP_MODE,PUBLIC_SITE,clearAppSession,hasAppSession} from "./appMode";
 import {NEXON_MAINTENANCE_MESSAGE} from "./nexonError";
 import "./web.css";
 
@@ -50,7 +50,7 @@ export function PublicApp(){
  const [rankingPeriod,setRankingPeriod]=useState(localStorage.getItem("web-ranking")!=="total"),[rankingDays,setRankingDays]=useState<1|7|30>(()=>storedDays("web-ranking-days",1)),[growthDays,setGrowthDays]=useState<7|30>(()=>storedDays("web-growth-days",7)===30?30:7),[chaseWorkspace,setChaseWorkspace]=useState(initialChaseWorkspace);
  const deferredRankingPeriod=useDeferredValue(rankingPeriod),deferredRankingDays=useDeferredValue(rankingDays);
  const [theme,setTheme]=useState(localStorage.getItem("web-theme")==="light"?"light":"dark"),[online,setOnline]=useState(navigator.onLine),[progressVisible,setProgressVisible]=useState(false);
- const localProfile=useMemo(()=>({...readLocalProfile(),signedIn:false}),[]),probeAccount=localStorage.getItem("web-account-hint")==="1"||localStorage.getItem("web-account-probed-v1")!=="1",sessionQuery=useQuery({queryKey:["session"],queryFn:()=>startSession(api),enabled:probeAccount,staleTime:Infinity,retry:1,placeholderData:localProfile});const me=sessionQuery.data||localProfile;
+ const localProfile=useMemo(()=>({...readLocalProfile(),signedIn:false}),[]),probeAccount=hasAppSession()||localStorage.getItem("web-account-hint")==="1"||localStorage.getItem("web-account-probed-v1")!=="1",sessionQuery=useQuery({queryKey:["session"],queryFn:()=>startSession(api),enabled:probeAccount,staleTime:Infinity,retry:1,placeholderData:localProfile});const me=sessionQuery.data||localProfile;
  useEffect(()=>{const onLogin=()=>{markAccountLoginPending();void sessionQuery.refetch();};addEventListener("android-login",onLogin);return ()=>removeEventListener("android-login",onLogin);},[]);
  const profileSync=useMemo(()=>createProfileSync(profile=>api("/api/profile",profile)),[]);
  useEffect(()=>{if(sessionQuery.data?.signedIn&&!sessionQuery.isPlaceholderData)profileSync.markSynced(sessionQuery.data);},[sessionQuery.data,sessionQuery.isPlaceholderData,profileSync]);
@@ -59,7 +59,7 @@ export function PublicApp(){
  const dashboardQuery=useQuery({queryKey:["dashboard","legacy"],queryFn:()=>api("/api/dashboard"),enabled:Boolean(me?.signedIn)&&localStorage.getItem("legacy-bootstrap-opt-in")==="1"&&localStorage.getItem("direct-local-ready")!=="1",staleTime:Infinity,refetchOnWindowFocus:false,refetchOnReconnect:false});
  const rows=(dashboardQuery.data?.characters||[]) as Snapshot[];
  useEffect(()=>{if(direct.rows.length){setPersonal(direct.rows);localStorage.setItem("direct-local-ready","1");}},[direct.rows]);
- useEffect(()=>{if(sessionQuery.data){localStorage.setItem("web-account-probed-v1","1");if(sessionQuery.data.signedIn)localStorage.setItem("web-account-hint","1");else localStorage.removeItem("web-account-hint");}},[sessionQuery.data]);
+ useEffect(()=>{if(sessionQuery.data&&!sessionQuery.data.unreachable){localStorage.setItem("web-account-probed-v1","1");if(sessionQuery.data.signedIn)localStorage.setItem("web-account-hint","1");else localStorage.removeItem("web-account-hint");}},[sessionQuery.data]);
  useEffect(()=>{let timer=0;if(direct.status.busy)setProgressVisible(true);else if(direct.status.progressPercent===100)timer=window.setTimeout(()=>setProgressVisible(false),350);else setProgressVisible(false);return()=>window.clearTimeout(timer);},[direct.status.busy,direct.status.progressPercent]);
  useEffect(()=>{const onHash=()=>{const hash=location.hash.slice(1);if(hash==="settings"){setSettingsOpen(true);return;}if(validView(hash)){setView(hash);setSettingsOpen(false);}};addEventListener("hashchange",onHash);return()=>removeEventListener("hashchange",onHash);},[]);
  const navigate=(next:View)=>{setView(next);setSettingsOpen(false);setMobileMenuOpen(false);if(location.hash!==`#${next}`)location.hash=next;scrollTo({top:0,behavior:"instant"});};

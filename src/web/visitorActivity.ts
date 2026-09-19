@@ -1,5 +1,6 @@
 // 개인정보 없이 공개 웹의 익명 이용 현황을 낮은 빈도로 전송합니다.
 import {APP_MODE,apiUrl} from "./appMode";
+import {appFetch} from "./nativeFetch";
 const VISITOR_KEY="web-anonymous-visitor-v1";
 const LAST_ACTIVITY_KEY="web-anonymous-activity-at-v1";
 const SESSION_KEY="web-anonymous-session-reported-v1";
@@ -9,7 +10,7 @@ function storageValue(storage:Storage,key:string){try{return storage.getItem(key
 function writeStorage(storage:Storage,key:string,value:string){try{storage.setItem(key,value);}catch{/* 저장 차단 시 현재 문서에서만 집계합니다. */}}
 async function digest(value:string){const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(byte=>byte.toString(16).padStart(2,"0")).join("");}
 
-export async function reportVisitorActivity(fetcher:typeof fetch=fetch,now=Date.now()){
+export async function reportVisitorActivity(fetcher:typeof fetch=appFetch as typeof fetch,now=Date.now()){
  const sessionStart=storageValue(sessionStorage,SESSION_KEY)!=="1";
  const last=Number(storageValue(localStorage,LAST_ACTIVITY_KEY)||0);
  if(!sessionStart&&Number.isFinite(last)&&now-last<ACTIVITY_INTERVAL_MS)return false;

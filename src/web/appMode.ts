@@ -18,4 +18,6 @@ export function appAuthHeaders():Record<string,string>{
  let token="";try{token=window.AndroidAuth?.sessionToken?.()||"";}catch{/* 브리지가 없으면 익명으로 계속합니다. */}
  return token?{authorization:`Bearer ${token}`}:{};
 }
+// 앱은 로그인 세션을 네이티브에 보관하므로, 있으면 화면 표시와 관계없이 서버에 로그인 상태를 확인합니다.
+export function hasAppSession(){if(!APP_MODE)return false;try{return Boolean(window.AndroidAuth?.sessionToken?.());}catch{return false;}}
 export function clearAppSession(){try{window.AndroidAuth?.clearSession?.();}catch{/* 앱 밖에서는 할 일이 없습니다. */}}

@@ -29,3 +29,12 @@ it("Bearer 토큰을 쿠키보다 먼저 읽고 형식이 틀리면 무시한다
  expect(sessionToken(new Request("https://x/",{headers:{cookie:"maple_session=cookie"}}))).toBe("cookie");
  expect(sessionToken(new Request("https://x/",{headers:{authorization:"Bearer bad token"}}))).toBe("");
 });
+
+it("POST+덮어쓰기 헤더는 프리셋 이름 변경(PATCH)으로 처리한다",async()=>{
+ const sql:string[]=[];
+ const statement=(text:string)=>{const self={bind:()=>self,first:async()=>{sql.push(text);return text.includes("FROM sessions")?{user_id:"u"}:text.startsWith("UPDATE chase_presets")?{id:"p",name:"새이름",ocidsJson:"[]"}:null;}};return self;};
+ const fake={DB:{prepare:statement}} as unknown as Parameters<typeof worker.fetch>[1];
+ const response=await worker.fetch(new Request("https://guildfollow.com/api/chase-presets/p",{method:"POST",headers:{origin:"https://guildfollow.com",authorization:`Bearer ${token}`,"x-http-method-override":"PATCH","content-type":"application/json"},body:JSON.stringify({name:"새이름"})}),fake);
+ expect(response.status).toBe(200);
+ expect(sql.some(text=>text.startsWith("UPDATE chase_presets SET name"))).toBe(true);
+});

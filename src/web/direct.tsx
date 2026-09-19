@@ -11,6 +11,7 @@ import {directStore} from "./directStore";
 import {DIRECT_MIN_INTERVAL_MS,recoveredInterval,retryAfterDelay,slowedInterval} from "./directRate";
 import {readPersonal,writePersonal} from "./personalStorage";
 import {APP_MODE,PUBLIC_SITE} from "./appMode";
+import {appFetch} from "./nativeFetch";
 import "./web.css";
 
 declare global {interface Window {AndroidDirect?:{storeServiceKeyOnDevice:(value:string)=>boolean;importSnapshots:(payload:string)=>boolean}}}
@@ -35,7 +36,7 @@ class NexonClient{
    await this.pace();this.requestCount++;this.runRequests++;if(this.requestCount%100===0)void directStore.saveMeta("request-budget",{date:this.requestDay,count:this.requestCount});
    const url=new URL(`https://open.api.nexon.com/maplestory/v1/${path}`);url.search=new URLSearchParams(params).toString();
    const timeout=AbortSignal.timeout(20_000),signal=typeof AbortSignal.any==="function"?AbortSignal.any([this.signal,timeout]):this.signal;
-   const response=await fetch(url,{headers:{"x-nxopen-api-key":this.key},credentials:"omit",referrerPolicy:"no-referrer",signal}),body=await response.text();
+   const response=await appFetch(url,{headers:{"x-nxopen-api-key":this.key},credentials:"omit",referrerPolicy:"no-referrer",signal}),body=await response.text();
    if(response.ok){if(++this.successStreak>=50){this.interval=recoveredInterval(this.interval);this.successStreak=0;}return parseNexon(body);}
    if(response.status===429){this.rateLimits++;this.successStreak=0;this.interval=slowedInterval(this.interval);}
    if((response.status===429||response.status>=500)&&attempt<3){let wait=700*2**attempt+Math.random()*300;if(response.status===429)wait=Math.max(wait,retryAfterDelay(response.headers.get("retry-after")));await delay(wait);continue;}

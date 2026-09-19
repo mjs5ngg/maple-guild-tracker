@@ -119,7 +119,9 @@ async function usageAnalytics(request:Request,env:Env){
  return json({measuredAt:new Date(now*1000).toISOString(),today:Number(first.today||0),sevenDays:Number(first.seven||0),thirtyDays:Number(first.thirty||0),active15Minutes:Number(second.active15||0),active60Minutes:Number(second.active60||0),todaySessions:Number(third.sessionStarts||0),approximate:true});
 }
 async function chasePresets(request:Request,env:Env){
- const id=await accountUserId(request,env),method=request.method,url=new URL(request.url),presetId=url.pathname.split("/").filter(Boolean)[2];
+ // Android 네이티브 HTTP는 PATCH를 보낼 수 없어 POST+덮어쓰기 헤더로 이름 변경을 요청합니다.
+ const override=request.method==="POST"&&request.headers.get("x-http-method-override")?.toUpperCase()==="PATCH";
+ const id=await accountUserId(request,env),method=override?"PATCH":request.method,url=new URL(request.url),presetId=url.pathname.split("/").filter(Boolean)[2];
  if(method==="GET"){
   const rows=await env.DB.prepare("SELECT id,name,period_days AS periodDays,ocids_json AS ocidsJson,sort_key AS sortKey,sort_direction AS sortDirection,updated_at AS updatedAt FROM chase_presets WHERE user_id=? ORDER BY updated_at DESC").bind(id).all<Record<string,unknown>>();
   return json({presets:rows.results.map(row=>({...row,ocids:JSON.parse(String(row.ocidsJson)),ocidsJson:undefined}))});

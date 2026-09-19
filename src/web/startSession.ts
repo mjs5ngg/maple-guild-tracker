@@ -1,5 +1,5 @@
 // 로그인 설정과 브라우저 로컬 설정을 D1 쓰기 없이 합쳐 불러옵니다.
-export type SessionProfile={primary:string;favorites:string[];signedIn:boolean};
+export type SessionProfile={primary:string;favorites:string[];signedIn:boolean;unreachable?:boolean};
 const LOCAL_PROFILE_KEY="web-local-profile-v1";
 
 function normalize(value:unknown):Omit<SessionProfile,"signedIn">{
@@ -23,7 +23,8 @@ export async function startSession(api:(path:string,body?:unknown)=>Promise<Reco
    await api("/api/profile",local);return {...writeLocalProfile(local),signedIn:true};
   }
   return {...writeLocalProfile(profile),signedIn:true};
- }catch{return {...local,signedIn:false};}
+ // 연결 실패는 로그아웃이 아니므로 표시해 두고, 호출한 쪽이 로그인 흔적을 지우지 않게 합니다.
+ }catch{return {...local,signedIn:false,unreachable:true};}
 }
 
 // 다른 기기의 변경은 화면 복귀 때 이 간격이 지났을 때만 다시 읽어 Worker 요청을 아낍니다.

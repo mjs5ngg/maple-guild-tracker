@@ -20,7 +20,7 @@ it("계정 설정이 있으면 로컬 복사본도 갱신한다",async()=>{
 });
 it("서버 연결 실패 중에도 로컬 설정으로 시작한다",async()=>{
  writeLocalProfile({primary:"대표",favorites:[]});const api=vi.fn().mockRejectedValue(new Error("연결 실패"));
- expect(await startSession(api)).toEqual({signedIn:false,primary:"대표",favorites:[]});
+ expect(await startSession(api)).toEqual({signedIn:false,unreachable:true,primary:"대표",favorites:[]});
 });
 it("연속 즐겨찾기 변경은 마지막 값 한 번만 보낸다",async()=>{
  vi.useFakeTimers();const send=vi.fn().mockResolvedValue({ok:true}),sync=createProfileSync(send,2000);
