@@ -31,3 +31,16 @@ export async function signatureMatches(secret:string,timestamp:string,batchId:st
  const expected=await hmac(secret,signedPayload(timestamp,batchId,body));
  return constantTimeEqual(expected,signature.toLowerCase());
 }
+
+// 로그인 시도·교환 코드처럼 몇 분만 쓰는 값을 D1에 저장하지 않도록 만료 시각을 담아 서명합니다.
+function base64url(text:string){return btoa(String.fromCharCode(...encoder.encode(text))).replaceAll("+","-").replaceAll("/","_").replace(/=+$/g,"");}
+function fromBase64url(value:string){const binary=atob(value.replaceAll("-","+").replaceAll("_","/"));return new TextDecoder().decode(Uint8Array.from(binary,char=>char.charCodeAt(0)));}
+export async function signToken(secret:string,payload:Record<string,unknown>&{e:number}){
+ const body=base64url(JSON.stringify(payload));
+ return `${body}.${await hmac(secret,body)}`;
+}
+export async function readToken<T extends {e:number}>(secret:string,token:string,nowSeconds=Math.floor(Date.now()/1000)):Promise<T|null>{
+ const match=/^([A-Za-z0-9_-]{8,2048})\.([a-f0-9]{64})$/.exec(token);if(!match)return null;
+ if(!constantTimeEqual(await hmac(secret,match[1]),match[2]))return null;
+ try{const payload=JSON.parse(fromBase64url(match[1])) as T;return typeof payload.e==="number"&&payload.e>nowSeconds?payload:null;}catch{return null;}
+}

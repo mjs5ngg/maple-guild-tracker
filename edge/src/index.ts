@@ -1,5 +1,5 @@
 // Cloudflare Workers에서 익명 설정·Google 로그인·공개 순위와 서명 수집 API를 제공합니다.
-import {sha256,signatureMatches,timestampMilliseconds} from "./security";
+import {readToken,sha256,signToken,signatureMatches,timestampMilliseconds} from "./security";
 import {FAVORITE_LIMIT,type IngestBody,validChasePreset,validChasePresetName,validIngest,validProfile} from "./validation";
 
 interface Env{
@@ -175,27 +175,31 @@ async function dashboard(request:Request,env:Env){
  return json({characters,sync,today,legacyBootstrap:true});
 }
 
+// 로그인 시도(10분)와 Android 교환 코드(2분)는 D1 대신 서명 토큰에 담습니다. 재사용은 PKCE와 Google 코드 1회 사용이 막습니다.
+type LoginState={t:"s";k:string;b?:string;l:string|null;c?:string;e:number;n:string};
+type ExchangeCode={t:"x";u:string;c:string;e:number;n:string};
+const loginSecret=(env:Env)=>`login-v1:${env.GOOGLE_CLIENT_SECRET}`;
 async function googleStart(request:Request,env:Env){
  await takeRate(env.AUTH_RATE_LIMITER,`google:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  let linkUser:string|null=null; try{linkUser=await userId(request,env);}catch{/* 새 계정으로 계속합니다. */}
- const state=randomToken(),browser=randomToken(),expires=nowSeconds()+600;
- await env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user) VALUES(?,?,?,?)").bind(await sha256(state),await sha256(browser),expires,linkUser).run();
+ const browser=randomToken(),state=await signToken(loginSecret(env),{t:"s",k:"web",b:await sha256(browser),l:linkUser,e:nowSeconds()+600,n:randomToken()});
  return new Response(null,{status:302,headers:{location:googleUrl(request,env,state),"set-cookie":sessionCookie(request,"maple_login",browser,600)}});
 }
 async function androidStart(request:Request,env:Env,clientKind="android"){
  await takeRate(env.AUTH_RATE_LIMITER,`android-start:${request.headers.get("cf-connecting-ip")||"unknown"}`);
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  const input=await bodyJson(request) as {challenge?:unknown};if(typeof input.challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(input.challenge))throw new ApiError(400,"Android 로그인 요청을 확인하세요.");
- let linkUser:string|null=null;try{linkUser=await accountUserId(request,env);}catch{/* 새 계정으로 계속합니다. */}const state=randomToken();
- await env.DB.batch([env.DB.prepare("DELETE FROM android_exchange_codes WHERE expires_at<=?").bind(nowSeconds()),env.DB.prepare("INSERT INTO login_attempts(state_hash,browser_hash,expires_at,link_user,client_kind,pkce_challenge) VALUES(?,?,?,?,?,?)").bind(await sha256(state),"",nowSeconds()+600,linkUser,clientKind,input.challenge)]);
+ let linkUser:string|null=null;try{linkUser=await accountUserId(request,env);}catch{/* 새 계정으로 계속합니다. */}
+ const state=await signToken(loginSecret(env),{t:"s",k:clientKind,l:linkUser,c:input.challenge,e:nowSeconds()+600,n:randomToken()});
  return json({url:googleUrl(request,env,state)});
 }
 async function googleCallback(request:Request,env:Env){
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  const url=new URL(request.url),code=url.searchParams.get("code"),state=url.searchParams.get("state"),browser=cookies(request).maple_login||"";
  if(!code||!state)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
- const attempt=await env.DB.prepare("DELETE FROM login_attempts WHERE state_hash=? AND expires_at>? AND (client_kind<>'web' OR browser_hash=?) RETURNING link_user,client_kind,pkce_challenge").bind(await sha256(state),nowSeconds(),await sha256(browser)).first<{link_user:string|null;client_kind:string;pkce_challenge:string|null}>();
+ const stateToken=await readToken<LoginState>(loginSecret(env),state,nowSeconds());
+ const attempt=stateToken&&stateToken.t==="s"&&(stateToken.k!=="web"||stateToken.b===await sha256(browser))?{link_user:stateToken.l,client_kind:stateToken.k,pkce_challenge:stateToken.c||null}:null;
  if(!attempt)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
  const origin=url.origin,tokenResponse=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"authorization_code",client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,code,redirect_uri:`${origin}/auth/google/callback`})});
  if(!tokenResponse.ok)throw new ApiError(400,"Google 로그인을 확인하지 못했습니다.");
@@ -206,10 +210,9 @@ async function googleCallback(request:Request,env:Env){
  const id=existing?.user_id||attempt.link_user||crypto.randomUUID(),session=randomToken(),now=nowSeconds(),statements:D1PreparedStatement[]=[];
  if(!existing&&!attempt.link_user)statements.push(env.DB.prepare("INSERT INTO users(id,last_active) VALUES(?,?)").bind(id,now));
  if(!existing)statements.push(env.DB.prepare("INSERT INTO identities(provider,subject,user_id) VALUES('google',?,?)").bind(google.sub,id));
- statements.push(env.DB.prepare("UPDATE users SET last_active=? WHERE id=?").bind(now,id));
  if(attempt.client_kind==="android"||attempt.client_kind==="android-v2"){
-  if(!attempt.pkce_challenge)throw new ApiError(400,"Android 로그인 요청이 만료되었습니다.");const exchange=randomToken();
-  statements.push(env.DB.prepare("INSERT INTO android_exchange_codes(code_hash,user_id,pkce_challenge,expires_at) VALUES(?,?,?,?)").bind(await sha256(exchange),id,attempt.pkce_challenge,now+120));await env.DB.batch(statements);
+  if(!attempt.pkce_challenge)throw new ApiError(400,"Android 로그인 요청이 만료되었습니다.");
+  const exchange=await signToken(loginSecret(env),{t:"x",u:id,c:attempt.pkce_challenge,e:now+120,n:randomToken()});if(statements.length)await env.DB.batch(statements);
   return new Response(null,{status:302,headers:{location:`${androidCallbackScheme(attempt.client_kind)}://auth?code=${encodeURIComponent(exchange)}`}});
  }
  statements.push(env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),id,now+30*86400));
@@ -221,7 +224,8 @@ async function androidExchange(request:Request,env:Env){
  const input=await bodyJson(request) as {code?:unknown;verifier?:unknown};
  if(typeof input.code!=="string"||typeof input.verifier!=="string"||!/^[A-Za-z0-9_-]{43,128}$/.test(input.verifier))throw new ApiError(400,"Android 로그인 교환 요청을 확인하세요.");
  const challenge=await pkceChallenge(input.verifier);
- const row=await env.DB.prepare("DELETE FROM android_exchange_codes WHERE code_hash=? AND pkce_challenge=? AND expires_at>? RETURNING user_id").bind(await sha256(input.code),challenge,nowSeconds()).first<{user_id:string}>();
+ if(!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
+ const code=await readToken<ExchangeCode>(loginSecret(env),input.code,nowSeconds()),row=code&&code.t==="x"&&code.c===challenge?{user_id:code.u}:null;
  if(!row)throw new ApiError(400,"Android 로그인 코드가 만료되었거나 이미 사용되었습니다.");
  const session=randomToken();await env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at,kind) VALUES(?,?,?,'account')").bind(await sha256(session),row.user_id,nowSeconds()+30*86400).run();return json({session});
 }
