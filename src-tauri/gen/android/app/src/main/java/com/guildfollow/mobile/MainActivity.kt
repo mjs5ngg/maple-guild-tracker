@@ -44,6 +44,14 @@ class MainActivity : TauriActivity() {
     @JavascriptInterface
     fun sessionToken(): String = authPreferences().getString("session", null).orEmpty()
 
+    // 개인정보·이용 안내는 앱 화면을 벗어나지 않도록 맞춤 탭으로 엽니다. 공개 사이트 주소만 허용합니다.
+    @JavascriptInterface
+    fun openPage(url: String) {
+      val uri = Uri.parse(url)
+      if (uri.scheme != "https" || uri.host != "guildfollow.com") return
+      runOnUiThread { startActivity(loginTabIntent(url)) }
+    }
+
     @JavascriptInterface
     fun clearSession() {
       authPreferences().edit().remove("session").apply()

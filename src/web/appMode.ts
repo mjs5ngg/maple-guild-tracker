@@ -3,7 +3,7 @@ declare global {
  const __APP__:boolean|undefined;
  const __API_ORIGIN__:string|undefined;
  const __DIRECT_PATH__:string|undefined;
- interface Window { AndroidAuth?:{startGoogleLogin:()=>void;sessionToken?:()=>string;clearSession?:()=>void} }
+ interface Window { AndroidAuth?:{startGoogleLogin:()=>void;sessionToken?:()=>string;clearSession?:()=>void;openPage?:(url:string)=>void} }
 }
 
 export const APP_MODE=typeof __APP__!=="undefined"&&__APP__===true;
