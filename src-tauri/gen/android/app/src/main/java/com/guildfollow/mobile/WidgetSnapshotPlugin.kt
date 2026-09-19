@@ -38,6 +38,7 @@ object WidgetSnapshotStore {
     context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Activity.MODE_PRIVATE)
       .edit()
       .putString(MapleWidgetRenderer.SNAPSHOT_KEY, snapshot.toString())
+      .remove(MapleWidgetRenderer.REFRESHING_KEY)
       .apply()
     MapleWidgetRenderer.updateAll(context)
   }

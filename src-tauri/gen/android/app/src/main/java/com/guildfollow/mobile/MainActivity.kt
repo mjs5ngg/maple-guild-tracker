@@ -33,7 +33,7 @@ import java.security.SecureRandom
 class MainActivity : TauriActivity() {
   companion object {
     @JvmStatic private external fun storeServiceKey(value: String): Boolean
-    @JvmStatic private external fun importDirectSnapshots(dbPath: String, payload: String): Boolean
+    @JvmStatic private external fun importDirectSnapshots(dbPath: String, payload: String): String?
   }
   override val handleBackNavigation: Boolean = true
   private val publicOrigin = "https://guildfollow.com"
@@ -153,7 +153,12 @@ class MainActivity : TauriActivity() {
     fun importSnapshots(payload: String): Boolean {
       if (payload.length > 64 * 1024 * 1024) return false
       val database = File(applicationContext.applicationInfo.dataDir, "tracker.sqlite3")
-      return importDirectSnapshots(database.absolutePath, payload)
+      // 가져오기가 돌려준 스냅샷으로 홈 위젯을 바로 다시 그립니다(15분 작업을 기다리지 않음).
+      val raw = importDirectSnapshots(database.absolutePath, payload) ?: return false
+      val snapshot = runCatching { JSONObject(raw) }.getOrNull() ?: return false
+      WidgetSnapshotStore.save(applicationContext, snapshot)
+      Thread { runCatching { WidgetSnapshotStore.cacheImagesAndRefresh(applicationContext, snapshot) } }.start()
+      return true
     }
   }
 

@@ -3,6 +3,8 @@
 mod android_direct;
 #[cfg(target_os = "android")]
 mod android_widget_sync;
+#[cfg(any(target_os = "android", test))]
+mod direct_import;
 mod commands;
 mod db;
 mod exp;
@@ -198,8 +200,12 @@ pub fn run() {
                     }
                 }
             }
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(sync::background_loop(handle));
+            // Android는 앱 화면의 웹 직접 조회와 위젯 작업이 조회를 맡으므로 같은 키로 중복 조회하지 않습니다.
+            #[cfg(not(target_os = "android"))]
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(sync::background_loop(handle));
+            }
             Ok(())
         })
         .on_window_event(|_window, _event| {

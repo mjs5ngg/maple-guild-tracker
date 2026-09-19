@@ -153,6 +153,18 @@ internal fun buildFavoriteRow(context: Context, character: JSONObject, position:
 enum class WidgetKind { LARGE, WEEKLY, SQUARE, COMBINED }
 
 abstract class MapleWidgetProvider(private val kind: WidgetKind) : AppWidgetProvider() {
+  override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action == MapleWidgetRenderer.ACTION_REFRESH) {
+      // 새로고침 버튼: "갱신 중" 표시 후 1회 동기화를 실행합니다. 결과가 저장되면 표시가 풀립니다.
+      context.getSharedPreferences(MapleWidgetRenderer.PREFERENCES, Context.MODE_PRIVATE).edit()
+        .putLong(MapleWidgetRenderer.REFRESHING_KEY, System.currentTimeMillis()).apply()
+      MapleWidgetRenderer.updateAll(context)
+      WidgetSyncScheduler.syncNow(context)
+      return
+    }
+    super.onReceive(context, intent)
+  }
+
   override fun onEnabled(context: Context) {
     WidgetSyncScheduler.ensureScheduled(context)
   }
@@ -178,6 +190,19 @@ object MapleWidgetRenderer {
   const val PREFERENCES = "maple_home_widgets"
   const val SNAPSHOT_KEY = "favorite_snapshot"
   const val AVATAR_DIRECTORY = "widget_avatars"
+  const val ACTION_REFRESH = "com.guildfollow.mobile.widget.REFRESH"
+  const val REFRESHING_KEY = "refreshing_since"
+  private const val REFRESH_TIMEOUT_MS = 2 * 60 * 1000L
+
+  fun refreshIntent(context: Context, requestCode: Int): PendingIntent {
+    val intent = Intent(context, FavoriteRankingWidgetProvider::class.java).setAction(ACTION_REFRESH)
+    return PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  }
+
+  private fun isRefreshing(context: Context): Boolean {
+    val since = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getLong(REFRESHING_KEY, 0L)
+    return since > 0 && System.currentTimeMillis() - since < REFRESH_TIMEOUT_MS
+  }
 
   fun updateAll(context: Context) {
     val manager = AppWidgetManager.getInstance(context)
@@ -312,9 +337,9 @@ object MapleWidgetRenderer {
     }
     views.setEmptyView(R.id.favorite_list, R.id.favorite_empty)
     views.setOnClickPendingIntent(R.id.favorite_header, openApp(context, 6200 + widgetId))
-    views.setOnClickPendingIntent(R.id.favorite_refresh, openApp(context, 7200 + widgetId))
+    views.setOnClickPendingIntent(R.id.favorite_refresh, refreshIntent(context, 7200 + widgetId))
     val updated = formatWidgetUpdatedAt(snapshot?.takeUnless { it.isNull("updated_at") }?.optString("updated_at"))
-    views.setTextViewText(R.id.favorite_updated, updated?.let { "$it 갱신" } ?: "앱에서 동기화해 주세요")
+    views.setTextViewText(R.id.favorite_updated, if (isRefreshing(context)) "갱신 중…" else updated?.let { "$it 갱신" } ?: "앱에서 동기화해 주세요")
     return views
   }
 

@@ -832,3 +832,11 @@
 
 - `.github/dependabot.yml` 설정에 따라 GitHub에 `dependabot/...` 브랜치 7개가 있다(2026-09-15 생성, 이번 작업과 무관). 급하지 않아 합치지 않고 `checklist.md`의 보류 항목으로만 남긴다.
 - 대부분 주 버전 도약(Vite 8, TypeScript 7, plugin-react 6, lucide-react 1.x)이라 그대로 합치면 빌드나 화면이 달라질 수 있다. 진행할 때는 한 건씩 올리고 `npm test`, `npm run web:build`, `npm run web:build:app`, APK 빌드와 실기기 확인을 거친다.
+
+# 2026-09-19 새 앱 홈 위젯 기능 복원
+
+- 증상: 새 앱(com.guildfollow.mobile) 위젯의 틀은 뜨지만 즐겨찾기가 v0.5 시절 목록에 머물고, 주간 위젯은 과거 날짜가 "자료 없음"이었으며, 갱신 시각이 05:29에서 멈춘 것처럼 보였다. 새로고침 버튼은 앱만 열었다.
+- 원인: 화면이 웹 내장으로 바뀌며 예전 앱의 "앱 화면→위젯"(`get_dashboard`→`mobile_widgets::update`) 경로가 사라졌다. 남은 웹→네이티브 가져오기(`AndroidDirect.importSnapshots`)는 (1) 어떤 캐릭터의 레벨·경험치가 null이거나 숫자 해석이 안 되면 JSON 해석 오류로 전체를 버렸고, (2) 31일 초과 기록을 거부했으며, (3) 성공해도 위젯을 다시 그리지 않았다. 갱신 시각은 사냥 판정 시각(live_updated_at) 최대값이라 상태가 그대로면 멈춰 보였다. 패키지 이름 변경(JNI 이름 등)은 원인이 아니었다.
+- 조치: 가져오기 로직을 `src-tauri/src/direct_import.rs`(Android·테스트 공용)로 분리해 빈 값·해석 불가 값은 해당 캐릭터·날짜만 건너뛰고, 최신 31일만 쓰고, 한 트랜잭션으로 저장한 뒤 위젯 스냅샷을 반환한다. `MainActivity.importSnapshots`가 그 스냅샷으로 즉시 위젯을 갱신한다. 실패 사유는 logcat `RustStdoutStderr`의 `GuildWidget`으로 남는다. 새로고침 버튼은 `maple-home-widget-manual-sync` 1회 작업을 실행하고 "갱신 중…"을 최대 2분 표시한다. 갱신 시각은 스냅샷 생성 시각(UTC ISO, 위젯에서 KST로 표시)이다. 위젯이 없으면 15분 작업은 조회를 건너뛰고, Android는 앱 내부 `background_loop`를 끈다. `db::open`에 busy_timeout 5초. 죽은 코드 `PublicWidgetSnapshot.kt`와 테스트 삭제.
+- 확인(S24+, Tailscale 켠 상태): 앱 새로고침 직후 새 앱 위젯 3개(즐겨찾기 랭킹·대표 정사각형·주간)가 현재 즐겨찾기·최신 값·당시 시각으로 바뀌고, 주간 위젯 09.13~09.19가 모두 채워져 예전 앱 합본 위젯과 값이 일치했다. 위젯 새로고침 버튼은 앱을 열지 않고 약 8초 만에 갱신 시각을 바꿨다. Rust 34개, Vitest 135개, Android 단위 테스트 통과.
+- 참고: 홈 화면 두 번째 페이지의 위젯들은 예전 앱(com.mjs5ngg.guildmatefollow)의 것이며 별도로 계속 갱신된다.

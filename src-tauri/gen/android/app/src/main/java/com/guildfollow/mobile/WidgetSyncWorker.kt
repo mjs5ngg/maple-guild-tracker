@@ -7,7 +7,9 @@ import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
@@ -28,6 +30,8 @@ class WidgetSyncWorker(context: Context, parameters: WorkerParameters) : Worker(
 
   override fun doWork(): Result {
     return try {
+      // 홈 화면에 위젯이 없으면 NEXON을 조회하지 않고 끝내 호출 한도를 아낍니다.
+      if (!WidgetSyncScheduler.hasWidgets(applicationContext)) return Result.success()
       Keyring.initializeNdkContext(applicationContext)
       val database = File(applicationContext.applicationInfo.dataDir, "tracker.sqlite3")
       if (!database.isFile) return Result.success()
@@ -45,6 +49,16 @@ class WidgetSyncWorker(context: Context, parameters: WorkerParameters) : Worker(
 
 object WidgetSyncScheduler {
   private const val WORK_NAME = "maple-home-widget-periodic-sync"
+  private const val MANUAL_WORK_NAME = "maple-home-widget-manual-sync"
+
+  // 위젯의 새로고침 버튼: 기다리지 않고 한 번 동기화합니다. 연달아 눌러도 한 번만 실행됩니다.
+  fun syncNow(context: Context) {
+    val request = OneTimeWorkRequestBuilder<WidgetSyncWorker>()
+      .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+      .build()
+    WorkManager.getInstance(context.applicationContext)
+      .enqueueUniqueWork(MANUAL_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+  }
 
   fun ensureScheduled(context: Context) {
     val constraints = Constraints.Builder()

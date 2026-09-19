@@ -20,6 +20,8 @@ pub fn open(path: &Path) -> Result<Connection, AppError> {
     let connection = Connection::open(path)?;
     connection.pragma_update(None, "journal_mode", "WAL")?;
     connection.pragma_update(None, "foreign_keys", "ON")?;
+    // 앱 화면 가져오기와 위젯 백그라운드 작업이 겹쳐도 바로 실패하지 않고 잠시 기다립니다.
+    connection.busy_timeout(std::time::Duration::from_secs(5))?;
     Ok(connection)
 }
 
@@ -705,7 +707,10 @@ pub fn mobile_widget_snapshot_for_date(
     connection: &Connection,
     today_date: &str,
 ) -> Result<MobileWidgetSnapshot, AppError> {
-    Ok(dashboard_for_date(connection, "7d", today_date)?.mobile_widget_snapshot())
+    let mut snapshot = dashboard_for_date(connection, "7d", today_date)?.mobile_widget_snapshot();
+    // 위젯의 갱신 시각은 스냅샷을 만든 시각입니다(사냥 판정 시각은 상태가 그대로면 멈춰 보입니다).
+    snapshot.updated_at = Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+    Ok(snapshot)
 }
 
 pub fn recalculate_character(connection: &Connection, character_id: i64) -> Result<(), AppError> {
@@ -1304,10 +1309,14 @@ mod tests {
         let data = dashboard_for_date(&connection, "7d", "2026-09-05").unwrap();
         assert_eq!(data.rankings[0].status, "일부 수집 (2/7일)");
         let widget = mobile_widget_snapshot_for_date(&connection, "2026-09-05").unwrap();
-        assert_eq!(
-            serde_json::to_value(&widget).unwrap(),
-            serde_json::to_value(data.mobile_widget_snapshot()).unwrap()
-        );
+        // 갱신 시각만 스냅샷 생성 시각으로 바뀌고 나머지 내용은 대시보드 계산과 같습니다.
+        let mut expected = serde_json::to_value(data.mobile_widget_snapshot()).unwrap();
+        let mut actual = serde_json::to_value(&widget).unwrap();
+        let generated = actual["updated_at"].take();
+        expected["updated_at"] = serde_json::Value::Null;
+        assert_eq!(actual, expected);
+        let generated = chrono::DateTime::parse_from_rfc3339(generated.as_str().unwrap()).unwrap();
+        assert!((chrono::Utc::now() - generated.with_timezone(&chrono::Utc)).num_seconds().abs() < 60);
         assert_eq!(widget.primary_weekly_points.len(), 7);
         assert_eq!(widget.primary_weekly_points[0].date, "2026-08-30");
         assert_eq!(
