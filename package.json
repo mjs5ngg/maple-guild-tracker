@@ -50,7 +50,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4.3.3",
-    "typescript": "~5.7.0",
+    "typescript": "~7.0.2",
     "vite": "^6.0.0",
     "vitest": "^5.0.0",
     "wrangler": "^4.131.1"
