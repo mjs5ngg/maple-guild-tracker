@@ -24,9 +24,9 @@ try {
         npx wrangler d1 migrations apply maple-exp-public --remote --config edge/wrangler.jsonc
         if ($LASTEXITCODE -ne 0) { throw "D1 마이그레이션이 실패했습니다." }
     }
-    npx wrangler pages deploy web-dist/direct --project-name maple-exp-personal
+    npx wrangler pages deploy web-dist/direct --project-name maple-exp-personal --branch main
     if ($LASTEXITCODE -ne 0) { throw "개인 직접 조회 Pages 배포가 실패했습니다." }
-    npx wrangler pages deploy web-dist/ads --project-name maple-exp-ads
+    npx wrangler pages deploy web-dist/ads --project-name maple-exp-ads --branch main
     if ($LASTEXITCODE -ne 0) { throw "광고 격리 Pages 배포가 실패했습니다." }
     npx wrangler deploy --config edge/wrangler.jsonc
     if ($LASTEXITCODE -ne 0) { throw "Worker 배포가 실패했습니다." }
