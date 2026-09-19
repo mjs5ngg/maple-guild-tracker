@@ -840,3 +840,10 @@
 - 조치: 가져오기 로직을 `src-tauri/src/direct_import.rs`(Android·테스트 공용)로 분리해 빈 값·해석 불가 값은 해당 캐릭터·날짜만 건너뛰고, 최신 31일만 쓰고, 한 트랜잭션으로 저장한 뒤 위젯 스냅샷을 반환한다. `MainActivity.importSnapshots`가 그 스냅샷으로 즉시 위젯을 갱신한다. 실패 사유는 logcat `RustStdoutStderr`의 `GuildWidget`으로 남는다. 새로고침 버튼은 `maple-home-widget-manual-sync` 1회 작업을 실행하고 "갱신 중…"을 최대 2분 표시한다. 갱신 시각은 스냅샷 생성 시각(UTC ISO, 위젯에서 KST로 표시)이다. 위젯이 없으면 15분 작업은 조회를 건너뛰고, Android는 앱 내부 `background_loop`를 끈다. `db::open`에 busy_timeout 5초. 죽은 코드 `PublicWidgetSnapshot.kt`와 테스트 삭제.
 - 확인(S24+, Tailscale 켠 상태): 앱 새로고침 직후 새 앱 위젯 3개(즐겨찾기 랭킹·대표 정사각형·주간)가 현재 즐겨찾기·최신 값·당시 시각으로 바뀌고, 주간 위젯 09.13~09.19가 모두 채워져 예전 앱 합본 위젯과 값이 일치했다. 위젯 새로고침 버튼은 앱을 열지 않고 약 8초 만에 갱신 시각을 바꿨다. Rust 34개, Vitest 135개, Android 단위 테스트 통과.
 - 참고: 홈 화면 두 번째 페이지의 위젯들은 예전 앱(com.mjs5ngg.guildmatefollow)의 것이며 별도로 계속 갱신된다.
+
+# 2026-09-19 즐겨찾기 유실 수정, 관리자 대시보드 제공량 표시, 플레이 스토어 준비
+
+- 즐겨찾기 유실 원인: `main.tsx`의 markSynced 효과가 화면 선반영(`setQueryData`)까지 "전송 완료"로 기록해, 전송을 건너뛰고 미전송 기록도 지웠다. 서버에는 11:09 이후 저장이 없었고, 앱을 다시 시작하면 서버의 빈 목록이 기기 값을 덮었다. 기준값은 이제 세션 조회 결과(`queryFn`)에서만 정한다. 실기기에서 `/api/profile` 200과 D1 반영, 재시작 뒤 유지를 확인했다.
+- 로컬 변경은 로그인 여부와 관계없이 `recordLocalChange`로 미전송 기록에 남긴다. 전송에 실패해도 화면을 되돌리지 않고, 미전송이 있을 때만 화면·온라인 복귀 때 한 번 다시 보낸다.
+- 관리자 대시보드는 자동 갱신(1분)을 없앴다. 이용 현황의 30일 전체 집계 D1 읽기가 켜 둔 동안 계속 쌓였기 때문이다. Cloudflare GraphQL(Account Analytics 읽기 토큰)로 오늘(UTC) Workers 요청, D1 읽기·쓰기 행, 저장 용량을 무료 한도 대비로 표시한다. 토큰은 `scripts/set-cloudflare-analytics-token.ps1`로 WSL `/etc/maple-exp/server.env`에 저장한다. 릴리스는 `/home/mapledev/maple-releases/20260919-operations-cloudflare-usage`.
+- 플레이 스토어 준비물은 `store/play/`에 둔다. 앱 쪽 변경: TV(leanback) 선언 제거, 백업·기기 이전에서 앱 데이터 제외, 개인정보 페이지에 계정 삭제 방법(`#account-deletion`) 추가. AAB와 업로드 키 스크립트는 `scripts/package-android-play.ps1`, `scripts/create-upload-key.ps1`. 새 개인 계정은 비공개 테스트에 12명이 14일 연속 참여해야 한다.

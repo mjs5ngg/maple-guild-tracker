@@ -15,3 +15,8 @@ edge/.wrangler/
 .local-runtime/
 test-results/
 playwright-report/
+
+# Play 업로드 키는 저장소 밖(%USERPROFILE%\.guildfollow)에 두지만 실수로 복사한 경우도 막습니다.
+*.jks
+*.keystore
+*.aab
