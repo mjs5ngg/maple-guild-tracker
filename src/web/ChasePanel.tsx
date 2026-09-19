@@ -1,5 +1,5 @@
 // 길드원과 즐겨찾기를 최대 열 명까지 비교하고 추월 예상 프리셋을 관리합니다.
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {Check,ChevronDown,Pencil,Plus,Save,Trash2,X} from "lucide-react";
 import {CartesianGrid,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
@@ -7,6 +7,7 @@ import type {Snapshot} from "./types";
 import {Avatar} from "./Avatar";
 import {compact,periodGain,progressPoints,todayGain} from "./experience";
 import {absoluteGap,catchupProjection,sevenDayAverage} from "./projections";
+import {shouldRefreshAccount} from "./startSession";
 import {canToggleWholeGroup,sortChaseCandidates,type ChaseWorkspace,type Direction,type SortKey} from "./chaseWorkspace";
 type Preset={id:string;name:string;periodDays:7|30;ocids:string[];sortKey:SortKey;sortDirection:Direction;updatedAt:number;pendingSync?:"upsert"|"rename"};
 const STORAGE="maple-chase-presets-v1";
@@ -28,8 +29,10 @@ function ChaseDot({cx,cy,payload,ocid,tint}:{cx?:number;cy?:number;payload?:Reco
 
 export default function ChasePanel({rows,guildRows,favoriteRows,primary,signedIn,api,workspace,onWorkspace}:{rows:Snapshot[];guildRows:Snapshot[];favoriteRows:Snapshot[];primary?:Snapshot;signedIn:boolean;api:(path:string,body?:unknown,method?:string)=>Promise<any>;workspace:ChaseWorkspace;onWorkspace:(value:ChaseWorkspace)=>void}){
  const [open,setOpen]=useState(false),[draft,setDraft]=useState<string[]>([]),[presets,setPresets]=useState<Preset[]>(readPresets),[message,setMessage]=useState(""),[editingId,setEditingId]=useState<string|null>(null),[editingName,setEditingName]=useState("");
- const {periodDays,selected,sortKey,direction}=workspace;
- useEffect(()=>{if(!signedIn)return;void api("/api/chase-presets",undefined,"GET").then(async data=>{const local=readPresets(),remote=(data.presets||[]) as Preset[],merged=new Map(remote.map(item=>[item.id,item]));for(const item of local)if(item.pendingSync||!merged.has(item.id))merged.set(item.id,item.pendingSync?item:{...item,pendingSync:"upsert"});let values=[...merged.values()].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,20);setPresets(values);writePresets(values);for(const item of values.filter(value=>value.pendingSync)){try{const result=item.pendingSync==="rename"?await api(`/api/chase-presets/${item.id}`,{name:item.name},"PATCH"):await api(`/api/chase-presets/${item.id}`,presetInput(item),"PUT"),server=(result.preset||item) as Preset;values=values.map(value=>value.id===item.id?{...server,pendingSync:undefined}:value);setPresets(values);writePresets(values);}catch{setMessage("브라우저의 프리셋 변경을 계정에 다시 동기화하지 못했습니다.");}}}).catch(()=>setMessage("로그인 프리셋을 불러오지 못했습니다."));},[signedIn]);
+ const {periodDays,selected,sortKey,direction}=workspace,[syncTick,setSyncTick]=useState(0),fetchedAt=useRef(0);
+ // 다른 기기에서 바꾼 프리셋은 화면 복귀 때 5분 간격으로만 다시 읽습니다.
+ useEffect(()=>{if(!signedIn)return;const onVisible=()=>{if(document.visibilityState==="visible"&&shouldRefreshAccount(fetchedAt.current))setSyncTick(value=>value+1);};document.addEventListener("visibilitychange",onVisible);return ()=>document.removeEventListener("visibilitychange",onVisible);},[signedIn]);
+ useEffect(()=>{if(!signedIn)return;fetchedAt.current=Date.now();void api("/api/chase-presets",undefined,"GET").then(async data=>{const local=readPresets(),remote=(data.presets||[]) as Preset[],merged=new Map(remote.map(item=>[item.id,item]));for(const item of local)if(item.pendingSync||!merged.has(item.id))merged.set(item.id,item.pendingSync?item:{...item,pendingSync:"upsert"});let values=[...merged.values()].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,20);setPresets(values);writePresets(values);for(const item of values.filter(value=>value.pendingSync)){try{const result=item.pendingSync==="rename"?await api(`/api/chase-presets/${item.id}`,{name:item.name},"PATCH"):await api(`/api/chase-presets/${item.id}`,presetInput(item),"PUT"),server=(result.preset||item) as Preset;values=values.map(value=>value.id===item.id?{...server,pendingSync:undefined}:value);setPresets(values);writePresets(values);}catch{setMessage("브라우저의 프리셋 변경을 계정에 다시 동기화하지 못했습니다.");}}}).catch(()=>setMessage("로그인 프리셋을 불러오지 못했습니다."));},[signedIn,syncTick]);
  const selectedRows=useMemo(()=>selected.map(ocid=>rows.find(row=>row.ocid===ocid)).filter(Boolean) as Snapshot[],[selected,rows]);
  const chart=useMemo(()=>{const dates=new Map<string,Record<string,unknown>>();for(const row of selectedRows)for(const point of progressPoints(row,periodDays,__EXP_TABLE__)){const item=dates.get(point.date)||{date:point.date.slice(5)};item[row.ocid]=point.percent;item[`${row.ocid}:gainLabel`]=point.gained===null?"자료 없음":`+${compact(point.gained)}`;item[`${row.ocid}:levelUp`]=point.levelUp;dates.set(point.date,item);}return [...dates.values()];},[selectedRows,periodDays]);
  const metrics=useMemo(()=>selectedRows.map(row=>{const isPrimary=Boolean(primary&&row.ocid===primary.ocid),average=sevenDayAverage(row,__EXP_TABLE__),catchup=primary&&!isPrimary?catchupProjection(primary,row,__EXP_TABLE__):null,gap=primary?absoluteGap(primary.basic,row.basic,__EXP_TABLE__):null;return {row,isPrimary,today:todayGain(row,__EXP_TABLE__),period:periodGain(row,periodDays,__EXP_TABLE__).value,average,catchup,gap};}),[selectedRows,primary,periodDays]);

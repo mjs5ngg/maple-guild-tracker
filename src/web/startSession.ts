@@ -25,3 +25,32 @@ export async function startSession(api:(path:string,body?:unknown)=>Promise<Reco
   return {...writeLocalProfile(profile),signedIn:true};
  }catch{return {...local,signedIn:false};}
 }
+
+// 다른 기기의 변경은 화면 복귀 때 이 간격이 지났을 때만 다시 읽어 Worker 요청을 아낍니다.
+export const ACCOUNT_REFRESH_MS=5*60_000;
+export function shouldRefreshAccount(lastFetchedAt:number,now=Date.now()){return now-lastFetchedAt>=ACCOUNT_REFRESH_MS;}
+export function sameProfile(left:{primary:string;favorites:string[]},right:{primary:string;favorites:string[]}){
+ const a=normalize(left),b=normalize(right);
+ return a.primary===b.primary&&JSON.stringify([...a.favorites].sort())===JSON.stringify([...b.favorites].sort());
+}
+// 로그인 복귀 뒤 첫 화면에서 /api/me를 확인하도록 표시합니다. 로그아웃 상태 방문자는 이 표시가 없어 D1을 읽지 않습니다.
+export function markAccountLoginPending(){try{localStorage.setItem("web-account-hint","1");}catch{/* 로그인 후 새로고침하면 다시 확인합니다. */}}
+// 즐겨찾기 연속 변경을 모아 마지막 값만 보내고, 이미 보낸 값과 같으면 보내지 않습니다.
+export function createProfileSync(send:(profile:{primary:string;favorites:string[]})=>Promise<unknown>,delay=2000){
+ let synced:{primary:string;favorites:string[]}|null=null,pending:{primary:string;favorites:string[]}|null=null,timer:ReturnType<typeof setTimeout>|null=null;
+ async function flush(){
+  if(timer){clearTimeout(timer);timer=null;}
+  const next=pending;pending=null;
+  if(!next||synced&&sameProfile(synced,next))return false;
+  await send(next);synced=normalize(next);return true;
+ }
+ return {
+  markSynced(profile:{primary:string;favorites:string[]}){synced=normalize(profile);},
+  schedule(profile:{primary:string;favorites:string[]},onError?:(error:unknown)=>void){
+   pending=normalize(profile);if(timer)clearTimeout(timer);
+   timer=setTimeout(()=>{void flush().catch(error=>onError?.(error));},delay);
+  },
+  async sendNow(profile:{primary:string;favorites:string[]}){pending=normalize(profile);return flush();},
+  flush,
+ };
+}

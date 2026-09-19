@@ -62,18 +62,24 @@ function historyBasic(row:Row){return {character_name:row.name,character_level:r
 async function device(request:Request,env:Env){
  void request;void env;return json({ok:true,deprecated:true});
 }
+// 즐겨찾기를 정렬·중복 제거한 JSON 한 칸으로 저장해 같은 설정이면 문자열이 같도록 맞춥니다.
+export function favoritesJson(names:string[]){return JSON.stringify([...new Set(names)].sort());}
+function parseFavorites(value:unknown){try{const parsed=JSON.parse(String(value||"[]"));return Array.isArray(parsed)?parsed.filter((name):name is string=>typeof name==="string"):[];}catch{return [];}}
 async function me(request:Request,env:Env){
- if(!cookies(request).maple_session)return json({primary:"",favorites:[],signedIn:false});
- const id=await accountUserId(request,env),user=await env.DB.prepare("SELECT primary_name FROM users WHERE id=?").bind(id).first<{primary_name:string}>();
- const favorites=await env.DB.prepare("SELECT name FROM favorites WHERE user_id=? ORDER BY name").bind(id).all<{name:string}>();
- return json({primary:user?.primary_name||"",favorites:favorites.results.map(row=>row.name),signedIn:Boolean(cookies(request).maple_session)});
+ const token=cookies(request).maple_session;
+ if(!token)return json({primary:"",favorites:[],signedIn:false});
+ // 세션 확인과 설정 조회를 한 번의 읽기로 끝냅니다.
+ const row=await env.DB.prepare("SELECT u.primary_name,u.favorites_json FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.kind='account' AND s.expires_at>?").bind(await sha256(token),nowSeconds()).first<{primary_name:string;favorites_json:string}>();
+ if(!row){const response=json({primary:"",favorites:[],signedIn:false});response.headers.append("set-cookie",sessionCookie(request,"maple_session","",0));return response;}
+ return json({primary:row.primary_name||"",favorites:parseFavorites(row.favorites_json),signedIn:true});
 }
 async function profile(request:Request,env:Env){
  const id=await accountUserId(request,env),input=await bodyJson(request); if(!validProfile(input))throw new ApiError(400,"대표캐릭터와 즐겨찾기 30명 이내의 닉네임을 확인하세요.");
  await takeRate(env.WRITE_RATE_LIMITER,`profile:${id}`);
- const statements=[env.DB.prepare("UPDATE users SET primary_name=?,last_active=? WHERE id=?").bind(input.primary,nowSeconds(),id),env.DB.prepare("DELETE FROM favorites WHERE user_id=?").bind(id)];
- for(const name of [...input.favorites].sort())statements.push(env.DB.prepare("INSERT INTO favorites(user_id,name) VALUES(?,?)").bind(id,name));
- await env.DB.batch(statements); return json({ok:true});
+ // 값이 같으면 0행, 다르면 사용자 1행만 씁니다.
+ const favorites=favoritesJson(input.favorites);
+ const result=await env.DB.prepare("UPDATE users SET primary_name=?,favorites_json=?,last_active=? WHERE id=? AND (primary_name IS NOT ? OR favorites_json IS NOT ?)").bind(input.primary,favorites,nowSeconds(),id,input.primary,favorites).run();
+ return json({ok:true,changed:Number(result.meta.changes||0)>0});
 }
 async function activity(request:Request,env:Env){
  const input=await bodyJson(request,512) as {visitor?:unknown;sessionStart?:unknown};
@@ -173,7 +179,7 @@ async function googleCallback(request:Request,env:Env){
  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)throw new ApiError(503,"Google 로그인이 아직 설정되지 않았습니다.");
  const url=new URL(request.url),code=url.searchParams.get("code"),state=url.searchParams.get("state"),browser=cookies(request).maple_login||"";
  if(!code||!state)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
- const attempt=await env.DB.prepare("DELETE FROM login_attempts WHERE state_hash=? AND expires_at>? AND (client_kind='android' OR browser_hash=?) RETURNING link_user,client_kind,pkce_challenge").bind(await sha256(state),nowSeconds(),await sha256(browser)).first<{link_user:string|null;client_kind:string;pkce_challenge:string|null}>();
+ const attempt=await env.DB.prepare("DELETE FROM login_attempts WHERE state_hash=? AND expires_at>? AND (client_kind<>'web' OR browser_hash=?) RETURNING link_user,client_kind,pkce_challenge").bind(await sha256(state),nowSeconds(),await sha256(browser)).first<{link_user:string|null;client_kind:string;pkce_challenge:string|null}>();
  if(!attempt)throw new ApiError(400,"로그인을 확인하지 못했습니다. 다시 시도해 주세요.");
  const origin=url.origin,tokenResponse=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"authorization_code",client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,code,redirect_uri:`${origin}/auth/google/callback`})});
  if(!tokenResponse.ok)throw new ApiError(400,"Google 로그인을 확인하지 못했습니다.");
@@ -220,8 +226,8 @@ async function subscriptions(request:Request,env:Env){
  await internalAuth(request,env,"");
  const active=nowSeconds()-168*3600;
  const primaries=(await env.DB.prepare("SELECT DISTINCT primary_name AS name FROM users WHERE last_active>=? AND primary_name<>'' ORDER BY name").bind(active).all<{name:string}>()).results.map(row=>row.name);
- const favorites=(await env.DB.prepare("SELECT DISTINCT f.name FROM favorites f JOIN users u ON u.id=f.user_id WHERE u.last_active>=? ORDER BY f.name").bind(active).all<{name:string}>()).results.map(row=>row.name);
- const rows=await env.DB.prepare(`WITH active AS (SELECT id,primary_name FROM users WHERE last_active>=?), targets AS (SELECT primary_name AS name FROM active WHERE primary_name<>'' UNION SELECT f.name FROM favorites f JOIN active a ON a.id=f.user_id UNION SELECT gm.name FROM active a JOIN characters p ON p.name=a.primary_name JOIN guild_members gm ON gm.guild_key=p.guild_key) SELECT name FROM targets ORDER BY name`).bind(active).all<{name:string}>();
+ const favorites=(await env.DB.prepare("SELECT DISTINCT f.value AS name FROM users u, json_each(u.favorites_json) f WHERE u.last_active>=? ORDER BY name").bind(active).all<{name:string}>()).results.map(row=>row.name);
+ const rows=await env.DB.prepare(`WITH active AS (SELECT id,primary_name,favorites_json FROM users WHERE last_active>=?), targets AS (SELECT primary_name AS name FROM active WHERE primary_name<>'' UNION SELECT f.value FROM active a, json_each(a.favorites_json) f UNION SELECT gm.name FROM active a JOIN characters p ON p.name=a.primary_name JOIN guild_members gm ON gm.guild_key=p.guild_key) SELECT name FROM targets ORDER BY name`).bind(active).all<{name:string}>();
  return json({activeSince:new Date(active*1000).toISOString(),primaries,favorites,targets:rows.results.map(row=>row.name)});
 }
 async function ingest(request:Request,env:Env){
