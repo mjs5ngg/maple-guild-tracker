@@ -817,3 +817,13 @@
 - 같은 배포판의 `maple-exp-ngrok`, 백업·보존 타이머도 같은 이유로 함께 멈춘다.
 - 조치: 스크립트가 `MAPLE_OPERATIONS_KEEPALIVE=1 sleep infinity`를 숨은 `wsl.exe`로 한 번만 띄워 배포판을 유지한다. 전역 `.wslconfig`는 바꾸지 않았다. 실행 후 90초 동안 `/status` 200 유지, 재실행 시 keepalive 중복 없음 확인. 끄려면 `wsl --terminate Ubuntu-24.04`.
 - 상시 유지: 작업 스케줄러 `MapleOperationsDashboardKeepAlive`(현재 사용자 로그온 시, 제한 권한, 실행 시간 제한 없음, 중복 실행 무시)가 `conhost --headless`로 `scripts/keep-operations-dashboard-alive.ps1`을 창 없이 실행한다. 스크립트는 keepalive 세션이 끝나면 10초 뒤 다시 띄우고, 바로가기가 띄운 세션이 있으면 그것을 기다린다. `wsl --shutdown` 직후 20초 안에 `/status` 200으로 복구되고 100초 유지되는 것을 확인했다. 해제하려면 `Unregister-ScheduledTask MapleOperationsDashboardKeepAlive` 후 `wsl --shutdown`.
+
+# 2026-09-19 Android 내장 화면 전환(v0.6.0)과 계정 동기화 재개
+
+- 증상: S24+에서 v0.5.0이 `net::ERR_NAME_NOT_RESOLVED` 흰 화면. Chrome은 정상. 앱 uid의 DNS가 Tailscale VPN(100.100.100.100)을 거치며 일부 질의가 `TIMEOUT(255)`로 실패했고, 원격 URL을 여는 구조라 앱 전체가 멈췄다. INTERNET 권한·데이터 세이버(전경 허용)는 원인이 아니었다.
+- 조치: 같은 `src/web` React 화면과 직접 조회 엔진을 APK에 내장(`npm run web:build:app` → `web-dist/app`, 엔진은 `/direct/`). 앱 출처 `http://tauri.localhost`. API는 `https://guildfollow.com` 절대 주소 + `Authorization: Bearer`(세션은 `android_auth` prefs, `AndroidAuth.sessionToken()`), Worker는 앱 출처에만 CORS(프리플라이트 2시간 캐시). 이용 신호는 text/plain으로 보내 프리플라이트 없음. 앱 빌드는 광고 제외.
+- 확인: Tailscale을 켠 채 v0.6.0이 정상 화면으로 실행, 설정·키 입력 iframe(/direct/) 로드, 상태 표시줄·내비게이션 막대 여백 정상, WorkManager 예약 유지. 로컬 Worker에서 OPTIONS 204·Bearer `/api/me`·`/api/profile`·프리셋·비허용 출처 403 확인.
+- 이전 버그 2개 수정(0006): `login_attempts` CHECK에 `android-v2` 없음, 콜백이 `android`만 허용. v0.5.0 신규 앱 로그인은 원래 항상 실패했다.
+- D1 쓰기 절감: 즐겨찾기를 `users.favorites_json` 한 칸으로 합쳐 설정 저장 최대 32행→1행, 같은 값이면 0행. `/api/me` 1회 조회. 클라이언트는 즐겨찾기 변경 2초 모음, 다른 기기 변경은 화면 복귀 시 5분 간격으로만 재조회.
+- 주의: 출처가 바뀌어 v0.5.0의 WebView 저장소(서비스 키·IndexedDB 기록)는 이어지지 않는다. 서비스 키 1회 재입력 필요, 위젯용 네이티브 SQLite·Keystore는 유지.
+- 미완료: 운영 배포(`wrangler login` 필요, 이 PC에 Cloudflare 인증이 없어 주간 D1 백업 작업도 한 번도 성공하지 못함), 실기기 Google 로그인 왕복과 PC↔앱 설정 일치 확인.
