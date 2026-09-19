@@ -14,18 +14,12 @@ if ([string]::IsNullOrWhiteSpace($token) -or $token -notmatch '^[A-Za-z0-9_\-]+$
     throw "토큰 형식이 올바르지 않습니다."
 }
 
-$update = @"
-set -eu
-token=`$(cat)
-tmp=`$(mktemp)
-grep -v -E '^(CLOUDFLARE_ACCOUNT_ID|CLOUDFLARE_ANALYTICS_TOKEN)=' $envFile > "`$tmp" || true
-printf 'CLOUDFLARE_ACCOUNT_ID=%s\nCLOUDFLARE_ANALYTICS_TOKEN=%s\n' '$accountId' "`$token" >> "`$tmp"
-install -m 0600 -o root -g root "`$tmp" $envFile
-rm -f "`$tmp"
-systemctl restart maple-exp-operations.service
-"@
+# WSL에서 실행할 저장 스크립트는 이 파일과 같은 폴더에 있습니다. 어느 폴더에서 실행해도 찾도록 절대 경로로 바꿉니다.
+$helper = Join-Path $PSScriptRoot "set-cloudflare-analytics-token.sh"
+$drive = $helper.Substring(0, 1).ToLower()
+$wslHelper = "/mnt/$drive" + ($helper.Substring(2) -replace '\\', '/')
 try {
-    $token | & wsl.exe -d $distroName -u root -- bash -c ($update -replace "`r", "")
+    $token | & wsl.exe -d $distroName -u root -- bash $wslHelper $envFile
     if ($LASTEXITCODE -ne 0) {
         throw "WSL 설정 저장에 실패했습니다."
     }
