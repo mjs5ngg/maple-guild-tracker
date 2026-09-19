@@ -213,7 +213,18 @@ class MainActivity : TauriActivity() {
     val url = response?.optString("url").orEmpty()
     if (url.isBlank()) return showLoginError()
     getSharedPreferences("android_auth", MODE_PRIVATE).edit().putString("pkce_verifier", verifier).apply()
-    runOnUiThread { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    runOnUiThread { startActivity(loginTabIntent(url)) }
+  }
+
+  // Google 로그인을 외부 브라우저 새 탭이 아니라 앱 작업 안의 맞춤 탭(Custom Tabs)으로 엽니다.
+  // guildfollow://auth로 돌아오면 singleTask인 이 액티비티가 위에 쌓인 로그인 탭을 정리해 브라우저에 페이지가 남지 않습니다.
+  // androidx.browser 없이 맞춤 탭 규약의 세션 값만 넣어 요청하며, 지원하지 않는 브라우저는 일반 보기로 엽니다.
+  private fun loginTabIntent(url: String): Intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+    putExtras(Bundle().apply { putBinder("android.support.customtabs.extra.SESSION", null) })
+    putExtra("android.support.customtabs.extra.SHARE_STATE", 2)
+    putExtra("androidx.browser.customtabs.extra.SHARE_STATE", 2)
+    putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1)
+    putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", 0xFF0B1220.toInt())
   }
 
   private fun exchangeLogin(code: String) {
